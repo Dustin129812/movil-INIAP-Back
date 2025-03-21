@@ -1,0 +1,92 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Area;
+use App\Models\Ethnic_Group;
+use App\Models\Location;
+use App\Models\Nationality;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Hash;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+class ImportController extends Controller
+{
+    public function importUserFile(Request $request)
+    {
+        set_time_limit(600);
+
+        try {
+            if (!$request->hasFile('import_file')) {
+                throw new \Exception('No se proporcionó un archivo para importar.');
+            }
+
+            $file = $request->file('import_file');
+            if (!$file->isValid()) {
+                return response()->json(['error' => 'Archivo no válido.'], Response::HTTP_BAD_REQUEST);
+            }
+
+            $uploaddir = 'public/excel/';
+            $uploadfile = $uploaddir . $file->getClientOriginalName();
+            $file->move($uploaddir, $file->getClientOriginalName());
+
+            if (!file_exists($uploadfile)) {
+                throw new \Exception('Error al mover el archivo.');
+            }
+
+            $reader = IOFactory::createReaderForFile($uploadfile);
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($uploadfile);
+
+            if (!$spreadsheet->getSheetByName('users')) {
+                throw new \Exception('La hoja "users" no se encuentra en el archivo Excel.');
+            }
+
+            $sheet = $spreadsheet->getSheetByName('users');
+
+            $highestRow = $sheet->getHighestRow();
+            $highestColumn = $sheet->getHighestColumn();
+
+            for ($row = 6; $row <= $highestRow; $row++) {
+                $data['name'] = $sheet->getCell('D' . $row)->getValue();
+                $data['dni'] = $sheet->getCell('H' . $row)->getValue();
+                $data['gender'] = $sheet->getCell('I' . $row)->getValue();
+                $data['email'] = strtolower($sheet->getCell('AA' . $row)->getValue());
+                $data['phone'] = strtolower($sheet->getCell('Y' . $row)->getValue());
+                $birthDateValue = $sheet->getCell('J' . $row)->getValue();
+                $data['password'] = Hash::make($sheet->getCell('H' . $row)->getValue());
+                if (is_numeric($birthDateValue)) {
+                    $data['birth_date'] = Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($birthDateValue))->format('d/m/Y');
+                }
+
+                $locationsName = $sheet->getCell('A' . $row)->getValue();
+                $locations = Location::firstOrCreate(['name' => $locationsName]);
+                $data['location_id'] = $locations->id;
+
+                $nationalityName = $sheet->getCell('K' . $row)->getValue();
+                $nationality = Nationality::firstOrCreate(['name' => $nationalityName]);
+                $data['nationality_id'] = $nationality->id;
+
+                $ethnicName = $sheet->getCell('G' . $row)->getValue();
+                $ethnic = Ethnic_Group::firstOrCreate(['name' => $ethnicName]);
+                $data['ethnic_id'] = $ethnic->id;
+
+                $positionsName = $sheet->getCell('AJ' . $row)->getValue();
+                $positions = Area::firstOrCreate(['name' => $positionsName]);
+                $data['position_id'] = $positions->id;
+
+                // Insertar en la base de datos utilizando Eloquent
+                $existingUser = User::where('dni', $data['dni'])->first();
+                if (!$existingUser) {
+                    $newUser = User::create($data);
+                }
+            }
+            return response()->json(['message' => 'Datos insertados con éxito'], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+    }
+}
