@@ -10,8 +10,9 @@ class Pei extends Model
     use HasFactory;
     protected $table = 'pei';
     protected $fillable = [
-        'name',
+        'expected_results',
         'locations_id',
+        'multidisciplinary_group_id',
         'rubro_id',
         'user_id',
         'investigation_area_id',
@@ -24,11 +25,16 @@ class Pei extends Model
         return $this->belongsTo(Location::class);
     }
 
-    public function rubros(){
+    public function multidisciplinary_group()
+    {
+        return $this->belongsTo(Multidisciplinary_Group::class);
+    }
+
+    public function rubro(){
         return $this->belongsTo(Rubro::class);
     }
 
-    public function users(){
+    public function user(){
         return $this->belongsTo(User::class);
     }
 

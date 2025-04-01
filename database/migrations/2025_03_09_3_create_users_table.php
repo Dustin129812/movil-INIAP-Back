@@ -30,7 +30,6 @@ return new class extends Migration
             $table->foreignId('nationality_id')->constrained('nationalities');
             $table->foreignId('ethnic_id')->constrained('ethnic_groups');
             $table->foreignId('position_id')->constrained('positions');
-            $table->foreignId('multidisciplinary_group_id')->constrained('multidisciplinary_groups')->nullable()->change();
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {

@@ -260,26 +260,5 @@ class MiscelaneoSeeder extends Seeder
         foreach ($rubros as $rubro) {
             Rubro::create($rubro);
         }
-
-        $multidisciplinary_groups = [
-            [
-                'name' => 'DEFAULT',
-                'location' => 'ADM. CENTRAL',
-                'rubro' => 'Arroz'
-            ]
-        ];
-
-        foreach ($multidisciplinary_groups as $multidisciplinary_group) {
-            $locationId = DB::table('locations')->where('name', $multidisciplinary_group['location'])->value('id');
-
-            // Buscar el ID del cantón en la tabla 'cantons'
-            $rubroId = DB::table('rubros')->where('name', $multidisciplinary_group['rubro'])->value('id');
-
-            Multidisciplinary_Group::create([
-                'name' => $multidisciplinary_group['name'],
-                'location_id' => $locationId,
-                'rubro_id' => $rubroId
-            ]);
-        }
     }
 }

@@ -11,15 +11,23 @@ class Multidisciplinary_Group extends Model
     protected $table = 'multidisciplinary_groups';
     protected $fillable = [
         'name',
+        'leader_id',
         'location_id',
         'rubro_id'
     ];
 
-    public function multidisciplinary_groups(){
-        return $this->hasMany(User::class);
+    public function leader()
+    {
+        return $this->belongsTo(User::class, 'leader_id');
     }
 
-    public function rubros(){
-        return $this->belongsTo(Rubro::class);
+    public function members()
+    {
+        return $this->belongsToMany(User::class, 'group_members', 'group_id', 'user_id');
     }
+
+    public function pei(){
+        return $this->hasMany(Pei::class);
+    }
+
 }

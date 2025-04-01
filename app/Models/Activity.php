@@ -10,6 +10,11 @@ class Activity extends Model
     use HasFactory;
     protected $table = 'activities';
     protected $fillable = [
-        'name'
+        'name',
+        'objetive_id'
     ];
+
+    public function objetive(){
+        return $this->belongsTo(Objetive::class);
+    }
 }

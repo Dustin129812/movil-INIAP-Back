@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable
+class User extends Authenticatable  implements JWTSubject
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasApiTokens;
     protected $fillable = [
         'dni',
         'name',
@@ -24,14 +25,20 @@ class User extends Authenticatable
         'position_id',
     ];
 
-    protected $attributes = [
-        'multidisciplinary_group_id' => 1,
-    ];
-
     protected $hidden = [
         'password',
         'remember_token',
     ];
+
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    public function getJWTCustomClaims()
+    {
+        return [];
+    }
 
     protected function casts(): array
     {
@@ -57,8 +64,15 @@ class User extends Authenticatable
         return $this->belongsTo(Position::class);
     }
 
-    public function multidisciplinary_groups(){
-        return $this->belongsTo(Multidisciplinary_Group::class);
+    public function leaderGroups()
+    {
+        return $this->hasMany(Multidisciplinary_Group::class, 'leader_id');
+    }
+
+    // Relación con los grupos donde el usuario es miembro
+    public function memberGroups()
+    {
+        return $this->belongsToMany(Multidisciplinary_Group::class, 'group_members', 'user_id', 'group_id');
     }
 
     public function pei(){

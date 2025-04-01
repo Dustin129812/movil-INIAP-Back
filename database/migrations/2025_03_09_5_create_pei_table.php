@@ -16,9 +16,10 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->string('name');
+            $table->string('expected_results');
 
             $table->foreignId('locations_id')->constrained('locations');
+            $table->foreignId('multidisciplinary_group_id')->constrained('multidisciplinary_groups');
             $table->foreignId('rubro_id')->constrained('rubros');
             $table->foreignId('user_id')->constrained('users');
             $table->foreignId('investigation_area_id')->constrained('investigation_areas');

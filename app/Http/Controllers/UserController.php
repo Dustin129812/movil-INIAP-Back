@@ -6,7 +6,6 @@ use App\Http\Resources\UserCollection;
 use App\Http\Resources\UserResource;
 use App\Models\Ethnic_Group;
 use App\Models\Location;
-use App\Models\Multidisciplinary_Group;
 use App\Models\Nationality;
 use App\Models\Position;
 use App\Models\User;

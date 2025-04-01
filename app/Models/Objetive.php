@@ -11,10 +11,13 @@ class Objetive extends Model
     protected $table = 'objetives';
     protected $fillable = [
         'name',
-        'activity_id'
     ];
 
     public function pei(){
         return $this->hasMany(Pei::class);
+    }
+
+    public function activity(){
+        return $this->hasMany(Activity::class);
     }
 }
