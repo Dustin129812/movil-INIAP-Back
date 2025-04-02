@@ -13,7 +13,8 @@ class Performance_Indicator extends Model
         'name'
     ];
 
-    public function pei(){
-        return $this->hasMany(Pei::class);
+    public function activity()
+    {
+        return $this->belongsTo(Activity::class);
     }
 }

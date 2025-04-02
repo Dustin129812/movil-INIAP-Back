@@ -2,80 +2,73 @@
 
 namespace App\Http\Controllers;
 
+
 use App\Models\Activity;
-use App\Models\Investigation_Area;
-use App\Models\Investigation_Line;
-use App\Models\Location;
-use App\Models\Multidisciplinary_Group;
-use App\Models\Objetive;
-use App\Models\Pei;
 use App\Models\Performance_Indicator;
+use App\Models\Product;
 use App\Models\Rubro;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PlannerController extends Controller
 {
-    public function getObjetive()
+    public function addProductAndActivity(Request $request)
     {
-        return response()->json([
-            'msg' => [
-                'summary' => 'success',
-                'detail' => 'Objetivo devuelto correctamente',
-                'code' => 200
-            ],
-            'objetivo' => Objetive::all(),
-        ], 200);
-    }
+        DB::beginTransaction();
 
-    public function getActivity()
-    {
-        return response()->json([
-            'msg' => [
-                'summary' => 'success',
-                'detail' => 'Actividad devuelta correctamente',
-                'code' => 200
-            ],
-            'actividad' => Activity::all(),
-        ], 200);
-    }
+        Log::info('Datos recibidos para agregar producto y actividades:', $request->all());
 
-    public function addObjetive(Request $request){
-        $objetive = new Objetive();
-        $objetive->name = $request->input('name');
-        $objetive->save();
+        try {
+            $product = new Product();
+            $product->name = $request->input('name');
+            $product->budget = $request->input('budget');
 
-        return response()->json([
-            'msg' => ['objetivo agregado correctamente']
-        ]);
-    }
+            $product->user()->associate(User::find($request->input('user')));
+            $product->rubro()->associate(Rubro::find($request->input('rubro')));
 
-    public function addActivity(Request $request){
-        $activity = new Activity();
-        $activity->name = $request->input('name');
-        $activity->objetive()->associate(Objetive::find($request->input('objetive')));
-        $activity->save();
+            $product->save();
 
-        return response()->json([
-            'msg' => ['actividad agregado correctamente']
-        ]);
-    }
+            foreach ($request->input('activities', []) as $activityData) {
+                Log::info('Actividad a guardar:', $activityData);
+                $activity = new Activity();
+                $activity->description = $activityData['description'];
+                $activity->budget = $request->input('budget');
 
-    public function addPei(Request $request){
-        $pei = new Pei();
-        $pei->expected_results = $request->input('expected_results');
-        $pei->locations()->associate(Location::find($request->input('location')));
-        $pei->multidisciplinary_group()->associate(Multidisciplinary_Group::find($request->input('groups')));
-        $pei->rubro()->associate(Rubro::find($request->input('rubro')));
-        $pei->user()->associate(User::find($request->input('user')));
-        $pei->investigation_area()->associate(Investigation_Area::find($request->input('investigation_area')));
-        $pei->investigation_line()->associate(Investigation_Line::find($request->input('investigation_line')));
-        $pei->objetive()->associate(Objetive::find($request->input('objetive')));
-        $pei->performance_indicator()->associate(Performance_Indicator::find($request->input('performance_indicator')));
+                $activity->user()->associate(User::find($request->input('user')));
+                $activity->product()->associate($product);
+                $activity->indicator()->associate(Performance_Indicator::find($activityData['indicator']));
 
-        $pei->save();
-        return response()->json([
-            'msg' => ['Planificacion Institucional agregada correctamente']
-        ]);
+                $indicator = Performance_Indicator::find($request->input('indicator'));
+                if ($indicator) {
+                    Log::info('Indicador encontrado:', ['indicator_id' => $indicator->id]);
+                } else {
+                    Log::error('Indicador no encontrado:', ['indicator_id' => $request->input('indicator')]);
+                }
+
+
+                $activity->save();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'El producto y sus actividades han sido guardados correctamente',
+                    'code' => 201
+                ]
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al guardar el producto y actividades: ' . $e->getMessage(),
+                    'code' => 500
+                ]
+            ], 500);
+        }
     }
 }
