@@ -33,4 +33,12 @@ Route::get('getEthnics', [GeneralController::class, 'getEthnics']);
 Route::get('getPositions', [GeneralController::class, 'getPositions']);
 Route::get('getRubros', [GeneralController::class, 'getRubros']);
 Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
+Route::get('getProducts', [GeneralController::class, 'getProducts']);
 Route::get('getUsers', [UserController::class, 'getUsers']);
+
+Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
+Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
+
+
+Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
+

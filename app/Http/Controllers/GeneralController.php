@@ -7,6 +7,7 @@ use App\Models\Location;
 use App\Models\Nationality;
 use App\Models\Performance_Indicator;
 use App\Models\Position;
+use App\Models\Product;
 use App\Models\Rubro;
 use Illuminate\Http\Request;
 
@@ -40,4 +41,32 @@ class GeneralController extends Controller
         $indicators = Performance_Indicator::get();
         return $indicators;
     }
+
+    public function getProducts(){
+        $products = Product::get();
+        return $products;
+    }
+
+    public function getActivitiesByProduct($productId)
+    {
+        // Buscar el producto junto con las actividades relacionadas
+        $product = Product::with('activity')->find($productId);
+
+        if (!$product) {
+            return response()->json(['message' => 'Producto no encontrado.'], 404);
+        }
+
+        // Si el producto tiene actividades asociadas
+        if ($product->activity->isEmpty()) {
+            return response()->json(['message' => 'No hay actividades para este producto.'], 404);
+        }
+
+        // Retornar las actividades asociadas al producto
+        return response()->json($product->activity);
+    }
+
+
+
+
+
 }

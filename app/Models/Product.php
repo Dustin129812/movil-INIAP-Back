@@ -26,6 +26,6 @@ class Product extends Model
     }
 
     public function activity(){
-        return $this->hasMany(Activity::class);
+        return $this->hasMany(Activity::class, "product_id");
     }
 }
