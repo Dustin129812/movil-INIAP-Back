@@ -54,24 +54,4 @@ class UserController extends Controller
             ]
         ])->response()->setStatusCode(200);
     }
-
-    public function getLocations(){
-        $locations = Location::get();
-        return $locations;
-    }
-
-    public function getNationality(){
-        $nationality = Nationality::get();
-        return $nationality;
-    }
-
-    public function getEthnics(){
-        $ethnic = Ethnic_Group::get();
-        return $ethnic;
-    }
-
-    public function getPositions(){
-        $position = Position::get();
-        return $position;
-    }
 }

@@ -17,7 +17,7 @@ class Rubro extends Model
         return $this->hasMany(Multidisciplinary_Group::class);
     }
 
-    public  function pei(){
-        return $this->hasMany(Pei::class);
+    public function product(){
+        return $this->hasMany(Product::class);
     }
 }

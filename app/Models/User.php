@@ -75,8 +75,12 @@ class User extends Authenticatable  implements JWTSubject
         return $this->belongsToMany(Multidisciplinary_Group::class, 'group_members', 'user_id', 'group_id');
     }
 
-    public function pei(){
-        return $this->hasMany(Pei::class);
+    public function product(){
+        return $this->hasMany(Product::class);
+    }
+
+    public function activity(){
+        return $this->hasMany(Activity::class);
     }
 
 }

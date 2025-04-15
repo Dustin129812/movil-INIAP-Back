@@ -11,14 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('activities', function (Blueprint $table) {
+        Schema::create('products', function (Blueprint $table) {
             $table->id();
             $table->timestamps();
             $table->softDeletes();
 
             $table->string('name');
+            $table->decimal('budget');
 
-            $table->foreignId('objetive_id')->constrained('objetives');
+            $table->foreignId('user_id')->constrained('users');
+            $table->foreignId('rubro_id')->constrained('rubros');
         });
     }
 
@@ -27,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('activities');
+        Schema::dropIfExists('products');
     }
 };
