@@ -26,13 +26,11 @@ class GroupController extends Controller
             'rubro_id' => $request->rubro_id,
         ]);
 
-        // Añadir miembros al grupo
         $group->members()->attach($request->members);
 
         return response()->json($group, 201);
     }
 
-    // Mostrar un grupo con su líder y miembros
     public function show($id)
     {
         $group = Multidisciplinary_Group::with('leader', 'members')->findOrFail($id);
@@ -40,7 +38,6 @@ class GroupController extends Controller
         return response()->json($group);
     }
 
-    // Actualizar los miembros de un grupo
     public function update(Request $request, $id)
     {
         $request->validate([
@@ -50,13 +47,11 @@ class GroupController extends Controller
 
         $group = Multidisciplinary_Group::findOrFail($id);
 
-        // Actualizar los miembros del grupo
         $group->members()->sync($request->members);
 
         return response()->json($group);
     }
 
-    // Eliminar un grupo
     public function destroy($id)
     {
         $group = Multidisciplinary_Group::findOrFail($id);

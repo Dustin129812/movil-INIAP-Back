@@ -18,8 +18,6 @@ class PlannerController extends Controller
     {
         DB::beginTransaction();
 
-        Log::info('Datos recibidos para agregar producto y actividades:', $request->all());
-
         try {
             $product = new Product();
             $product->name = $request->input('name');
@@ -39,15 +37,6 @@ class PlannerController extends Controller
                 $activity->user()->associate(User::find($request->input('user')));
                 $activity->product()->associate($product);
                 $activity->indicator()->associate(Performance_Indicator::find($activityData['indicator']));
-
-                $indicator = Performance_Indicator::find($request->input('indicator'));
-                if ($indicator) {
-                    Log::info('Indicador encontrado:', ['indicator_id' => $indicator->id]);
-                } else {
-                    Log::error('Indicador no encontrado:', ['indicator_id' => $request->input('indicator')]);
-                }
-
-
                 $activity->save();
             }
 

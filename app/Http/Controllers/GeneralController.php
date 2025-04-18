@@ -49,19 +49,16 @@ class GeneralController extends Controller
 
     public function getActivitiesByProduct($productId)
     {
-        // Buscar el producto junto con las actividades relacionadas
         $product = Product::with('activity')->find($productId);
 
         if (!$product) {
             return response()->json(['message' => 'Producto no encontrado.'], 404);
         }
 
-        // Si el producto tiene actividades asociadas
         if ($product->activity->isEmpty()) {
             return response()->json(['message' => 'No hay actividades para este producto.'], 404);
         }
 
-        // Retornar las actividades asociadas al producto
         return response()->json($product->activity);
     }
 
