@@ -8,6 +8,9 @@ use App\Models\Performance_Indicator;
 use App\Models\Product;
 use App\Models\Rubro;
 use App\Models\User;
+use App\Models\WeekActivity;
+use App\Models\WeekPlanner;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -29,7 +32,6 @@ class PlannerController extends Controller
             $product->save();
 
             foreach ($request->input('activities', []) as $activityData) {
-                Log::info('Actividad a guardar:', $activityData);
                 $activity = new Activity();
                 $activity->description = $activityData['description'];
                 $activity->budget = $request->input('budget');
@@ -60,4 +62,45 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+
+    public function weeklyPlanner(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+            $productId = $request->input('product_id');
+            $weekData = $request->input('week');
+
+            $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
+
+            foreach ($weekData as $day => $data) {
+                // Crear WeekActivity
+                $weekActivity = new WeekActivity();
+                $weekActivity->description = $data['description'] ?? '';
+                $weekActivity->date = $nextMonday;
+                $weekActivity->material = json_encode($data['materials']);
+
+                // Asocia actividad por día
+                $weekActivity->activity()->associate(Activity::find($data['activity_id']));
+                $weekActivity->save();
+
+                // Crear WeekPlanner
+                $planner = new WeekPlanner();
+                $planner->product()->associate(Product::find($productId));
+                $planner->weekActivity()->associate($weekActivity);
+                $planner->save();
+
+                // Avanzar al siguiente día
+                $nextMonday->addDay();
+            }
+
+            DB::commit();
+
+            return response()->json(['message' => 'Planificación guardada correctamente.']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
 }

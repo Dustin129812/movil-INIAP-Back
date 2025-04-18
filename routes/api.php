@@ -18,10 +18,11 @@ Route::middleware('auth:api')->group(function () {
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
 Route::post('addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
+Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
 
 Route::prefix('groups')->group(function () {
     Route::post('/', [GroupController::class, 'store']); // Crear un grupo
-    Route::get('{id}', [GroupController::class, 'show']); // Obtener los detalles de un grupo
+    Route::get('{id}', [GroupController::class, 'show']); // Obtener los detaweeklyPlannerlles de un grupo
     Route::put('{id}', [GroupController::class, 'update']); // Actualizar miembros de un grupo
     Route::delete('{id}', [GroupController::class, 'destroy']); // Eliminar un grupo
 });

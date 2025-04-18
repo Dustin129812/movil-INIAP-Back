@@ -28,4 +28,8 @@ class Activity extends Model
     public function indicator(){
         return $this->belongsTo(Performance_Indicator::class);
     }
+
+    public function weekActivity(){
+        return $this->hasMany(WeekActivity::class);
+    }
 }

@@ -17,15 +17,23 @@ class Product extends Model
         'rubro_id'
     ];
 
-    public function user(){
+    public function user()
+    {
         return $this->belongsTo(User::class);
     }
 
-    public function rubro(){
+    public function rubro()
+    {
         return $this->belongsTo(Rubro::class);
     }
 
-    public function activity(){
-        return $this->hasMany(Activity::class, "product_id");
+    public function activity()
+    {
+        return $this->hasMany(Activity::class);
+    }
+
+    public function weekPlanner()
+    {
+        return $this->hasMany(WeekPlanner::class);
     }
 }
