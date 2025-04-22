@@ -14,11 +14,17 @@ class WeekPlanner extends Model
         'week_activity_id'
     ];
 
-    public function product(){
-        return $this->belongsTo(Product::class);
+    public function product()
+    {
+        return $this->belongsTo(Product::class, 'product_id');
     }
 
-    PUBLIC function weekActivity(){
-        return $this->belongsTo(WeekActivity::class);
+    public function weekActivity()
+    {
+        return $this->belongsTo(WeekActivity::class, 'week_activity_id');
+    }
+
+    public function user(){
+        return $this->belongsTo(User::class);
     }
 }

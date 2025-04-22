@@ -19,6 +19,7 @@ Route::middleware('auth:api')->group(function () {
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
 Route::post('addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
 Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
+Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
 
 Route::prefix('groups')->group(function () {
     Route::post('/', [GroupController::class, 'store']); // Crear un grupo

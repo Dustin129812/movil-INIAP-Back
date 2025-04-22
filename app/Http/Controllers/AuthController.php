@@ -14,18 +14,12 @@ class AuthController extends Controller
     {
         // Validación de las credenciales
         $credentials = $request->only('email', 'password');
-
-        // Intentar autenticar al usuario
         if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json([
                 'message' => 'Invalid credentials!',
             ], 401);
         }
-
-        // Obtener el usuario autenticado
         $user = Auth::user();
-
-        // Retornar la respuesta con los datos del usuario y el token JWT
         return (new UserResource($user))->additional([
             'authToken' => $token,
             'msg' => [

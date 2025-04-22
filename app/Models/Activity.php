@@ -29,7 +29,9 @@ class Activity extends Model
         return $this->belongsTo(Performance_Indicator::class);
     }
 
-    public function weekActivity(){
+    public function weekActivities()
+    {
         return $this->hasMany(WeekActivity::class);
     }
+
 }

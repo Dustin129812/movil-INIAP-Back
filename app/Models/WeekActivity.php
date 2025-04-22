@@ -23,10 +23,14 @@ class WeekActivity extends Model
 
     public function weekPlanner()
     {
-        return $this->belongsTo(WeekPlanner::class, 'week_planner_id');
+        return $this->hasOne(WeekPlanner::class, 'week_activity_id');
     }
 
     public function activity(){
         return $this->belongsTo(Activity::class, 'activity_id');
+    }
+
+    public function user(){
+        return $this->belongsTo(User::class);
     }
 }

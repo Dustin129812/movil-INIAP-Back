@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 
+use App\Http\Resources\WeeklyPlannerResource;
 use App\Models\Activity;
 use App\Models\Performance_Indicator;
 use App\Models\Product;
@@ -103,4 +104,22 @@ class PlannerController extends Controller
         }
     }
 
+    public function getWeeklyPlanningByResponsible()
+    {
+        $responsables = User::whereHas('activities.weekActivities.weekPlanner')
+            ->with([
+                'activities' => function ($q) {
+                    $q->whereHas('weekActivities.weekPlanner');
+                    $q->with([
+                        'weekActivities' => function ($q2) {
+                            $q2->whereHas('weekPlanner')
+                                ->with('weekPlanner.product');
+                        }
+                    ]);
+                }
+            ])
+            ->get();
+
+        return WeeklyPlannerResource::collection($responsables);
+    }
 }
