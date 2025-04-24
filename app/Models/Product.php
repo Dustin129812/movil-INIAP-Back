@@ -14,7 +14,8 @@ class Product extends Model
         'name',
         'budget',
         'user_id',
-        'rubro_id'
+        'rubro_id',
+        'location_id'
     ];
 
     public function user()
@@ -36,4 +37,12 @@ class Product extends Model
     {
         return $this->hasMany(WeekPlanner::class);
     }
+
+    // app/Models/Product.php
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class);
+    }
+
 }

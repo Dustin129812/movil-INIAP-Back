@@ -17,7 +17,10 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->string('description');
-            $table->decimal('budget');
+            $table->decimal('budget', 15, 2)->default(0);
+            $table->decimal('ponderacion', 5, 2)->default(0);
+            $table->date('fecha_inicio')->nullable();
+            $table->date('fecha_fin')->nullable();
 
             $table->foreignId('user_id')->constrained('users');
             $table->foreignId('product_id')->constrained('products');

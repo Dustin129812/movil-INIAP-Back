@@ -78,11 +78,12 @@ class ImportController extends Controller
                 $positions = Area::firstOrCreate(['name' => $positionsName]);
                 $data['position_id'] = $positions->id;
 
-                // Insertar en la base de datos utilizando Eloquent
                 $existingUser = User::where('dni', $data['dni'])->first();
                 if (!$existingUser) {
                     $newUser = User::create($data);
+                    $newUser->assignRole('user');
                 }
+
             }
             return response()->json(['message' => 'Datos insertados con éxito'], Response::HTTP_OK);
         } catch (\Exception $e) {

@@ -28,7 +28,7 @@ class Location extends Model
         return $this->belongsTo(Canton::class);
     }
 
-    public function pei(){
-        return $this->hasMany(Pei::class);
+    public function product(){
+        return $this->hasMany(Product::class);
     }
 }

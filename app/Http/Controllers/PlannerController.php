@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\WeeklyPlannerResource;
 use App\Models\Activity;
+use App\Models\Location;
 use App\Models\Performance_Indicator;
 use App\Models\Product;
 use App\Models\Rubro;
@@ -23,21 +24,35 @@ class PlannerController extends Controller
         DB::beginTransaction();
 
         try {
+
+            $userLocation = auth()->user()->location;
+
             $product = new Product();
             $product->name = $request->input('name');
             $product->budget = $request->input('budget');
+            $product->ponderacion = $request->input('ponderacion');
 
-            $product->user()->associate(User::find($request->input('user')));
+            $responsibleUser = User::find($request->input('user'));
+            $product->user()->associate($responsibleUser);
+
+            if (!$responsibleUser->hasRole('product-manager')) {
+                $responsibleUser->assignRole('product-manager');
+            }
+
             $product->rubro()->associate(Rubro::find($request->input('rubro')));
+            $product->location()->associate($userLocation);
 
             $product->save();
 
             foreach ($request->input('activities', []) as $activityData) {
                 $activity = new Activity();
                 $activity->description = $activityData['description'];
-                $activity->budget = $request->input('budget');
+                $activity->budget = $activityData['budget']; // Corrige esto también
+                $activity->ponderacion = $activityData['ponderacion'];
+                $activity->fecha_inicio = $activityData['start_date'];
+                $activity->fecha_fin = $activityData['end_date'];
 
-                $activity->user()->associate(User::find($request->input('user')));
+                $activity->user()->associate(User::find($activityData['user']));
                 $activity->product()->associate($product);
                 $activity->indicator()->associate(Performance_Indicator::find($activityData['indicator']));
                 $activity->save();
@@ -63,6 +78,7 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+
 
     public function weeklyPlanner(Request $request)
     {

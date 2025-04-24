@@ -17,10 +17,12 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->string('name');
-            $table->decimal('budget');
+            $table->decimal('budget', 15, 2)->default(0);
+            $table->decimal('ponderacion', 5, 2)->default(0);
 
             $table->foreignId('user_id')->constrained('users');
             $table->foreignId('rubro_id')->constrained('rubros');
+            $table->foreignId('location_id')->constrained('locations');
         });
     }
 

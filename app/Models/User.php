@@ -6,11 +6,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
 class User extends Authenticatable  implements JWTSubject
 {
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, HasRoles;
+    protected $guard_name = 'api';
     protected $fillable = [
         'dni',
         'name',
@@ -55,6 +57,12 @@ class User extends Authenticatable  implements JWTSubject
     public function nationalities(){
         return $this->belongsTo(Nationality::class);
     }
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class);
+    }
+
 
     public function ethnic_groups(){
         return $this->belongsTo(Ethnic_Group::class);

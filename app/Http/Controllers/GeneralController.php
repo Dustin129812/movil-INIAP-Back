@@ -62,8 +62,17 @@ class GeneralController extends Controller
         return response()->json($product->activity);
     }
 
+    public function addRubro(Request $request){
+        $rubro = new Rubro();
+        $rubro->name = $request->input('name');
 
+        $rubro->save();
+    }
 
+    public function addIndicator(Request $request){
+        $indicator = new Performance_Indicator();
+        $indicator->name = $request->input('name');
 
-
+        $indicator->save();
+    }
 }

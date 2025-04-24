@@ -44,7 +44,10 @@ class UserController extends Controller
         $user->nationalities()->associate(Nationality::find($request->input('nationality')));
         $user->ethnic_groups()->associate(Ethnic_Group::find($request->input('ethnic')));
         $user->positions()->associate(Position::find($request->input('position')));
+
         $user->save();
+
+        $user->assignRole('user');
 
         return (new UserResource($user))->additional([
             'msg'=>[

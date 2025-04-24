@@ -11,14 +11,21 @@ use Illuminate\Support\Facades\Route;
 
 
 Route::post('login', [AuthController::class, 'login']);
+Route::post('logout', [AuthController::class, 'logout']);
 
 Route::middleware('auth:api')->group(function () {
-    Route::post('logout', [AuthController::class, 'logout']);
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+    Route::post('/addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
-Route::post('addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
 Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
+
+Route::post('addRubro', [GeneralController::class, 'addRubro']);
+Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
+
 Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
 
 Route::prefix('groups')->group(function () {
