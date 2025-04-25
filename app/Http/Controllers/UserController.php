@@ -16,7 +16,7 @@ class UserController extends Controller
 {
     public function getUsers()
     {
-        $users = User::all();
+        $users = User::with('roles')->get();
         $totalUsers = $users->count();
 
         return (new UserCollection($users))->additional([
@@ -57,4 +57,21 @@ class UserController extends Controller
             ]
         ])->response()->setStatusCode(200);
     }
+
+    public function updateRoles(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        $roles = $request->input('roles', []);
+        $user->syncRoles($roles);
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Roles actualizados',
+                'detail' => 'Los roles fueron actualizados correctamente',
+                'code' => 200,
+            ],
+        ]);
+    }
+
 }
+

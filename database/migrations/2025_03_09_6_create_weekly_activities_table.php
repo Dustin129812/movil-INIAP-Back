@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('description');
             $table->date('date');
             $table->string('material');
+            $table->enum('status', ['pending', 'approved', 'rejected', 'in progress', 'completed'])->default('pending');
 
             $table->foreignId('activity_id')->constrained('activities');
         });

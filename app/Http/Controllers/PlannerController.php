@@ -32,13 +32,7 @@ class PlannerController extends Controller
             $product->budget = $request->input('budget');
             $product->ponderacion = $request->input('ponderacion');
 
-            $responsibleUser = User::find($request->input('user'));
-            $product->user()->associate($responsibleUser);
-
-            if (!$responsibleUser->hasRole('product-manager')) {
-                $responsibleUser->assignRole('product-manager');
-            }
-
+            $product->user()->associate(User::find($request->input('user')));
             $product->rubro()->associate(Rubro::find($request->input('rubro')));
             $product->location()->associate($userLocation);
 
@@ -95,7 +89,9 @@ class PlannerController extends Controller
                 $weekActivity = new WeekActivity();
                 $weekActivity->description = $data['description'] ?? '';
                 $weekActivity->date = $nextMonday;
+                $weekActivity->day_of_week = $nextMonday->format('l (d/m/Y)'); // Asignar day_of_week
                 $weekActivity->material = json_encode($data['materials']);
+                $weekActivity->status = 'pending';
 
                 // Asocia actividad por día
                 $weekActivity->activity()->associate(Activity::find($data['activity_id']));
@@ -120,18 +116,44 @@ class PlannerController extends Controller
         }
     }
 
+    public function approveActivity(Request $request, $activityId)
+    {
+        try {
+            if (!auth()->user()->hasRole('product-manager')) {
+                return response()->json(['error' => 'No autorizado. Solo un product-manager puede aprobar actividades.'], 403);
+            }
+
+            // Obtener la actividad
+            $weekActivity = WeekActivity::findOrFail($activityId);
+
+            // Actualizar el estado según el valor enviado
+            $status = $request->input('status');
+            if (!in_array($status, ['approved', 'rejected'])) {
+                return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
+            }
+
+            $weekActivity->status = $status;
+            $weekActivity->save();
+
+            return response()->json(['message' => 'Actividad actualizada correctamente.']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage(), 'stack' => $e->getTraceAsString()], 500);
+        }
+    }
+
     public function getWeeklyPlanningByResponsible()
     {
         $responsables = User::whereHas('activities.weekActivities.weekPlanner')
             ->with([
                 'activities' => function ($q) {
-                    $q->whereHas('weekActivities.weekPlanner');
-                    $q->with([
-                        'weekActivities' => function ($q2) {
-                            $q2->whereHas('weekPlanner')
-                                ->with('weekPlanner.product');
-                        }
-                    ]);
+                    $q->whereHas('weekActivities.weekPlanner')
+                        ->with([
+                            'product', // Cargar la relación product para product_name
+                            'weekActivities' => function ($q2) {
+                                $q2->whereHas('weekPlanner')
+                                    ->with('weekPlanner.product');
+                            }
+                        ]);
                 }
             ])
             ->get();

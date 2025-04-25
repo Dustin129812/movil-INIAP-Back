@@ -48,4 +48,21 @@ class AuthController extends Controller
             return response()->json(['message' => 'Failed to log out, please try again'], 500);
         }
     }
+
+    public function getUserRoles()
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->getRoleNames(),
+            ]
+        ], 200);
+    }
 }

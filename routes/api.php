@@ -17,7 +17,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+    Route::get('/user/roles', [AuthController::class, 'getUserRoles']);
     Route::post('/addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
+    Route::get('/getUsers', [UserController::class, 'getUsers']);
+    Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
+    Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
+    Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
@@ -26,7 +31,6 @@ Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
 Route::post('addRubro', [GeneralController::class, 'addRubro']);
 Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
 
-Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
 
 Route::prefix('groups')->group(function () {
     Route::post('/', [GroupController::class, 'store']); // Crear un grupo
@@ -43,7 +47,6 @@ Route::get('getPositions', [GeneralController::class, 'getPositions']);
 Route::get('getRubros', [GeneralController::class, 'getRubros']);
 Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
 Route::get('getProducts', [GeneralController::class, 'getProducts']);
-Route::get('getUsers', [UserController::class, 'getUsers']);
 
 Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
 Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
