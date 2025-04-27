@@ -10,6 +10,7 @@ use App\Models\Position;
 use App\Models\Product;
 use App\Models\Rubro;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class GeneralController extends Controller
 {
@@ -42,17 +43,26 @@ class GeneralController extends Controller
         return $indicators;
     }
 
-    public function getProducts(){
-        $products = Product::get();
-        return $products;
+    public function getProducts()
+    {
+        $userId = Auth::id();
+        $products = Product::whereUserRelated($userId)->get();
+
+        return response()->json($products);
     }
 
     public function getActivitiesByProduct($productId)
     {
-        $product = Product::with('activity')->find($productId);
+        $userId = Auth::id();
+
+        $product = Product::with(['activity' => function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        }])
+            ->whereUserRelated($userId)
+            ->find($productId);
 
         if (!$product) {
-            return response()->json(['message' => 'Producto no encontrado.'], 404);
+            return response()->json(['message' => 'Producto no encontrado o no autorizado.'], 404);
         }
 
         if ($product->activity->isEmpty()) {

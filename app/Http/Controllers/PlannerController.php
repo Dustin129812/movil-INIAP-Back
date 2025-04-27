@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers;
 
-
 use App\Http\Resources\WeeklyPlannerResource;
 use App\Models\Activity;
-use App\Models\Location;
 use App\Models\Performance_Indicator;
 use App\Models\Product;
 use App\Models\Rubro;
@@ -14,8 +12,8 @@ use App\Models\WeekActivity;
 use App\Models\WeekPlanner;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class PlannerController extends Controller
 {
@@ -32,11 +30,17 @@ class PlannerController extends Controller
             $product->budget = $request->input('budget');
             $product->ponderacion = $request->input('ponderacion');
 
+            $user = User::find($request->input('user'));
+
             $product->user()->associate(User::find($request->input('user')));
             $product->rubro()->associate(Rubro::find($request->input('rubro')));
             $product->location()->associate($userLocation);
 
             $product->save();
+
+            if ($user) {
+                $user->assignRole('product-manager');
+            }
 
             foreach ($request->input('activities', []) as $activityData) {
                 $activity = new Activity();
@@ -50,6 +54,7 @@ class PlannerController extends Controller
                 $activity->product()->associate($product);
                 $activity->indicator()->associate(Performance_Indicator::find($activityData['indicator']));
                 $activity->save();
+
             }
 
             DB::commit();
@@ -81,11 +86,6 @@ class PlannerController extends Controller
         try {
             $productId = $request->input('product_id');
             $weekData = $request->input('week');
-
-            \Log::info('Datos recibidos en weeklyPlanner', [
-                'product_id' => $productId,
-                'week' => $weekData
-            ]);
 
             $product = Product::find($productId);
             if (!$product) {
@@ -135,12 +135,6 @@ class PlannerController extends Controller
             return response()->json(['message' => 'Planificación guardada correctamente.']);
         } catch (\Exception $e) {
             DB::rollBack();
-
-            \Log::error('Error en weeklyPlanner:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -190,5 +184,19 @@ class PlannerController extends Controller
             ->get();
 
         return WeeklyPlannerResource::collection($responsables);
+    }
+
+    public function getProductsWithActivities()
+    {
+        // Obtener todos los productos y sus actividades sin filtrar por el usuario
+        $products = Product::with([
+            'location',      // Relación con la ubicación
+            'rubro',         // Relación con el rubro
+            'activity.user', // Relación con la actividad y el usuario asociado
+            'activity.indicator'
+        ])
+            ->get();  // Obtiene todos los productos sin restricción de usuario
+
+        return response()->json($products);
     }
 }

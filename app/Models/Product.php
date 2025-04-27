@@ -45,4 +45,12 @@ class Product extends Model
         return $this->belongsTo(Location::class);
     }
 
+    public function scopeWhereUserRelated($query, $userId)
+    {
+        return $query->where('user_id', $userId)
+            ->orWhereHas('activity', function ($q) use ($userId) {
+                $q->where('user_id', $userId);
+            });
+    }
+
 }

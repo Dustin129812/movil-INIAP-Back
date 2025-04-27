@@ -24,6 +24,13 @@ Route::middleware('auth:api')->group(function () {
     Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
     Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
     Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
+
+    Route::get('getProducts', [GeneralController::class, 'getProducts']);
+    Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
+    Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
+    Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
+
+    Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
@@ -31,26 +38,15 @@ Route::post('importUserFile', [ImportController::class, 'importUserFile']);
 Route::post('addRubro', [GeneralController::class, 'addRubro']);
 Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
 
-
-Route::prefix('groups')->group(function () {
-    Route::post('/', [GroupController::class, 'store']); // Crear un grupo
-    Route::get('{id}', [GroupController::class, 'show']); // Obtener los detaweeklyPlannerlles de un grupo
-    Route::put('{id}', [GroupController::class, 'update']); // Actualizar miembros de un grupo
-    Route::delete('{id}', [GroupController::class, 'destroy']); // Eliminar un grupo
-});
-
-
 Route::get('getLocations', [GeneralController::class, 'getLocations']);
 Route::get('getNationality', [GeneralController::class, 'getNationality']);
 Route::get('getEthnics', [GeneralController::class, 'getEthnics']);
 Route::get('getPositions', [GeneralController::class, 'getPositions']);
 Route::get('getRubros', [GeneralController::class, 'getRubros']);
 Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
-Route::get('getProducts', [GeneralController::class, 'getProducts']);
-
-Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
-Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
 
 
-Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
+
+
+
 
