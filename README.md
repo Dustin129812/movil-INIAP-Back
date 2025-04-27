@@ -39,7 +39,7 @@ Sigue estas instrucciones para configurar el backend de SIMPAGI en tu entorno lo
 
 1.  **Clonar el Repositorio:**
     ```bash
-    git clone [https://github.com/tu-usuario/backend-simpagi.git](https://github.com/tu-usuario/backend-simpagi.git)
+    git clone https://github.com/DseCasis/simpagi-backend
     ```
 
 2.  **Navegar al Directorio del Proyecto:**
