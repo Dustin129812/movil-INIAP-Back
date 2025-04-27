@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://iniap.gob.ec/" target="_blank">
-    <img src="https://imgur.com/a/wB6NfhI" width="150" alt="INIAP Logo">
+    <img src="https://i.imgur.com/RhUg92U.png" width="150" alt="INIAP Logo">
   </a>
 </p>
 
