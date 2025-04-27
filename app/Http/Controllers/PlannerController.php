@@ -82,29 +82,52 @@ class PlannerController extends Controller
             $productId = $request->input('product_id');
             $weekData = $request->input('week');
 
+            \Log::info('Datos recibidos en weeklyPlanner', [
+                'product_id' => $productId,
+                'week' => $weekData
+            ]);
+
+            $product = Product::find($productId);
+            if (!$product) {
+                throw new \Exception("Producto con ID $productId no encontrado.");
+            }
+
+            // Obtenemos el lunes de la próxima semana
             $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
 
+            // Mapeo para calcular el offset de cada día
+            $daysOfWeek = [
+                'lunes' => 0,
+                'martes' => 1,
+                'miércoles' => 2,
+                'jueves' => 3,
+                'viernes' => 4,
+                'sábado' => 5,
+                'domingo' => 6,
+            ];
+
             foreach ($weekData as $day => $data) {
-                // Crear WeekActivity
+                $activity = Activity::find($data['activity_id']);
+                if (!$activity) {
+                    throw new \Exception("Actividad con ID {$data['activity_id']} no encontrada.");
+                }
+
+                // Calcular la fecha exacta para el día
+                $dayOffset = $daysOfWeek[$day] ?? 0;
+                $activityDate = $nextMonday->copy()->addDays($dayOffset);
+
                 $weekActivity = new WeekActivity();
                 $weekActivity->description = $data['description'] ?? '';
-                $weekActivity->date = $nextMonday;
-                $weekActivity->day_of_week = $nextMonday->format('l (d/m/Y)'); // Asignar day_of_week
-                $weekActivity->material = json_encode($data['materials']);
+                $weekActivity->date = $activityDate;
+                $weekActivity->material = json_encode($data['materials'] ?? []);
                 $weekActivity->status = 'pending';
-
-                // Asocia actividad por día
-                $weekActivity->activity()->associate(Activity::find($data['activity_id']));
+                $weekActivity->activity()->associate($activity);
                 $weekActivity->save();
 
-                // Crear WeekPlanner
                 $planner = new WeekPlanner();
-                $planner->product()->associate(Product::find($productId));
+                $planner->product()->associate($product);
                 $planner->weekActivity()->associate($weekActivity);
                 $planner->save();
-
-                // Avanzar al siguiente día
-                $nextMonday->addDay();
             }
 
             DB::commit();
@@ -112,9 +135,17 @@ class PlannerController extends Controller
             return response()->json(['message' => 'Planificación guardada correctamente.']);
         } catch (\Exception $e) {
             DB::rollBack();
+
+            \Log::error('Error en weeklyPlanner:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+
 
     public function approveActivity(Request $request, $activityId)
     {

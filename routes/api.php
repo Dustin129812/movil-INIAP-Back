@@ -22,11 +22,11 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/getUsers', [UserController::class, 'getUsers']);
     Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
     Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
+    Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
     Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
-Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
 
 Route::post('addRubro', [GeneralController::class, 'addRubro']);
 Route::post('addIndicator', [GeneralController::class, 'addIndicator']);

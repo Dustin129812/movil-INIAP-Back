@@ -16,7 +16,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->string('description');
+            $table->text('description');
             $table->date('date');
             $table->string('material');
             $table->enum('status', ['pending', 'approved', 'rejected', 'in progress', 'completed'])->default('pending');
