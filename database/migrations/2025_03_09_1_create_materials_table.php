@@ -11,16 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('weekly_activities', function (Blueprint $table) {
+        Schema::create('materials', function (Blueprint $table) {
             $table->id();
             $table->timestamps();
             $table->softDeletes();
-
-            $table->text('description');
-            $table->date('date');
-            $table->enum('status', ['pending', 'approved', 'rejected', 'in progress', 'completed'])->default('pending');
-
-            $table->foreignId('activity_id')->constrained('activities');
+            $table->string('name');
         });
     }
 
@@ -29,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('weekly_activities');
+        Schema::dropIfExists('materials');
     }
 };

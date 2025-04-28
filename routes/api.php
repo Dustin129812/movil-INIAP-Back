@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('login', [AuthController::class, 'login']);
 Route::post('logout', [AuthController::class, 'logout']);
 
-Route::middleware('auth:api')->group(function () {
+Route::middleware('auth:api')->group(callback: function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
@@ -36,6 +36,7 @@ Route::middleware('auth:api')->group(function () {
 
 });
 
+Route::get('/materials', [PlannerController::class, 'getMaterial']);
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
 
 Route::post('addRubro', [GeneralController::class, 'addRubro']);

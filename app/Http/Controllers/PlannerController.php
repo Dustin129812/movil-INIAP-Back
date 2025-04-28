@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\WeeklyPlannerResource;
 use App\Models\Activity;
+use App\Models\Material;
 use App\Models\Performance_Indicator;
 use App\Models\Product;
 use App\Models\Rubro;
@@ -112,23 +113,38 @@ class PlannerController extends Controller
                     throw new \Exception("Actividad con ID {$data['activity_id']} no encontrada.");
                 }
 
-                // Calcular la fecha exacta para el día
                 $dayOffset = $daysOfWeek[$day] ?? 0;
                 $activityDate = $nextMonday->copy()->addDays($dayOffset);
 
                 $weekActivity = new WeekActivity();
                 $weekActivity->description = $data['description'] ?? '';
                 $weekActivity->date = $activityDate;
-                $weekActivity->material = json_encode($data['materials'] ?? []);
                 $weekActivity->status = 'pending';
                 $weekActivity->activity()->associate($activity);
                 $weekActivity->save();
 
+                // Asociar materiales (opcional)
+                if (!empty($data['materials'])) {
+                    foreach ($data['materials'] as $materialData) {
+                        $materialId = $materialData['material_id'];
+                        $quantity = $materialData['quantity'] ?? 1;
+
+                        $material = Material::find($materialId);
+                        if (!$material) {
+                            throw new \Exception("Material con ID {$materialId} no encontrado.");
+                        }
+
+                        $weekActivity->materials()->attach($materialId, ['quantity' => $quantity]);
+                    }
+                }
+
+                // Crear planner
                 $planner = new WeekPlanner();
                 $planner->product()->associate($product);
                 $planner->weekActivity()->associate($weekActivity);
                 $planner->save();
             }
+
 
             DB::commit();
 
@@ -139,7 +155,12 @@ class PlannerController extends Controller
         }
     }
 
+    public function getMaterial()
+    {
+        $materials = Material::all();
 
+        return response()->json($materials);
+    }
 
     public function approveActivity(Request $request, $activityId)
     {

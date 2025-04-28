@@ -12,7 +12,7 @@ class WeekActivity extends Model
     protected $fillable = [
         'description',
         'date',
-        'material',
+        'material_id',
         'activity_id',
     ];
 
@@ -29,6 +29,12 @@ class WeekActivity extends Model
     public function activity(){
         return $this->belongsTo(Activity::class, 'activity_id');
     }
+
+    public function materials()
+    {
+        return $this->belongsToMany(Material::class)->withPivot('quantity');
+    }
+
 
     public function user(){
         return $this->belongsTo(User::class);

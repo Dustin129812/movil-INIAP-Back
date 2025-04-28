@@ -8,6 +8,7 @@ use App\Models\Experimental_Station;
 use App\Models\Investigation_Area;
 use App\Models\Investigation_Line;
 use App\Models\Location;
+use App\Models\Material;
 use App\Models\Measure;
 use App\Models\Multidisciplinary_Group;
 use App\Models\Nationality;
@@ -259,6 +260,14 @@ class MiscelaneoSeeder extends Seeder
 
         foreach ($rubros as $rubro) {
             Rubro::create($rubro);
+        }
+
+        $materials = [
+            ['name' => 'Vehiculo'],
+        ];
+
+        foreach ($materials as $material) {
+            Material::create($material);
         }
     }
 }

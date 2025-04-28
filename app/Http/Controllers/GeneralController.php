@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ActivityResource;
 use App\Models\Ethnic_Group;
 use App\Models\Location;
 use App\Models\Nationality;
@@ -55,10 +56,8 @@ class GeneralController extends Controller
     {
         $userId = Auth::id();
 
-        $product = Product::with(['activity' => function ($query) use ($userId) {
-            $query->where('user_id', $userId);
-        }])
-            ->whereUserRelated($userId)
+        $product = Product::with(['activity.indicator']) // 👈 importante: cargar el indicador
+        ->whereUserRelated($userId)
             ->find($productId);
 
         if (!$product) {
@@ -69,7 +68,8 @@ class GeneralController extends Controller
             return response()->json(['message' => 'No hay actividades para este producto.'], 404);
         }
 
-        return response()->json($product->activity);
+        // 👇 Retornar usando un Resource que incluya el indicador_name
+        return ActivityResource::collection($product->activity);
     }
 
     public function addRubro(Request $request){
