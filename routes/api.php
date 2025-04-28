@@ -31,6 +31,9 @@ Route::middleware('auth:api')->group(function () {
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
 
     Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
+    Route::get('/profile', [UserController::class, 'getProfile']);
+    Route::put('/profile/update-password', [UserController::class, 'updatePassword']);
+
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);

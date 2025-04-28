@@ -11,6 +11,7 @@ use App\Models\Position;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class UserController extends Controller
 {
@@ -58,6 +59,29 @@ class UserController extends Controller
         ])->response()->setStatusCode(200);
     }
 
+    public function updatePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => ['required'],
+            'new_password' => ['required', 'confirmed'],
+        ]);
+
+        $user = auth()->user(); // usuario autenticado
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'message' => 'La contraseña actual no es correcta.'
+            ], 422); // Unprocessable Entity
+        }
+
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Contraseña actualizada exitosamente.'
+        ]);
+    }
+
     public function updateRoles(Request $request, $id)
     {
         $user = User::findOrFail($id);
@@ -72,6 +96,20 @@ class UserController extends Controller
             ],
         ]);
     }
+
+    public function getProfile()
+    {
+        $user = auth()->user()->load('location'); // <- carga relación 'location'
+
+        return response()->json([
+            'id' => $user->id,
+            'dni' => $user->dni,
+            'name' => $user->name,
+            'email' => $user->email,
+            'location' => $user->location->name ?? null, // <- retornamos el nombre de la ubicación
+        ]);
+    }
+
 
 }
 
