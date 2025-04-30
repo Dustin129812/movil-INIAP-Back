@@ -203,7 +203,7 @@ class WeekActivityController extends Controller
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',
-                    'detail' => 'Error al actualizar el progreso: ' . $e->getMessage(),
+                    'detail' => 'Error al actualizar el progresso: ' . $e->getMessage(),
                     'code' => 500,
                 ],
             ], 500);
