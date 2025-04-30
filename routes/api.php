@@ -3,6 +3,7 @@
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PlannerController;
+use App\Http\Controllers\WeekActivityController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\GeneralController;
 use App\Http\Controllers\AuthController;
@@ -17,26 +18,33 @@ Route::middleware('auth:api')->group(callback: function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-    Route::get('/user/roles', [AuthController::class, 'getUserRoles']);
-    Route::post('/addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
-    Route::get('/getUsers', [UserController::class, 'getUsers']);
-    Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
+    Route::get('user/roles', [AuthController::class, 'getUserRoles']);
+
+    Route::get('getUsers', [UserController::class, 'getUsers']);
+    Route::get('profile', [UserController::class, 'getProfile']);
+    Route::put('profile/update-password', [UserController::class, 'updatePassword']);
+    Route::post('users/{id}/roles', [UserController::class, 'updateRoles']);
+
     Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
-    Route::post('weeklyPlanner', [PlannerController::class, 'weeklyPlanner']);
     Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
+    Route::post('addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
+    Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
 
     Route::get('getProducts', [GeneralController::class, 'getProducts']);
     Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
     Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
 
-    Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
-    Route::get('/profile', [UserController::class, 'getProfile']);
-    Route::put('/profile/update-password', [UserController::class, 'updatePassword']);
 
+
+    Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
+    Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
+    Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
+    Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress'])->middleware('auth:sanctum');
 });
 
-Route::get('/materials', [PlannerController::class, 'getMaterial']);
+
+Route::get('materials', [PlannerController::class, 'getMaterial']);
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
 
 Route::post('addRubro', [GeneralController::class, 'addRubro']);

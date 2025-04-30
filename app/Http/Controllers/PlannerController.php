@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeekPlanner;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,39 +24,45 @@ class PlannerController extends Controller
         DB::beginTransaction();
 
         try {
-
             $userLocation = auth()->user()->location;
 
+            // Crear el producto
             $product = new Product();
             $product->name = $request->input('name');
             $product->budget = $request->input('budget');
             $product->ponderacion = $request->input('ponderacion');
-
-            $user = User::find($request->input('user'));
-
-            $product->user()->associate(User::find($request->input('user')));
-            $product->rubro()->associate(Rubro::find($request->input('rubro')));
-            $product->location()->associate($userLocation);
-
+            $product->user_id = $request->input('user');
+            $product->rubro_id = $request->input('rubro');
+            $product->location_id = $userLocation->id;
             $product->save();
 
+            // Asignar rol al usuario
+            $user = User::find($request->input('user'));
             if ($user) {
                 $user->assignRole('product-manager');
             }
 
+            // Procesar actividades
             foreach ($request->input('activities', []) as $activityData) {
+                // Crear la actividad
                 $activity = new Activity();
                 $activity->description = $activityData['description'];
-                $activity->budget = $activityData['budget']; // Corrige esto también
+                $activity->budget = $activityData['budget'];
                 $activity->ponderacion = $activityData['ponderacion'];
-                $activity->fecha_inicio = $activityData['start_date'];
-                $activity->fecha_fin = $activityData['end_date'];
-
-                $activity->user()->associate(User::find($activityData['user']));
-                $activity->product()->associate($product);
-                $activity->indicator()->associate(Performance_Indicator::find($activityData['indicator']));
+                $activity->start_date = $activityData['start_date'];
+                $activity->end_date = $activityData['end_date'];
+                $activity->user_id = $activityData['user'];
+                $activity->product_id = $product->id;
+                $activity->indicator_id = $activityData['indicator'];
                 $activity->save();
 
+                // Guardar la distribución mensual
+                foreach ($activityData['monthly_distribution'] as $monthData) {
+                    $activity->monthlyProgress()->create([
+                        'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
+                        'percentage' => $monthData['percentage'],
+                    ]);
+                }
             }
 
             DB::commit();
@@ -64,8 +71,8 @@ class PlannerController extends Controller
                 'msg' => [
                     'summary' => 'Success',
                     'detail' => 'El producto y sus actividades han sido guardados correctamente',
-                    'code' => 201
-                ]
+                    'code' => 201,
+                ],
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -73,87 +80,12 @@ class PlannerController extends Controller
                 'msg' => [
                     'summary' => 'Error',
                     'detail' => 'Error al guardar el producto y actividades: ' . $e->getMessage(),
-                    'code' => 500
-                ]
+                    'code' => 500,
+                ],
             ], 500);
         }
     }
 
-
-    public function weeklyPlanner(Request $request)
-    {
-        DB::beginTransaction();
-
-        try {
-            $productId = $request->input('product_id');
-            $weekData = $request->input('week');
-
-            $product = Product::find($productId);
-            if (!$product) {
-                throw new \Exception("Producto con ID $productId no encontrado.");
-            }
-
-            // Obtenemos el lunes de la próxima semana
-            $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
-
-            // Mapeo para calcular el offset de cada día
-            $daysOfWeek = [
-                'lunes' => 0,
-                'martes' => 1,
-                'miércoles' => 2,
-                'jueves' => 3,
-                'viernes' => 4,
-                'sábado' => 5,
-                'domingo' => 6,
-            ];
-
-            foreach ($weekData as $day => $data) {
-                $activity = Activity::find($data['activity_id']);
-                if (!$activity) {
-                    throw new \Exception("Actividad con ID {$data['activity_id']} no encontrada.");
-                }
-
-                $dayOffset = $daysOfWeek[$day] ?? 0;
-                $activityDate = $nextMonday->copy()->addDays($dayOffset);
-
-                $weekActivity = new WeekActivity();
-                $weekActivity->description = $data['description'] ?? '';
-                $weekActivity->date = $activityDate;
-                $weekActivity->status = 'pending';
-                $weekActivity->activity()->associate($activity);
-                $weekActivity->save();
-
-                // Asociar materiales (opcional)
-                if (!empty($data['materials'])) {
-                    foreach ($data['materials'] as $materialData) {
-                        $materialId = $materialData['material_id'];
-                        $quantity = $materialData['quantity'] ?? 1;
-
-                        $material = Material::find($materialId);
-                        if (!$material) {
-                            throw new \Exception("Material con ID {$materialId} no encontrado.");
-                        }
-
-                        $weekActivity->materials()->attach($materialId, ['quantity' => $quantity]);
-                    }
-                }
-
-                // Crear planner
-                $planner = new WeekPlanner();
-                $planner->product()->associate($product);
-                $planner->weekActivity()->associate($weekActivity);
-                $planner->save();
-            }
-
-
-            DB::commit();
-
-            return response()->json(['message' => 'Planificación guardada correctamente.']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
 
     public function getMaterial()
     {
@@ -207,17 +139,90 @@ class PlannerController extends Controller
         return WeeklyPlannerResource::collection($responsables);
     }
 
-    public function getProductsWithActivities()
+    public function getProductsWithActivities(Request $request)
     {
-        // Obtener todos los productos y sus actividades sin filtrar por el usuario
-        $products = Product::with([
-            'location',      // Relación con la ubicación
-            'rubro',         // Relación con el rubro
-            'activity.user', // Relación con la actividad y el usuario asociado
-            'activity.indicator'
-        ])
-            ->get();  // Obtiene todos los productos sin restricción de usuario
+        try {
+            // Obtener el usuario autenticado (opcional)
+            $user = $request->user();
 
-        return response()->json($products);
+            // Cargar productos con todas las relaciones necesarias
+            $products = Product::with([
+                'location',
+                'rubro',
+                'activities.user', // Cambiado 'activity' a 'activities' para coincidir con la relación
+                'activities.indicator',
+                'activities.monthlyProgress',
+                'activities.executionProgress',
+            ])
+                ->when($user, function ($query) use ($user) {
+                    return $query->where('user_id', $user->id);
+                })
+                ->get();
+
+            // Mapear los datos para asegurar el formato esperado
+            $formattedProducts = $products->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'budget' => $product->budget,
+                    'ponderacion' => $product->ponderacion,
+                    'location' => $product->location ? [
+                        'id' => $product->location->id,
+                        'name' => $product->location->name,
+                    ] : null,
+                    'rubro' => $product->rubro ? [
+                        'id' => $product->rubro->id,
+                        'name' => $product->rubro->name,
+                    ] : null,
+                    'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
+                        return [
+                            'id' => $activity->id,
+                            'description' => $activity->description,
+                            'budget' => $activity->budget,
+                            'ponderacion' => $activity->ponderacion,
+                            'start_date' => $activity->start_date,
+                            'end_date' => $activity->end_date,
+                            'user' => $activity->user ? [
+                                'id' => $activity->user->id,
+                                'name' => $activity->user->name,
+                            ] : null,
+                            'indicator' => $activity->indicator ? [
+                                'id' => $activity->indicator->id,
+                                'name' => $activity->indicator->name,
+                            ] : null,
+                            'monthly_progress' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                                return [
+                                    'month' => $progress->month->format('Y-m-d'),
+                                    'percentage' => $progress->percentage,
+                                ];
+                            })->toArray(),
+                            'execution_progress' => ($activity->executionProgress ?? collect([]))->map(function ($progress) {
+                                return [
+                                    'month' => $progress->month->format('Y-m-d'),
+                                    'percentage' => $progress->percentage,
+                                ];
+                            })->toArray(),
+                        ];
+                    })->toArray(),
+                ];
+            })->toArray();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Productos obtenidos correctamente',
+                    'code' => 200,
+                ],
+                'data' => $formattedProducts,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener los productos: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
     }
 }

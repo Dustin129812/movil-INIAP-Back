@@ -12,8 +12,10 @@ class WeekActivity extends Model
     protected $fillable = [
         'description',
         'date',
+        'percentage',
         'material_id',
         'activity_id',
+        'observations'
     ];
 
     public function product()

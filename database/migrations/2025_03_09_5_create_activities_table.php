@@ -19,8 +19,8 @@ return new class extends Migration
             $table->string('description');
             $table->decimal('budget', 15, 2)->default(0);
             $table->decimal('ponderacion', 5, 2)->default(0);
-            $table->date('fecha_inicio')->nullable();
-            $table->date('fecha_fin')->nullable();
+            $table->date('start_date')->nullable();
+            $table->date('end_date')->nullable();
 
             $table->foreignId('user_id')->constrained('users');
             $table->foreignId('product_id')->constrained('products');

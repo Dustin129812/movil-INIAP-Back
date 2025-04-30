@@ -34,4 +34,25 @@ class Activity extends Model
         return $this->hasMany(WeekActivity::class);
     }
 
+    public function monthlyProgress()
+    {
+        return $this->hasMany(ActivityMonthlyProgress::class);
+    }
+
+    public function executionProgress()
+    {
+        return $this->hasMany(ActivityExecutionProgress::class);
+    }
+
+    public function getMonthlyProgressPercentages(): array
+    {
+        return $this->monthlyProgress->map(function ($progress) {
+            return [
+                'month' => $progress->month->format('Y-m'),
+                'percentage' => $progress->percentage,
+                'absolute_percentage' => $this->ponderacion * ($progress->percentage / 100),
+            ];
+        })->toArray();
+    }
+
 }

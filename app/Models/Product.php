@@ -33,12 +33,15 @@ class Product extends Model
         return $this->hasMany(Activity::class);
     }
 
+    public function activities()
+    {
+        return $this->hasMany(Activity::class);
+    }
+
     public function weekPlanner()
     {
         return $this->hasMany(WeekPlanner::class);
     }
-
-    // app/Models/Product.php
 
     public function location()
     {
