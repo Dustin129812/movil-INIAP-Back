@@ -4,7 +4,6 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PlannerController;
 use App\Http\Controllers\WeekActivityController;
-use App\Http\Controllers\GroupController;
 use App\Http\Controllers\GeneralController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
@@ -34,7 +33,6 @@ Route::middleware('auth:api')->group(callback: function () {
     Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
     Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
-
 
 
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);

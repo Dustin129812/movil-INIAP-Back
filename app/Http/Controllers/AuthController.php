@@ -38,7 +38,6 @@ class AuthController extends Controller
         ])->response()->setStatusCode(200);
     }
 
-
     public function logout()
     {
         try {

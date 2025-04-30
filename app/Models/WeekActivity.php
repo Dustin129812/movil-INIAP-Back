@@ -15,7 +15,9 @@ class WeekActivity extends Model
         'percentage',
         'material_id',
         'activity_id',
-        'observations'
+        'observations',
+        'estimated_hours',
+        'work_location'
     ];
 
     public function product()

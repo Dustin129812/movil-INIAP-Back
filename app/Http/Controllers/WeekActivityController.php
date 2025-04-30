@@ -54,6 +54,8 @@ class WeekActivityController extends Controller
                 $weekActivity->description = $data['description'] ?? '';
                 $weekActivity->date = $activityDate;
                 $weekActivity->status = 'pending';
+                $weekActivity->estimated_hours = $data['estimated_hours'] ?? '';
+                $weekActivity->work_location = $data['work_location'] ?? '';
                 $weekActivity->percentage = 0;
                 $weekActivity->activity()->associate($activity);
                 $weekActivity->save();

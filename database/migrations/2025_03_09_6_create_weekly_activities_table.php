@@ -19,9 +19,10 @@ return new class extends Migration
             $table->text('description');
             $table->date('date');
             $table->integer('percentage');
+            $table->integer('estimated_hours');
+            $table->string('work_location');
             $table->enum('status', ['pending', 'approved', 'rejected', 'in progress', 'completed'])->default('pending');
             $table->text('observations')->nullable()->after('percentage');
-
 
             $table->foreignId('activity_id')->constrained('activities');
         });
