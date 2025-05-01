@@ -86,7 +86,6 @@ class PlannerController extends Controller
         }
     }
 
-
     public function getMaterial()
     {
         $materials = Material::all();

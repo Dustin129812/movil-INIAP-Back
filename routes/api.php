@@ -6,6 +6,7 @@ use App\Http\Controllers\PlannerController;
 use App\Http\Controllers\WeekActivityController;
 use App\Http\Controllers\GeneralController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ChartController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -38,9 +39,10 @@ Route::middleware('auth:api')->group(callback: function () {
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
     Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
-    Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress'])->middleware('auth:sanctum');
-});
+    Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress']);
 
+    Route::get('chart-data', [ChartController::class, 'getChartData']);
+});
 
 Route::get('materials', [PlannerController::class, 'getMaterial']);
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
