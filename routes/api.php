@@ -43,8 +43,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
     Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress']);
 
-    Route::post('importUserFile', [ImportController::class, 'importUserFile']);
-    Route::post('import/excel', [ImportController::class, 'importProcessedData']);
 
     Route::post('addRubro', [GeneralController::class, 'addRubro']);
     Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
@@ -56,7 +54,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
 });
 
-
+Route::post('importUserFile', [ImportController::class, 'importUserFile']);
 
 
 

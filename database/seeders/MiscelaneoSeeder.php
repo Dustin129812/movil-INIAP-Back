@@ -264,6 +264,15 @@ class MiscelaneoSeeder extends Seeder
 
         $materials = [
             ['name' => 'Vehiculo'],
+            ['name' => 'Combustible'],
+            ['name' => 'Orden de movilización'],
+            ['name' => 'Conductor'],
+            ['name' => 'Personal de campo'],
+            ['name' => 'Maquinaría agrícola'],
+            ['name' => 'Insumos Agrícolas'],
+            ['name' => 'Análisis de laboratorios'],
+            ['name' => 'Auditorio'],
+            ['name' => 'Sala de reuniones'],
         ];
 
         foreach ($materials as $material) {

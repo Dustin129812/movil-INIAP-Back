@@ -64,6 +64,7 @@ class WeekActivityController extends Controller
                 if (!empty($data['materials'])) {
                     foreach ($data['materials'] as $materialData) {
                         $materialId = $materialData['material_id'];
+                        $materialDescription = $materialData['material_description'] ?? '';
                         $quantity = $materialData['quantity'] ?? 1;
 
                         $material = Material::find($materialId);
@@ -71,7 +72,10 @@ class WeekActivityController extends Controller
                             throw new \Exception("Material con ID {$materialId} no encontrado.");
                         }
 
-                        $weekActivity->materials()->attach($materialId, ['quantity' => $quantity]);
+                        $weekActivity->materials()->attach($materialId, [
+                            'quantity' => $quantity,
+                            'description' => $materialDescription
+                        ]);
                     }
                 }
 

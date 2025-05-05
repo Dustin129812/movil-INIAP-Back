@@ -125,10 +125,13 @@ class PlannerController extends Controller
                 'activities' => function ($q) {
                     $q->whereHas('weekActivities.weekPlanner')
                         ->with([
-                            'product', // Cargar la relación product para product_name
+                            'product',
                             'weekActivities' => function ($q2) {
                                 $q2->whereHas('weekPlanner')
-                                    ->with('weekPlanner.product');
+                                    ->with([
+                                        'weekPlanner.product',
+                                        'materials' // <- Asegúrate de incluir esta relación aquí
+                                    ]);
                             }
                         ]);
                 }
