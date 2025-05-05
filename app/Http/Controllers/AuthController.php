@@ -12,7 +12,11 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        // Intentamos autenticar al usuario
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|min:8',
+        ]);
+
         $credentials = $request->only('email', 'password');
         if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json([
@@ -20,16 +24,13 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Obtenemos el usuario autenticado
         $user = Auth::user();
 
-        // Obtenemos los roles del usuario
-        $roles = $user->getRoleNames(); // Devuelve una colección de roles, pero puedes convertirlo en un array si prefieres
+        $roles = $user->getRoleNames();
 
-        // Retornar el token, rol y usuario
         return (new UserResource($user))->additional([
-            'authToken' => $token,
-            'roles' => $roles,  // Añadimos los roles en la respuesta
+            '__session' => $token,
+            'roles' => $roles,
             'msg' => [
                 'summary' => 'Login success',
                 'detail' => 'Authentication successful',

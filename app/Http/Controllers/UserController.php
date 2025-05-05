@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\RoleUpdated;
 use App\Http\Resources\UserCollection;
 use App\Http\Resources\UserResource;
 use App\Models\Ethnic_Group;
@@ -87,7 +88,7 @@ class UserController extends Controller
         $user = User::findOrFail($id);
         $roles = $request->input('roles', []);
         $user->syncRoles($roles);
-
+        broadcast(new RoleUpdated($user, $roles)); // Emitiendo el nuevo evento
         return response()->json([
             'msg' => [
                 'summary' => 'Roles actualizados',

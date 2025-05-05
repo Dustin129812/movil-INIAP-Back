@@ -148,15 +148,11 @@ class PlannerController extends Controller
             $products = Product::with([
                 'location',
                 'rubro',
-                'activities.user', // Cambiado 'activity' a 'activities' para coincidir con la relación
+                'activities.user',
                 'activities.indicator',
                 'activities.monthlyProgress',
                 'activities.executionProgress',
-            ])
-                ->when($user, function ($query) use ($user) {
-                    return $query->where('user_id', $user->id);
-                })
-                ->get();
+            ])->get();
 
             // Mapear los datos para asegurar el formato esperado
             $formattedProducts = $products->map(function ($product) {
