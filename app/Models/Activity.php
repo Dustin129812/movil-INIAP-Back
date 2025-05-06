@@ -12,13 +12,18 @@ class Activity extends Model
     protected $fillable = [
         'description',
         'budget',
-        'user_id',
         'product_id',
         'indicator_id',
     ];
 
     public function user(){
-        return $this->belongsTo(User::class);
+        return $this->belongsTobelongsToMany(User::class);
+    }
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'activity_user', 'activity_id', 'user_id')
+            ->withTimestamps();
     }
 
     public function product(){

@@ -55,9 +55,3 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
-
-
-
-
-
-

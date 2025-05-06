@@ -51,12 +51,12 @@ class PlannerController extends Controller
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
-                $activity->user_id = $activityData['user'];
                 $activity->product_id = $product->id;
                 $activity->indicator_id = $activityData['indicator'];
                 $activity->save();
 
-                // Guardar la distribución mensual
+                $activity->users()->sync($activityData['user']);
+
                 foreach ($activityData['monthly_distribution'] as $monthData) {
                     $activity->monthlyProgress()->create([
                         'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
@@ -147,23 +147,35 @@ class PlannerController extends Controller
             // Obtener el usuario autenticado (opcional)
             $user = $request->user();
 
-            // Cargar productos con todas las relaciones necesarias
+            // Cargar productos con relaciones
             $products = Product::with([
                 'location',
                 'rubro',
-                'activities.user',
-                'activities.indicator',
-                'activities.monthlyProgress',
-                'activities.executionProgress',
+                'user', // Agregar para el responsable del producto
+                'activities' => function ($query) {
+                    $query->with(['users', 'indicator', 'monthlyProgress', 'executionProgress']);
+                },
             ])->get();
 
-            // Mapear los datos para asegurar el formato esperado
+            // Log para depuración
+            Log::info('Productos cargados:', [
+                'products_count' => $products->count(),
+                'activities_count' => $products->pluck('activities')->flatten()->count(),
+                'users_count' => $products->pluck('activities.*.users')->flatten()->count(),
+                'sample_activity' => $products->pluck('activities')->flatten()->first()?->toArray(),
+            ]);
+
+            // Mapear los datos
             $formattedProducts = $products->map(function ($product) {
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
                     'budget' => $product->budget,
                     'ponderacion' => $product->ponderacion,
+                    'user' => $product->user ? [ // Responsable del producto
+                        'id' => $product->user->id,
+                        'name' => $product->user->name ?? 'Sin nombre',
+                    ] : null,
                     'location' => $product->location ? [
                         'id' => $product->location->id,
                         'name' => $product->location->name,
@@ -178,12 +190,14 @@ class PlannerController extends Controller
                             'description' => $activity->description,
                             'budget' => $activity->budget,
                             'ponderacion' => $activity->ponderacion,
-                            'start_date' => $activity->start_date,
-                            'end_date' => $activity->end_date,
-                            'user' => $activity->user ? [
-                                'id' => $activity->user->id,
-                                'name' => $activity->user->name,
-                            ] : null,
+                            'start_date' => $activity->start_date ? $activity->start_date->format('Y-m-d') : null,
+                            'end_date' => $activity->end_date ? $activity->end_date->format('Y-m-d') : null,
+                            'user' => ($activity->users ?? collect([]))->map(function ($user) {
+                                return [
+                                    'id' => $user->id,
+                                    'name' => $user->name ?? 'Sin nombre',
+                                ];
+                            })->toArray(),
                             'indicator' => $activity->indicator ? [
                                 'id' => $activity->indicator->id,
                                 'name' => $activity->indicator->name,
@@ -214,6 +228,7 @@ class PlannerController extends Controller
                 'data' => $formattedProducts,
             ]);
         } catch (\Exception $e) {
+            Log::error('Error al obtener productos: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',
