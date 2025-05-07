@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Rubro;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GeneralController extends Controller
@@ -48,30 +49,80 @@ class GeneralController extends Controller
 
     public function getProducts()
     {
-        $userId = Auth::id();
-        $products = Product::whereUserRelated($userId)->get();
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return response()->json(['message' => 'No autenticado.'], 401);
+            }
 
-        return response()->json($products);
+            $products = Product::with(['activity.users'])
+                ->whereUserRelated($userId)
+                ->get();
+
+            Log::info('Productos cargados para usuario:', [
+                'user_id' => $userId,
+                'products_count' => $products->count(),
+            ]);
+
+            return response()->json(['data' => $products]); // Devuelve { data: [...] }
+        } catch (\Exception $e) {
+            Log::error('Error al obtener productos: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'message' => 'Error al obtener los productos.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function getActivitiesByProduct($productId)
     {
-        $userId = Auth::id();
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return response()->json(['message' => 'No autenticado.'], 401);
+            }
 
-        $product = Product::with(['activity.indicator']) // 👈 importante: cargar el indicador
-        ->whereUserRelated($userId)
-            ->find($productId);
+            $product = Product::with(['activity.users', 'activity.indicator'])
+                ->whereUserRelated($userId)
+                ->find($productId);
 
-        if (!$product) {
-            return response()->json(['message' => 'Producto no encontrado o no autorizado.'], 404);
+            if (!$product) {
+                return response()->json([
+                    'message' => 'Producto no encontrado o no autorizado.'
+                ], 404);
+            }
+
+            if ($product->activity->isEmpty()) {
+                return response()->json([
+                    'message' => 'No hay actividades para este producto.'
+                ], 404);
+            }
+
+            Log::info('Actividades cargadas para producto:', [
+                'product_id' => $productId,
+                'user_id' => $userId,
+                'activities_count' => $product->activity->count(),
+                'users_count' => $product->activity->pluck('users')->flatten()->count(),
+                'indicators_loaded' => $product->activity->pluck('indicator')->filter()->count(),
+            ]);
+
+            return response()->json(['data' => ActivityResource::collection($product->activity)]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener actividades: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'product_id' => $productId,
+            ]);
+            return response()->json([
+                'message' => 'Error al obtener las actividades.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        if ($product->activity->isEmpty()) {
-            return response()->json(['message' => 'No hay actividades para este producto.'], 404);
-        }
-
-        // 👇 Retornar usando un Resource que incluya el indicador_name
-        return ActivityResource::collection($product->activity);
     }
 
     public function addRubro(Request $request): JsonResponse // Especifica el tipo de retorno

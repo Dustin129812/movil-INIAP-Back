@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Activity;
 use App\Models\Material;
 use App\Models\Product;
+use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeekPlanner;
 use Carbon\Carbon;
@@ -47,6 +48,22 @@ class WeekActivityController extends Controller
                     throw new \Exception("Actividad con ID {$data['activity_id']} no encontrada.");
                 }
 
+                // Obtener el user_id del payload
+                $userId = $data['user_id'] ?? null;
+                if (!$userId) {
+                    throw new \Exception("No se proporcionó un user_id para el día $day.");
+                }
+
+                $user = User::find($userId);
+                if (!$user) {
+                    throw new \Exception("Usuario con ID $userId no encontrado.");
+                }
+
+                // Validar que el usuario esté asociado a la actividad (usando activity_user)
+                if (!$activity->users()->where('user_id', $userId)->exists()) {
+                    throw new \Exception("El usuario con ID $userId no está asignado a la actividad con ID {$data['activity_id']}.");
+                }
+
                 $dayOffset = $daysOfWeek[$day] ?? 0;
                 $activityDate = $nextMonday->copy()->addDays($dayOffset);
 
@@ -57,7 +74,8 @@ class WeekActivityController extends Controller
                 $weekActivity->estimated_hours = $data['estimated_hours'] ?? '';
                 $weekActivity->work_location = $data['work_location'] ?? '';
                 $weekActivity->percentage = 0;
-                $weekActivity->activity()->associate($activity);
+                $weekActivity->activity_id = $activity->id;
+                $weekActivity->user_id = $userId; // Asociar al usuario enviado
                 $weekActivity->save();
 
                 // Asociar materiales (opcional)
@@ -79,13 +97,11 @@ class WeekActivityController extends Controller
                     }
                 }
 
-                // Crear planner
                 $planner = new WeekPlanner();
                 $planner->product()->associate($product);
                 $planner->weekActivity()->associate($weekActivity);
                 $planner->save();
             }
-
 
             DB::commit();
 

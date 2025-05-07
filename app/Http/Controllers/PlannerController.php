@@ -120,26 +120,54 @@ class PlannerController extends Controller
 
     public function getWeeklyPlanningByResponsible()
     {
-        $responsables = User::whereHas('activities.weekActivities.weekPlanner')
-            ->with([
-                'activities' => function ($q) {
-                    $q->whereHas('weekActivities.weekPlanner')
-                        ->with([
-                            'product',
-                            'weekActivities' => function ($q2) {
-                                $q2->whereHas('weekPlanner')
-                                    ->with([
-                                        'weekPlanner.product',
-                                        'materials' // <- Asegúrate de incluir esta relación aquí
-                                    ]);
-                            }
-                        ]);
-                }
-            ])
+        $users = User::whereHas('activities.weekActivities') // solo chequea que haya al menos una actividad semanal
+        ->with([
+            'activities' => function ($q) {
+                $q->select('activities.id', 'activities.description', 'activities.product_id')
+                    ->with([
+                        'product:id,name',
+                        'weekActivities' => function ($q2) {
+                            $q2->select(
+                                'weekly_activities.id',
+                                'weekly_activities.description',
+                                'weekly_activities.date',
+                                'weekly_activities.status',
+                                'weekly_activities.activity_id',
+                                'weekly_activities.user_id'
+                            )->with('materials');
+                        }
+                    ]);
+            }
+        ])
             ->get();
 
-        return WeeklyPlannerResource::collection($responsables);
+        $formattedResult = $users->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'activities' => $user->activities->map(function ($activity) use ($user) {
+                    return [
+                        'product_name' => $activity->product->name ?? null,
+                        'product_id' => $activity->product->id ?? null,
+                        'activity_description' => $activity->description ?? null,
+                        'week_activities' => $activity->weekActivities
+                            ->filter(fn($wa) => $wa->user_id === $user->id)
+                            ->map(fn($wa) => [
+                                'id' => $wa->id,
+                                'week_description' => $wa->description,
+                                'date' => $wa->date,
+                                'day_of_week' => Carbon::parse($wa->date)->format('l (d/m/Y)'),
+                                'materials' => $wa->materials,
+                                'status' => $wa->status,
+                            ])->values(),
+                    ];
+                })->filter(fn($a) => $a['week_activities']->isNotEmpty())->values(),
+            ];
+        });
+
+        return response()->json(['data' => $formattedResult]);
     }
+
 
     public function getProductsWithActivities(Request $request)
     {

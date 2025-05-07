@@ -16,10 +16,6 @@ class Activity extends Model
         'indicator_id',
     ];
 
-    public function user(){
-        return $this->belongsTobelongsToMany(User::class);
-    }
-
     public function users()
     {
         return $this->belongsToMany(User::class, 'activity_user', 'activity_id', 'user_id')
