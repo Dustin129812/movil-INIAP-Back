@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WeekActivityController extends Controller
 {
@@ -123,12 +124,14 @@ class WeekActivityController extends Controller
             $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
             $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
 
+            Log::info("Rango de fechas: $lastMonday a $lastSunday");
+
             $activities = WeekActivity::with(['activity', 'activity.product'])
                 ->whereBetween('date', [$lastMonday, $lastSunday])
-                ->whereHas('activity.product', function ($query) use ($user) {
-                    $query->where('user_id', $user->id);
-                })
+                ->where('user_id', $user->id) // Usar user_id directamente
                 ->get();
+
+            Log::info("Actividades encontradas: " . $activities->toJson());
 
             return response()->json([
                 'msg' => [
@@ -142,7 +145,7 @@ class WeekActivityController extends Controller
                         'activity_id' => $weekActivity->activity->id,
                         'description' => $weekActivity->description,
                         'date' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                        'product_name' => $weekActivity->activity->product->name,
+                        'product_name' => $weekActivity->activity->product ? $weekActivity->activity->product->name : $weekActivity->product_name,
                         'activity_name' => $weekActivity->activity->description,
                         'status' => $weekActivity->status,
                         'percentage' => $weekActivity->percentage,
@@ -151,6 +154,7 @@ class WeekActivityController extends Controller
                 }),
             ]);
         } catch (\Exception $e) {
+            Log::error("Error al obtener actividades: " . $e->getMessage());
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',

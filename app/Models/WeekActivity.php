@@ -32,7 +32,7 @@ class WeekActivity extends Model
     }
 
     public function activity(){
-        return $this->belongsTo(Activity::class, 'activity_id');
+        return $this->belongsTo(Activity::class);
     }
 
     public function materials()

@@ -57,6 +57,14 @@ class PlannerController extends Controller
 
                 $activity->users()->sync($activityData['user']);
 
+                // Asignar rol 'researcher' a cada responsable de la actividad
+                foreach ($activityData['user'] as $userId) {
+                    $responsible = User::find($userId);
+                    if ($responsible) {
+                        $responsible->assignRole('researcher');
+                    }
+                }
+
                 foreach ($activityData['monthly_distribution'] as $monthData) {
                     $activity->monthlyProgress()->create([
                         'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
@@ -185,14 +193,6 @@ class PlannerController extends Controller
                 },
             ])->get();
 
-            // Log para depuración
-            Log::info('Productos cargados:', [
-                'products_count' => $products->count(),
-                'activities_count' => $products->pluck('activities')->flatten()->count(),
-                'users_count' => $products->pluck('activities.*.users')->flatten()->count(),
-                'sample_activity' => $products->pluck('activities')->flatten()->first()?->toArray(),
-            ]);
-
             // Mapear los datos
             $formattedProducts = $products->map(function ($product) {
                 return [
@@ -218,8 +218,8 @@ class PlannerController extends Controller
                             'description' => $activity->description,
                             'budget' => $activity->budget,
                             'ponderacion' => $activity->ponderacion,
-                            'start_date' => $activity->start_date ? $activity->start_date->format('Y-m-d') : null,
-                            'end_date' => $activity->end_date ? $activity->end_date->format('Y-m-d') : null,
+                            'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                            'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
                             'user' => ($activity->users ?? collect([]))->map(function ($user) {
                                 return [
                                     'id' => $user->id,
