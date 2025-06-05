@@ -2,19 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\WeeklyPlannerResource;
 use App\Models\Activity;
 use App\Models\Material;
-use App\Models\Performance_Indicator;
 use App\Models\Product;
-use App\Models\Rubro;
 use App\Models\User;
 use App\Models\WeekActivity;
-use App\Models\WeekPlanner;
 use Carbon\Carbon;
-use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class PlannerController extends Controller
@@ -180,18 +174,23 @@ class PlannerController extends Controller
     public function getProductsWithActivities(Request $request)
     {
         try {
-            // Obtener el usuario autenticado (opcional)
+            // Obtener el usuario autenticado
             $user = $request->user();
 
             // Cargar productos con relaciones
             $products = Product::with([
                 'location',
                 'rubro',
-                'user', // Agregar para el responsable del producto
+                'user', // Responsable del producto
                 'activities' => function ($query) {
                     $query->with(['users', 'indicator', 'monthlyProgress', 'executionProgress']);
                 },
             ])->get();
+
+            // Filtrar el producto "Actividades Extra POA"
+            $products = $products->filter(function ($product) {
+                return $product->name !== 'Actividades Extra POA';
+            });
 
             // Mapear los datos
             $formattedProducts = $products->map(function ($product) {
@@ -200,7 +199,7 @@ class PlannerController extends Controller
                     'name' => $product->name,
                     'budget' => $product->budget,
                     'ponderacion' => $product->ponderacion,
-                    'user' => $product->user ? [ // Responsable del producto
+                    'user' => $product->user ? [
                         'id' => $product->user->id,
                         'name' => $product->user->name ?? 'Sin nombre',
                     ] : null,
@@ -256,7 +255,6 @@ class PlannerController extends Controller
                 'data' => $formattedProducts,
             ]);
         } catch (\Exception $e) {
-            Log::error('Error al obtener productos: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',

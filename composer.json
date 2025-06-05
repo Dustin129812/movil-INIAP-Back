@@ -14,6 +14,7 @@
         "phpoffice/phpspreadsheet": "^4.1",
         "predis/predis": "^3.0",
         "spatie/laravel-permission": "^6.17",
+        "tuncaybahadir/quar": "^1.5",
         "tymon/jwt-auth": "^2.2"
     },
     "require-dev": {

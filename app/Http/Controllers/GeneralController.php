@@ -59,11 +59,6 @@ class GeneralController extends Controller
                 ->whereUserRelated($userId)
                 ->get();
 
-            Log::info('Productos cargados para usuario:', [
-                'user_id' => $userId,
-                'products_count' => $products->count(),
-            ]);
-
             return response()->json(['data' => $products]); // Devuelve { data: [...] }
         } catch (\Exception $e) {
             Log::error('Error al obtener productos: ' . $e->getMessage(), [

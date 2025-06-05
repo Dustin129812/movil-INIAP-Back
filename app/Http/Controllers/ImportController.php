@@ -2,17 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Activity;
 use App\Models\Area;
 use App\Models\Ethnic_Group;
 use App\Models\Location;
 use App\Models\Nationality;
-use App\Models\Product;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -53,14 +50,30 @@ class ImportController extends Controller
             $highestRow = $sheet->getHighestRow();
             $highestColumn = $sheet->getHighestColumn();
 
+            $insertedCount = 0;
+            $skippedCount = 0;
+
             for ($row = 6; $row <= $highestRow; $row++) {
+                $dni = $sheet->getCell('H' . $row)->getValue();
+                $email = strtolower($sheet->getCell('AA' . $row)->getValue());
+
+                $existingUser = User::where('dni', $dni)
+                    ->orWhere('email', $email)
+                    ->first();
+
+                if ($existingUser) {
+                    $skippedCount++;
+                    continue;
+                }
+
+                $data['dni'] = $dni;
                 $data['name'] = $sheet->getCell('D' . $row)->getValue();
-                $data['dni'] = $sheet->getCell('H' . $row)->getValue();
                 $data['gender'] = $sheet->getCell('I' . $row)->getValue();
-                $data['email'] = strtolower($sheet->getCell('AA' . $row)->getValue());
+                $data['email'] = $email;
                 $data['phone'] = strtolower($sheet->getCell('Y' . $row)->getValue());
                 $birthDateValue = $sheet->getCell('J' . $row)->getValue();
-                $data['password'] = Hash::make($sheet->getCell('H' . $row)->getValue());
+                $data['password'] = Hash::make($dni);
+
                 if (is_numeric($birthDateValue)) {
                     $data['birth_date'] = Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($birthDateValue))->format('Y/m/d');
                 }
@@ -81,14 +94,17 @@ class ImportController extends Controller
                 $positions = Area::firstOrCreate(['name' => $positionsName]);
                 $data['position_id'] = $positions->id;
 
-                $existingUser = User::where('dni', $data['dni'])->first();
-                if (!$existingUser) {
-                    $newUser = User::create($data);
-                    $newUser->assignRole('user');
-                }
-
+                $newUser = User::create($data);
+                $newUser->assignRole('user');
+                $insertedCount++;
             }
-            return response()->json(['message' => 'Datos insertados con éxito'], Response::HTTP_OK);
+
+            return response()->json([
+                'message' => 'Proceso completado',
+                'usuarios_creados' => $insertedCount,
+                'usuarios_saltados' => $skippedCount
+            ], Response::HTTP_OK);
+
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }

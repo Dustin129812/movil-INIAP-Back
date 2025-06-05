@@ -264,6 +264,7 @@ class MiscelaneoSeeder extends Seeder
 
         $materials = [
             ['name' => 'Vehiculo'],
+            ['name' => 'Viaticos'],
             ['name' => 'Combustible'],
             ['name' => 'Orden de movilización'],
             ['name' => 'Conductor'],

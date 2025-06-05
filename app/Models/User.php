@@ -86,6 +86,9 @@ class User extends Authenticatable  implements JWTSubject
             ->withTimestamps();
     }
 
-
+    public function qrTokens() // Relación en plural, para hasMany
+    {
+        return $this->hasMany(QrToken::class);
+    }
 
 }

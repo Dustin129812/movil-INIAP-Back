@@ -51,12 +51,11 @@ class Product extends Model
     public function scopeWhereUserRelated($query, $userId)
     {
         return $query->where(function ($query) use ($userId) {
-            // Usuario responsable del producto
             $query->where('user_id', $userId)
-                // O usuario asociado a alguna actividad del producto
                 ->orWhereHas('activity.users', function ($query) use ($userId) {
                     $query->where('users.id', $userId);
-                });
+                })
+            ->orWhere('name', 'Actividades Extra POA');
         });
     }
 

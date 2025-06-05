@@ -78,7 +78,7 @@ class ChartController extends Controller
             } elseif ($metric === 'poa_vs_extra_poa') {
                 $data = $query->selectRaw('
                     CASE
-                        WHEN TRIM(rubros.name) ILIKE \'Extra POA\' THEN \'Extra POA\'
+                        WHEN TRIM(rubros.name) ILIKE \'Actividades Extra POA\' THEN \'Actividades Extra POA\'
                         ELSE \'POA\'
                     END as label,
                     COALESCE(SUM(weekly_activities.estimated_hours), 0) as value
@@ -97,7 +97,7 @@ class ChartController extends Controller
             } elseif ($metric === 'time_by_rubro') {
                 $data = $query->selectRaw('
                     CASE
-                        WHEN TRIM(rubros.name) ILIKE \'Extra POA\' THEN \'Extra POA\'
+                        WHEN TRIM(rubros.name) ILIKE \'Actividades Extra POA\' THEN \'Actividades Extra POA\'
                         ELSE \'POA\'
                     END as label,
                     COALESCE(SUM(weekly_activities.estimated_hours), 0) as value

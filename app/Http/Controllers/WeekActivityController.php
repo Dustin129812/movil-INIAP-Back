@@ -71,7 +71,8 @@ class WeekActivityController extends Controller
                 $weekActivity = new WeekActivity();
                 $weekActivity->description = $data['description'] ?? '';
                 $weekActivity->date = $activityDate;
-                $weekActivity->status = 'pending';
+                $isExtraPoa = $product->name === 'Actividades Extra POA';
+                $weekActivity->status = $isExtraPoa ? 'approved' : 'pending';
                 $weekActivity->estimated_hours = $data['estimated_hours'] ?? '';
                 $weekActivity->work_location = $data['work_location'] ?? '';
                 $weekActivity->percentage = 0;
