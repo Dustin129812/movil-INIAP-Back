@@ -56,3 +56,4 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
+Route::put('/products/{id}', [PlannerController::class, 'updateProductAndActivity']);

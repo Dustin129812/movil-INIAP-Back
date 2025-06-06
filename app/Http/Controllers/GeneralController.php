@@ -120,35 +120,65 @@ class GeneralController extends Controller
         }
     }
 
-    public function addRubro(Request $request): JsonResponse // Especifica el tipo de retorno
+    public function addRubro(Request $request): JsonResponse
     {
         try {
+            $rubroName = $request->input('name');
+
+            // 1. Validar que el nombre no sea nulo o vacío
+            if (empty($rubroName)) {
+                return response()->json(['error' => 'El nombre del rubro no puede estar vacío.'], 400);
+            }
+
+            // 2. Buscar si ya existe un rubro con ese nombre (ignorando mayúsculas/minúsculas para una mejor UX)
+            $existingRubro = Rubro::whereRaw('LOWER(name) = ?', [strtolower($rubroName)])->first();
+
+            if ($existingRubro) {
+                // Si ya existe, devuelve un error 409 Conflict
+                return response()->json(['error' => 'El rubro "' . $rubroName . '" ya existe.'], 409);
+            }
+
+            // Si no existe, procede a crearlo
             $rubro = new Rubro();
-            $rubro->name = $request->input('name');
+            $rubro->name = $rubroName;
             $rubro->save();
 
-            return response()->json($rubro, 201); // Devuelve el nuevo rubro y el código 201 (Created)
-            // O si prefieres un mensaje:
-            // return response()->json(['message' => 'Rubro creado exitosamente', 'rubro' => $rubro], 201);
+            return response()->json($rubro, 201);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Error al crear el rubro', 'details' => $e->getMessage()], 500); // Manejo de errores
+            // Un error general de servidor
+            return response()->json(['error' => 'Error al crear el rubro', 'details' => $e->getMessage()], 500);
         }
     }
 
     public function addIndicator(Request $request): JsonResponse
     {
         try {
+            $indicatorName = $request->input('name');
+
+            //Validar que el nombre no sea nulo o vacío
+            if (empty($indicatorName)) {
+                return response()->json(['error' => 'El nombre del indicador no puede estar vacío.'], 400);
+            }
+
+            //Buscar si ya existe un indicador con ese nombre (ignorando mayúsculas/minúsculas)
+            $existingIndicator = Rubro::whereRaw('LOWER(name) = ?', [strtolower($indicatorName)])->first();
+
+            if ($existingIndicator) {
+                //Si ya existe, devuelve un error 409 Conflict
+                return response()->json(['error' => 'El indicador "' . $indicatorName . '" ya existe.'], 409);
+            }
+
+            //Si no existe, procede a crearlo
             $indicator = new Performance_Indicator();
-            $indicator->name = $request->input('name');
+            $indicator->name = $indicatorName;
             $indicator->save();
 
-            return response()->json($indicator, 201); // Devuelve el nuevo indicador y código 201
-            // O:
-            // return response()->json(['message' => 'Indicador creado exitosamente', 'indicator' => $indicator], 201);
+            return response()->json($indicator, 201);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Error al crear el indicador', 'details' => $e->getMessage()], 500); // Manejo de errores
+            // Un error general de servidor
+            return response()->json(['error' => 'Error al crear el indicador', 'details' => $e->getMessage()], 500);
         }
     }
 }

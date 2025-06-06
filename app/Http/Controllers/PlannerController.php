@@ -88,6 +88,101 @@ class PlannerController extends Controller
         }
     }
 
+    // En tu controlador de Laravel
+
+    public function updateProductAndActivity(Request $request, $id)
+    {
+        DB::beginTransaction();
+
+        try {
+            $product = Product::findOrFail($id);
+
+            // Obtenemos los datos de la petición
+            $userData = $request->input('user');
+            $rubroData = $request->input('rubro');
+
+            // Actualiza los campos principales del producto
+            $product->name = $request->input('name');
+            $product->budget = $request->input('budget');
+            $product->ponderacion = $request->input('ponderacion');
+
+            // Extraemos solo el 'id' del array/objeto recibido.
+            $product->user_id = $userData['id'] ?? null;
+            $product->rubro_id = $rubroData['id'] ?? null;
+
+            $product->save();
+
+            if (isset($userData['id'])) {
+                $user = User::find($userData['id']);
+                if ($user) {
+                    $user->assignRole('product-manager');
+                }
+            }
+
+            $receivedActivityIds = [];
+
+            foreach ($request->input('activities', []) as $activityData) {
+                $activity = Activity::findOrNew($activityData['id'] ?? 0);
+
+                $indicatorData = $activityData['indicator'];
+                $usersData = $activityData['user'];
+
+                $activity->description = $activityData['description'];
+                $activity->budget = $activityData['budget'];
+                $activity->ponderacion = $activityData['ponderacion'];
+                $activity->start_date = $activityData['start_date'];
+                $activity->end_date = $activityData['end_date'];
+
+                $activity->indicator_id = $indicatorData['id'] ?? null;
+                $activity->product_id = $product->id;
+                $activity->save();
+
+                $userIds = collect($usersData)->pluck('id')->all();
+                $activity->users()->sync($userIds);
+
+                foreach ($userIds as $userId) {
+                    $responsible = User::find($userId);
+                    if ($responsible) $responsible->assignRole('researcher');
+                }
+
+                $activity->monthlyProgress()->delete();
+                if (!empty($activityData['monthly_distribution'])) {
+                    foreach ($activityData['monthly_distribution'] as $monthData) {
+                        $activity->monthlyProgress()->create([
+                            'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
+                            'percentage' => $monthData['percentage'],
+                        ]);
+                    }
+                }
+
+                $receivedActivityIds[] = $activity->id;
+            }
+
+            $product->activities()->whereNotIn('id', $receivedActivityIds)->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Actualización Exitosa',
+                    'detail' => 'El producto y sus actividades han sido actualizados correctamente',
+                    'code' => 200,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    // Devuelve el mensaje de error completo para facilitar la depuración
+                    'detail' => 'Error al actualizar el producto y actividades: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
     public function getMaterial()
     {
         $materials = Material::all();
