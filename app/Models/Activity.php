@@ -13,7 +13,6 @@ class Activity extends Model
         'description',
         'budget',
         'product_id',
-        'indicator_id',
     ];
 
     public function users()
@@ -26,8 +25,9 @@ class Activity extends Model
         return $this->belongsTo(Product::class);
     }
 
-    public function indicator(){
-        return $this->belongsTo(Performance_Indicator::class);
+    public function indicators()
+    {
+        return $this->belongsToMany(Performance_Indicator::class, 'activity_indicator', 'activity_id', 'indicator_id');
     }
 
     public function weekActivities()
