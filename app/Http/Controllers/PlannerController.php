@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Activity;
 use App\Models\Material;
 use App\Models\Product;
+use App\Notifications\ProductUpdated;
+use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\WeekActivity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PlannerController extends Controller
 {
@@ -169,6 +172,13 @@ class PlannerController extends Controller
             $product->activities()->whereNotIn('id', $receivedActivityIds)->delete();
 
             DB::commit();
+
+            $productManager = User::find($product->user_id);
+            $updater = Auth::user();
+
+            if ($productManager && $updater && $productManager->id !== $updater->id) {
+                $productManager->notify(new ProductUpdated($product, $updater));
+            }
 
             return response()->json([
                 'msg' => [
