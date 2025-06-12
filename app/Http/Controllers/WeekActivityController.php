@@ -5,12 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Activity;
 use App\Models\Material;
 use App\Models\Product;
+use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeekPlanner;
+use App\Notifications\CreateProduct;
+use App\Notifications\CreateWeekPlanner;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WeekActivityController extends Controller
 {
@@ -47,23 +52,42 @@ class WeekActivityController extends Controller
                     throw new \Exception("Actividad con ID {$data['activity_id']} no encontrada.");
                 }
 
+                // Obtener el user_id del payload
+                $userId = $data['user_id'] ?? null;
+                if (!$userId) {
+                    throw new \Exception("No se proporcionó un user_id para el día $day.");
+                }
+
+                $user = User::find($userId);
+                if (!$user) {
+                    throw new \Exception("Usuario con ID $userId no encontrado.");
+                }
+
+                // Validar que el usuario esté asociado a la actividad (usando activity_user)
+                if (!$activity->users()->where('user_id', $userId)->exists()) {
+                    throw new \Exception("El usuario con ID $userId no está asignado a la actividad con ID {$data['activity_id']}.");
+                }
+
                 $dayOffset = $daysOfWeek[$day] ?? 0;
                 $activityDate = $nextMonday->copy()->addDays($dayOffset);
 
                 $weekActivity = new WeekActivity();
                 $weekActivity->description = $data['description'] ?? '';
                 $weekActivity->date = $activityDate;
-                $weekActivity->status = 'pending';
+                $isExtraPoa = $product->name === 'Actividades Extra POA';
+                $weekActivity->status = $isExtraPoa ? 'approved' : 'pending';
                 $weekActivity->estimated_hours = $data['estimated_hours'] ?? '';
                 $weekActivity->work_location = $data['work_location'] ?? '';
                 $weekActivity->percentage = 0;
-                $weekActivity->activity()->associate($activity);
+                $weekActivity->activity_id = $activity->id;
+                $weekActivity->user_id = $userId; // Asociar al usuario enviado
                 $weekActivity->save();
 
                 // Asociar materiales (opcional)
                 if (!empty($data['materials'])) {
                     foreach ($data['materials'] as $materialData) {
                         $materialId = $materialData['material_id'];
+                        $materialDescription = $materialData['material_description'] ?? '';
                         $quantity = $materialData['quantity'] ?? 1;
 
                         $material = Material::find($materialId);
@@ -71,19 +95,27 @@ class WeekActivityController extends Controller
                             throw new \Exception("Material con ID {$materialId} no encontrado.");
                         }
 
-                        $weekActivity->materials()->attach($materialId, ['quantity' => $quantity]);
+                        $weekActivity->materials()->attach($materialId, [
+                            'quantity' => $quantity,
+                            'description' => $materialDescription
+                        ]);
                     }
                 }
 
-                // Crear planner
                 $planner = new WeekPlanner();
                 $planner->product()->associate($product);
                 $planner->weekActivity()->associate($weekActivity);
                 $planner->save();
             }
 
-
             DB::commit();
+
+            $productManager = User::find($product->user_id);
+            $updater = Auth::user();
+
+            if ($productManager && $updater && $productManager->id !== $updater->id) {
+                $productManager->notify(new CreateWeekPlanner($product, $updater));
+            }
 
             return response()->json(['message' => 'Planificación guardada correctamente.']);
         } catch (\Exception $e) {
@@ -103,12 +135,14 @@ class WeekActivityController extends Controller
             $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
             $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
 
+            Log::info("Rango de fechas: $lastMonday a $lastSunday");
+
             $activities = WeekActivity::with(['activity', 'activity.product'])
                 ->whereBetween('date', [$lastMonday, $lastSunday])
-                ->whereHas('activity.product', function ($query) use ($user) {
-                    $query->where('user_id', $user->id);
-                })
+                ->where('user_id', $user->id) // Usar user_id directamente
                 ->get();
+
+            Log::info("Actividades encontradas: " . $activities->toJson());
 
             return response()->json([
                 'msg' => [
@@ -122,7 +156,7 @@ class WeekActivityController extends Controller
                         'activity_id' => $weekActivity->activity->id,
                         'description' => $weekActivity->description,
                         'date' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                        'product_name' => $weekActivity->activity->product->name,
+                        'product_name' => $weekActivity->activity->product ? $weekActivity->activity->product->name : $weekActivity->product_name,
                         'activity_name' => $weekActivity->activity->description,
                         'status' => $weekActivity->status,
                         'percentage' => $weekActivity->percentage,
@@ -131,6 +165,7 @@ class WeekActivityController extends Controller
                 }),
             ]);
         } catch (\Exception $e) {
+            Log::error("Error al obtener actividades: " . $e->getMessage());
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',

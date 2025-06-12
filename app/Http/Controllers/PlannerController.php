@@ -2,31 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\WeeklyPlannerResource;
 use App\Models\Activity;
 use App\Models\Material;
-use App\Models\Performance_Indicator;
 use App\Models\Product;
-use App\Models\Rubro;
+use App\Notifications\CreateProduct;
+use App\Notifications\ProductUpdated;
+use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\WeekActivity;
-use App\Models\WeekPlanner;
 use Carbon\Carbon;
-use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PlannerController extends Controller
 {
     public function addProductAndActivity(Request $request)
     {
+        // Iniciar una transacción para garantizar la integridad de los datos
         DB::beginTransaction();
 
         try {
             $userLocation = auth()->user()->location;
 
-            // Crear el producto
+            // --- Crear el Producto ---
             $product = new Product();
             $product->name = $request->input('name');
             $product->budget = $request->input('budget');
@@ -36,13 +35,13 @@ class PlannerController extends Controller
             $product->location_id = $userLocation->id;
             $product->save();
 
-            // Asignar rol al usuario
+            // Asignar rol al responsable del producto
             $user = User::find($request->input('user'));
             if ($user) {
                 $user->assignRole('product-manager');
             }
 
-            // Procesar actividades
+            // --- Procesar Actividades ---
             foreach ($request->input('activities', []) as $activityData) {
                 // Crear la actividad
                 $activity = new Activity();
@@ -51,12 +50,29 @@ class PlannerController extends Controller
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
-                $activity->user_id = $activityData['user'];
                 $activity->product_id = $product->id;
-                $activity->indicator_id = $activityData['indicator'];
                 $activity->save();
 
-                // Guardar la distribución mensual
+                // Sincronizar los usuarios responsables (acepta un array)
+                if (!empty($activityData['user'])) {
+                    $activity->users()->sync($activityData['user']);
+                }
+
+                // Sincronizar los indicadores (acepta un array)
+                // Se asegura de usar la clave 'indicators' (plural) que viene del frontend
+                if (!empty($activityData['indicators'])) {
+                    $activity->indicators()->sync($activityData['indicators']);
+                }
+
+                // Asignar rol 'researcher' a cada responsable de la actividad
+                foreach ($activityData['user'] as $userId) {
+                    $responsible = User::find($userId);
+                    if ($responsible) {
+                        $responsible->assignRole('researcher');
+                    }
+                }
+
+                // Crear la distribución mensual
                 foreach ($activityData['monthly_distribution'] as $monthData) {
                     $activity->monthlyProgress()->create([
                         'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
@@ -67,19 +83,125 @@ class PlannerController extends Controller
 
             DB::commit();
 
+            $productManager = User::find($product->user_id);
+            $updater = Auth::user();
+
+            if ($productManager && $updater && $productManager->id !== $updater->id) {
+                $productManager->notify(new CreateProduct($product, $updater));
+            }
+
             return response()->json([
                 'msg' => [
-                    'summary' => 'Success',
+                    'summary' => 'Éxito',
                     'detail' => 'El producto y sus actividades han sido guardados correctamente',
                     'code' => 201,
                 ],
             ], 201);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
+            // Si algo falla, revertir todos los cambios
             DB::rollBack();
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',
                     'detail' => 'Error al guardar el producto y actividades: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
+    public function updateProductAndActivity(Request $request, $id)
+    {
+        DB::beginTransaction();
+
+        try {
+            $product = Product::findOrFail($id);
+            $product->update($request->only([
+                'name',
+                'budget',
+                'ponderacion',
+                'user_id',
+                'rubro_id',
+            ]));
+
+            // Asignar rol al responsable del producto
+            if ($request->has('user_id')) {
+                $user = User::find($request->input('user_id'));
+                if ($user) {
+                    $user->assignRole('product-manager');
+                }
+            }
+
+            $receivedActivityIds = [];
+
+            foreach ($request->input('activities', []) as $activityData) {
+                // Busca una actividad existente o crea una nueva si el ID es nulo
+                $activity = Activity::findOrNew($activityData['id'] ?? null);
+
+                // Asigna los valores a la actividad
+                $activity->description = $activityData['description'];
+                $activity->budget = $activityData['budget'];
+                $activity->ponderacion = $activityData['ponderacion'];
+                $activity->start_date = $activityData['start_date'];
+                $activity->end_date = $activityData['end_date'];
+                $activity->product_id = $product->id;
+                $activity->save();
+
+                // CORRECCIÓN 2: El frontend ya envía arrays de IDs, por lo que no es necesario usar pluck().
+                $userIds = $activityData['user'] ?? [];
+                $indicatorIds = $activityData['indicators'] ?? [];
+
+                $activity->users()->sync($userIds);
+                $activity->indicators()->sync($indicatorIds);
+
+                // Asignar rol 'researcher' a cada responsable
+                foreach ($userIds as $userId) {
+                    $responsible = User::find($userId);
+                    if ($responsible) {
+                        $responsible->assignRole('researcher');
+                    }
+                }
+
+                // Borrar y recrear el progreso mensual para evitar duplicados
+                $activity->monthlyProgress()->delete();
+                if (!empty($activityData['monthly_distribution'])) {
+                    foreach ($activityData['monthly_distribution'] as $monthData) {
+                        $activity->monthlyProgress()->create([
+                            'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
+                            'percentage' => $monthData['percentage'],
+                        ]);
+                    }
+                }
+
+                $receivedActivityIds[] = $activity->id;
+            }
+
+            // Eliminar actividades que ya no forman parte del producto
+            $product->activities()->whereNotIn('id', $receivedActivityIds)->delete();
+
+            DB::commit();
+
+            $productManager = User::find($product->user_id);
+            $updater = Auth::user();
+
+            if ($productManager && $updater && $productManager->id !== $updater->id) {
+                $productManager->notify(new ProductUpdated($product, $updater));
+            }
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Actualización Exitosa',
+                    'detail' => 'El producto y sus actividades han sido actualizados correctamente',
+                    'code' => 200,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al actualizar el producto y actividades: ' . $e->getMessage(),
                     'code' => 500,
                 ],
             ], 500);
@@ -120,47 +242,85 @@ class PlannerController extends Controller
 
     public function getWeeklyPlanningByResponsible()
     {
-        $responsables = User::whereHas('activities.weekActivities.weekPlanner')
-            ->with([
-                'activities' => function ($q) {
-                    $q->whereHas('weekActivities.weekPlanner')
-                        ->with([
-                            'product', // Cargar la relación product para product_name
-                            'weekActivities' => function ($q2) {
-                                $q2->whereHas('weekPlanner')
-                                    ->with('weekPlanner.product');
-                            }
-                        ]);
-                }
-            ])
+        $users = User::whereHas('activities.weekActivities') // solo chequea que haya al menos una actividad semanal
+        ->with([
+            'activities' => function ($q) {
+                $q->select('activities.id', 'activities.description', 'activities.product_id')
+                    ->with([
+                        'product:id,name',
+                        'weekActivities' => function ($q2) {
+                            $q2->select(
+                                'weekly_activities.id',
+                                'weekly_activities.description',
+                                'weekly_activities.date',
+                                'weekly_activities.status',
+                                'weekly_activities.activity_id',
+                                'weekly_activities.user_id'
+                            )->with('materials');
+                        }
+                    ]);
+            }
+        ])
             ->get();
 
-        return WeeklyPlannerResource::collection($responsables);
+        $formattedResult = $users->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'activities' => $user->activities->map(function ($activity) use ($user) {
+                    return [
+                        'product_name' => $activity->product->name ?? null,
+                        'product_id' => $activity->product->id ?? null,
+                        'activity_description' => $activity->description ?? null,
+                        'week_activities' => $activity->weekActivities
+                            ->filter(fn($wa) => $wa->user_id === $user->id)
+                            ->map(fn($wa) => [
+                                'id' => $wa->id,
+                                'week_description' => $wa->description,
+                                'date' => $wa->date,
+                                'day_of_week' => Carbon::parse($wa->date)->format('l (d/m/Y)'),
+                                'materials' => $wa->materials,
+                                'status' => $wa->status,
+                            ])->values(),
+                    ];
+                })->filter(fn($a) => $a['week_activities']->isNotEmpty())->values(),
+            ];
+        });
+
+        return response()->json(['data' => $formattedResult]);
     }
+
 
     public function getProductsWithActivities(Request $request)
     {
         try {
-            // Obtener el usuario autenticado (opcional)
             $user = $request->user();
 
-            // Cargar productos con todas las relaciones necesarias
             $products = Product::with([
                 'location',
                 'rubro',
-                'activities.user',
-                'activities.indicator',
-                'activities.monthlyProgress',
-                'activities.executionProgress',
+                'user', // Responsable del producto
+                'activities' => function ($query) {
+                    $query->with(['users', 'indicators', 'monthlyProgress', 'executionProgress']);
+                },
             ])->get();
 
-            // Mapear los datos para asegurar el formato esperado
+            // Filtrar el producto "Actividades Extra POA"
+            $products = $products->filter(function ($product) {
+                return $product->name !== 'Actividades Extra POA';
+            });
+
+            // Mapear los datos
             $formattedProducts = $products->map(function ($product) {
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
                     'budget' => $product->budget,
                     'ponderacion' => $product->ponderacion,
+                    'user' => $product->user ? [
+                        'id' => $product->user->id,
+                        'name' => $product->user->name ?? 'Sin nombre',
+                    ] : null,
                     'location' => $product->location ? [
                         'id' => $product->location->id,
                         'name' => $product->location->name,
@@ -175,32 +335,39 @@ class PlannerController extends Controller
                             'description' => $activity->description,
                             'budget' => $activity->budget,
                             'ponderacion' => $activity->ponderacion,
-                            'start_date' => $activity->start_date,
-                            'end_date' => $activity->end_date,
-                            'user' => $activity->user ? [
-                                'id' => $activity->user->id,
-                                'name' => $activity->user->name,
-                            ] : null,
-                            'indicator' => $activity->indicator ? [
-                                'id' => $activity->indicator->id,
-                                'name' => $activity->indicator->name,
-                            ] : null,
+                            'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                            'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                            'user' => ($activity->users ?? collect([]))->map(function ($user) {
+                                return [
+                                    'id' => $user->id,
+                                    'name' => $user->name ?? 'Sin nombre',
+                                ];
+                            })->toArray(),
+
+                            // Se mapea la colección de indicadores, igual que se hace con los usuarios.
+                            'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicators) {
+                                return [
+                                    'id' => $indicators->id,
+                                    'name' => $indicators->name,
+                                ];
+                            })->toArray(),
+
                             'monthly_progress' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
                                 return [
-                                    'month' => $progress->month->format('Y-m-d'),
+                                    'month' => Carbon::parse($progress->month)->format('Y-m-d'),
                                     'percentage' => $progress->percentage,
                                 ];
                             })->toArray(),
                             'execution_progress' => ($activity->executionProgress ?? collect([]))->map(function ($progress) {
                                 return [
-                                    'month' => $progress->month->format('Y-m-d'),
+                                    'month' => Carbon::parse($progress->month)->format('Y-m-d'),
                                     'percentage' => $progress->percentage,
                                 ];
                             })->toArray(),
                         ];
                     })->toArray(),
                 ];
-            })->toArray();
+            })->values()->toArray(); // Usamos values() para re-indexar el array después de filter()
 
             return response()->json([
                 'msg' => [
@@ -210,7 +377,7 @@ class PlannerController extends Controller
                 ],
                 'data' => $formattedProducts,
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',

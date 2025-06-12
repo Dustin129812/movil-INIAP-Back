@@ -11,8 +11,19 @@ class ActivityResource extends JsonResource
         return [
             'id' => $this->id,
             'description' => $this->description,
+            'budget' => $this->budget,
+            'ponderacion' => $this->ponderacion,
+            'user' => $this->whenLoaded('users', function () {
+                return $this->users->map(function ($user) {
+                    return [
+                        'id' => $user->id,
+                        'name' => $user->name ?? 'Sin nombre',
+                    ];
+                })->toArray();
+            }, []),
             'indicator_id' => $this->indicator_id,
-            'indicator_name' => $this->indicator ? $this->indicator->name : null,
+            'indicator_name' => $this->whenLoaded('indicator', fn() => $this->indicator?->name, null),
+            'monthly_distribution' => $this->monthly_distribution ?? [],
         ];
     }
 }

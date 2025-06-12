@@ -12,21 +12,22 @@ class Activity extends Model
     protected $fillable = [
         'description',
         'budget',
-        'user_id',
         'product_id',
-        'indicator_id',
     ];
 
-    public function user(){
-        return $this->belongsTo(User::class);
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'activity_user', 'activity_id', 'user_id')
+            ->withTimestamps();
     }
 
     public function product(){
         return $this->belongsTo(Product::class);
     }
 
-    public function indicator(){
-        return $this->belongsTo(Performance_Indicator::class);
+    public function indicators()
+    {
+        return $this->belongsToMany(Performance_Indicator::class, 'activity_indicator', 'activity_id', 'indicator_id');
     }
 
     public function weekActivities()

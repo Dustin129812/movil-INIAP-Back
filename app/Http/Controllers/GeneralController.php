@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Rubro;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GeneralController extends Controller
@@ -48,61 +49,128 @@ class GeneralController extends Controller
 
     public function getProducts()
     {
-        $userId = Auth::id();
-        $products = Product::whereUserRelated($userId)->get();
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return response()->json(['message' => 'No autenticado.'], 401);
+            }
 
-        return response()->json($products);
+            $products = Product::with(['activity.users'])
+                ->whereUserRelated($userId)
+                ->get();
+
+            return response()->json(['data' => $products]); // Devuelve { data: [...] }
+        } catch (\Exception $e) {
+            Log::error('Error al obtener productos: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'message' => 'Error al obtener los productos.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function getActivitiesByProduct($productId)
     {
-        $userId = Auth::id();
+        try {
+            $userId = Auth::id();
+            if (!$userId) {
+                return response()->json(['message' => 'No autenticado.'], 401);
+            }
 
-        $product = Product::with(['activity.indicator']) // 👈 importante: cargar el indicador
-        ->whereUserRelated($userId)
-            ->find($productId);
+            $product = Product::with(['activity.users', 'activity.indicators'])
+                ->whereUserRelated($userId)
+                ->find($productId);
 
-        if (!$product) {
-            return response()->json(['message' => 'Producto no encontrado o no autorizado.'], 404);
+            if (!$product) {
+                return response()->json([
+                    'message' => 'Producto no encontrado o no autorizado.'
+                ], 404);
+            }
+
+            if ($product->activity->isEmpty()) {
+                return response()->json([
+                    'message' => 'No hay actividades para este producto.'
+                ], 404);
+            }
+
+            return response()->json(['data' => ActivityResource::collection($product->activity)]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener actividades: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'product_id' => $productId,
+            ]);
+            return response()->json([
+                'message' => 'Error al obtener las actividades.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        if ($product->activity->isEmpty()) {
-            return response()->json(['message' => 'No hay actividades para este producto.'], 404);
-        }
-
-        // 👇 Retornar usando un Resource que incluya el indicador_name
-        return ActivityResource::collection($product->activity);
     }
 
-    public function addRubro(Request $request): JsonResponse // Especifica el tipo de retorno
+    public function addRubro(Request $request): JsonResponse
     {
         try {
+            $rubroName = $request->input('name');
+
+            // 1. Validar que el nombre no sea nulo o vacío
+            if (empty($rubroName)) {
+                return response()->json(['error' => 'El nombre del rubro no puede estar vacío.'], 400);
+            }
+
+            // 2. Buscar si ya existe un rubro con ese nombre (ignorando mayúsculas/minúsculas para una mejor UX)
+            $existingRubro = Rubro::whereRaw('LOWER(name) = ?', [strtolower($rubroName)])->first();
+
+            if ($existingRubro) {
+                // Si ya existe, devuelve un error 409 Conflict
+                return response()->json(['error' => 'El rubro "' . $rubroName . '" ya existe.'], 409);
+            }
+
+            // Si no existe, procede a crearlo
             $rubro = new Rubro();
-            $rubro->name = $request->input('name');
+            $rubro->name = $rubroName;
             $rubro->save();
 
-            return response()->json($rubro, 201); // Devuelve el nuevo rubro y el código 201 (Created)
-            // O si prefieres un mensaje:
-            // return response()->json(['message' => 'Rubro creado exitosamente', 'rubro' => $rubro], 201);
+            return response()->json($rubro, 201);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Error al crear el rubro', 'details' => $e->getMessage()], 500); // Manejo de errores
+            // Un error general de servidor
+            return response()->json(['error' => 'Error al crear el rubro', 'details' => $e->getMessage()], 500);
         }
     }
 
     public function addIndicator(Request $request): JsonResponse
     {
         try {
+            $indicatorName = $request->input('name');
+
+            //Validar que el nombre no sea nulo o vacío
+            if (empty($indicatorName)) {
+                return response()->json(['error' => 'El nombre del indicador no puede estar vacío.'], 400);
+            }
+
+            //Buscar si ya existe un indicador con ese nombre (ignorando mayúsculas/minúsculas)
+            $existingIndicator = Rubro::whereRaw('LOWER(name) = ?', [strtolower($indicatorName)])->first();
+
+            if ($existingIndicator) {
+                //Si ya existe, devuelve un error 409 Conflict
+                return response()->json(['error' => 'El indicador "' . $indicatorName . '" ya existe.'], 409);
+            }
+
+            //Si no existe, procede a crearlo
             $indicator = new Performance_Indicator();
-            $indicator->name = $request->input('name');
+            $indicator->name = $indicatorName;
             $indicator->save();
 
-            return response()->json($indicator, 201); // Devuelve el nuevo indicador y código 201
-            // O:
-            // return response()->json(['message' => 'Indicador creado exitosamente', 'indicator' => $indicator], 201);
+            return response()->json($indicator, 201);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Error al crear el indicador', 'details' => $e->getMessage()], 500); // Manejo de errores
+            // Un error general de servidor
+            return response()->json(['error' => 'Error al crear el indicador', 'details' => $e->getMessage()], 500);
         }
     }
 }

@@ -18,11 +18,18 @@ class WeeklyPlannerResource extends JsonResource
                     'activity_description' => $activity->description,
                     'week_activities' => $activity->weekActivities->map(function ($weekActivity) {
                         return [
-                            'id' => $weekActivity->id, // Incluir el id de WeekActivity
+                            'id' => $weekActivity->id,
                             'week_description' => $weekActivity->description,
                             'date' => $weekActivity->date,
-                            'day_of_week' => \Carbon\Carbon::parse($weekActivity->date)->format('l (d/m/Y)'), // Ej: Monday (22/04/2024)
-                            'materials' => json_decode($weekActivity->material, true) ?? [],
+                            'day_of_week' => \Carbon\Carbon::parse($weekActivity->date)->format('l (d/m/Y)'),
+                            'materials' => $weekActivity->materials->map(function ($material) {
+                                return [
+                                    'id' => $material->id,
+                                    'name' => $material->name,
+                                    'quantity' => $material->pivot->quantity,
+                                    'description' => $material->pivot->description,
+                                ];
+                            }),
                             'status' => $weekActivity->status,
                         ];
                     }),

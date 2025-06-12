@@ -22,9 +22,7 @@ return new class extends Migration
             $table->date('start_date')->nullable();
             $table->date('end_date')->nullable();
 
-            $table->foreignId('user_id')->constrained('users');
             $table->foreignId('product_id')->constrained('products');
-            $table->foreignId('indicator_id')->constrained('performance_indicators');
         });
     }
 

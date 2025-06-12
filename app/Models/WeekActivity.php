@@ -17,7 +17,8 @@ class WeekActivity extends Model
         'activity_id',
         'observations',
         'estimated_hours',
-        'work_location'
+        'work_location',
+        'user_id'
     ];
 
     public function product()
@@ -31,13 +32,16 @@ class WeekActivity extends Model
     }
 
     public function activity(){
-        return $this->belongsTo(Activity::class, 'activity_id');
+        return $this->belongsTo(Activity::class);
     }
 
     public function materials()
     {
-        return $this->belongsToMany(Material::class)->withPivot('quantity');
+        return $this->belongsToMany(Material::class, 'material_week_activity')
+            ->withPivot('quantity', 'description')
+            ->withTimestamps();
     }
+
 
 
     public function user(){

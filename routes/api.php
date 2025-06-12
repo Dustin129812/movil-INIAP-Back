@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PlannerController;
@@ -11,12 +12,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 
-Route::post('login', [AuthController::class, 'login']);
+Route::post('login', [AuthController::class, 'login'])->name('login');
 
 Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read/{notificationId}', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
     Route::post('logout', [AuthController::class, 'logout']);
     Route::get('user/roles', [AuthController::class, 'getUserRoles']);
 
@@ -30,6 +36,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
     Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
     Route::get('materials', [PlannerController::class, 'getMaterial']);
+    Route::put('/products/{id}', [PlannerController::class, 'updateProductAndActivity']);
 
     Route::get('getProducts', [GeneralController::class, 'getProducts']);
     Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
@@ -43,8 +50,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
     Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress']);
 
-    Route::post('import/excel', [ImportController::class, 'importProcessedData']);
-
     Route::post('addRubro', [GeneralController::class, 'addRubro']);
     Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
     Route::get('getLocations', [GeneralController::class, 'getLocations']);
@@ -54,3 +59,5 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getRubros', [GeneralController::class, 'getRubros']);
     Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
 });
+
+Route::post('importUserFile', [ImportController::class, 'importUserFile']);

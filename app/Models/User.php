@@ -72,17 +72,6 @@ class User extends Authenticatable  implements JWTSubject
         return $this->belongsTo(Position::class);
     }
 
-    public function leaderGroups()
-    {
-        return $this->hasMany(Multidisciplinary_Group::class, 'leader_id');
-    }
-
-    // Relación con los grupos donde el usuario es miembro
-    public function memberGroups()
-    {
-        return $this->belongsToMany(Multidisciplinary_Group::class, 'group_members', 'user_id', 'group_id');
-    }
-
     public function product(){
         return $this->hasMany(Product::class);
     }
@@ -93,8 +82,13 @@ class User extends Authenticatable  implements JWTSubject
 
     public function activities()
     {
-        return $this->hasMany(Activity::class);
+        return $this->belongsToMany(Activity::class, 'activity_user', 'user_id', 'activity_id')
+            ->withTimestamps();
     }
 
+    public function qrTokens() // Relación en plural, para hasMany
+    {
+        return $this->hasMany(QrToken::class);
+    }
 
 }

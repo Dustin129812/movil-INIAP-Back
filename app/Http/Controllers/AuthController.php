@@ -24,6 +24,7 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // Obtenemos el usuario autenticado
         $user = Auth::user();
 
         $roles = $user->getRoleNames();

@@ -24,7 +24,9 @@ class WeekPlanner extends Model
         return $this->belongsTo(WeekActivity::class, 'week_activity_id');
     }
 
-    public function user(){
-        return $this->belongsTo(User::class);
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'activity_user', 'activity_id', 'user_id');
     }
+
 }

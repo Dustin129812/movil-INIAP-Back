@@ -25,6 +25,7 @@ return new class extends Migration
             $table->text('observations')->nullable()->after('percentage');
 
             $table->foreignId('activity_id')->constrained('activities');
+            $table->foreignId('user_id')->constrained('users');
         });
     }
 
