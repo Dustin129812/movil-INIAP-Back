@@ -81,7 +81,7 @@ class GeneralController extends Controller
                 return response()->json(['message' => 'No autenticado.'], 401);
             }
 
-            $product = Product::with(['activity.users', 'activity.indicator'])
+            $product = Product::with(['activity.users', 'activity.indicators'])
                 ->whereUserRelated($userId)
                 ->find($productId);
 
@@ -96,14 +96,6 @@ class GeneralController extends Controller
                     'message' => 'No hay actividades para este producto.'
                 ], 404);
             }
-
-            Log::info('Actividades cargadas para producto:', [
-                'product_id' => $productId,
-                'user_id' => $userId,
-                'activities_count' => $product->activity->count(),
-                'users_count' => $product->activity->pluck('users')->flatten()->count(),
-                'indicators_loaded' => $product->activity->pluck('indicator')->filter()->count(),
-            ]);
 
             return response()->json(['data' => ActivityResource::collection($product->activity)]);
         } catch (\Exception $e) {

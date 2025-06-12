@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Activity;
 use App\Models\Material;
 use App\Models\Product;
+use App\Notifications\CreateProduct;
 use App\Notifications\ProductUpdated;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
@@ -81,6 +82,13 @@ class PlannerController extends Controller
             }
 
             DB::commit();
+
+            $productManager = User::find($product->user_id);
+            $updater = Auth::user();
+
+            if ($productManager && $updater && $productManager->id !== $updater->id) {
+                $productManager->notify(new CreateProduct($product, $updater));
+            }
 
             return response()->json([
                 'msg' => [
@@ -337,10 +345,10 @@ class PlannerController extends Controller
                             })->toArray(),
 
                             // Se mapea la colección de indicadores, igual que se hace con los usuarios.
-                            'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
+                            'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicators) {
                                 return [
-                                    'id' => $indicator->id,
-                                    'name' => $indicator->name,
+                                    'id' => $indicators->id,
+                                    'name' => $indicators->name,
                                 ];
                             })->toArray(),
 

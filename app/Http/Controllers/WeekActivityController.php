@@ -8,9 +8,12 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeekPlanner;
+use App\Notifications\CreateProduct;
+use App\Notifications\CreateWeekPlanner;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -106,6 +109,13 @@ class WeekActivityController extends Controller
             }
 
             DB::commit();
+
+            $productManager = User::find($product->user_id);
+            $updater = Auth::user();
+
+            if ($productManager && $updater && $productManager->id !== $updater->id) {
+                $productManager->notify(new CreateWeekPlanner($product, $updater));
+            }
 
             return response()->json(['message' => 'Planificación guardada correctamente.']);
         } catch (\Exception $e) {

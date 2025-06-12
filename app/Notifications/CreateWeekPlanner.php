@@ -2,12 +2,14 @@
 
 namespace App\Notifications;
 
-use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use App\Models\Product;
 use App\Models\User;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
 
-class ProductUpdated extends Notification
+class CreateWeekPlanner extends Notification
 {
     use Queueable;
 
@@ -19,18 +21,19 @@ class ProductUpdated extends Notification
         $this->updater = $updater;
     }
 
-    public function via($notifiable)
+    public function via(object $notifiable): array
     {
         return ['database'];
     }
-    public function toArray($notifiable)
+
+    public function toArray(object $notifiable): array
     {
         return [
             'product_id' => $this->product->id,
             'product_name' => $this->product->name,
             'updater_id' => $this->updater->id,
             'updater_name' => $this->updater->name,
-            'message' => "El producto '{$this->product->name}' ha sido actualizado por {$this->updater->name}.",
+            'message' => "La planifiacion semanal '{$this->product->name}' ha sido realizada por {$this->updater->name}.",
         ];
     }
 }

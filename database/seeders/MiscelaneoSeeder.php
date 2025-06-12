@@ -274,6 +274,7 @@ class MiscelaneoSeeder extends Seeder
             ['name' => 'Análisis de laboratorios'],
             ['name' => 'Auditorio'],
             ['name' => 'Sala de reuniones'],
+            ['name' => 'Equipo Tecnológico'],
         ];
 
         foreach ($materials as $material) {
