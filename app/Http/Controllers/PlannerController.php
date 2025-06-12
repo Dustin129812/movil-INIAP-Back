@@ -6,6 +6,8 @@ use App\Models\Activity;
 use App\Models\Material;
 use App\Models\Product;
 use App\Notifications\CreateProduct;
+use App\Notifications\CreateWeekPlanner;
+use App\Notifications\PlannerAccept;
 use App\Notifications\ProductUpdated;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
@@ -14,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Notifications\Notifiable;
 
 class PlannerController extends Controller
 {
@@ -217,28 +220,43 @@ class PlannerController extends Controller
 
     public function approveActivity(Request $request, $activityId)
     {
-        try {
-            if (!auth()->user()->hasRole('product-manager')) {
-                return response()->json(['error' => 'No autorizado. Solo un product-manager puede aprobar actividades.'], 403);
-            }
-
-            // Obtener la actividad
-            $weekActivity = WeekActivity::findOrFail($activityId);
-
-            // Actualizar el estado según el valor enviado
-            $status = $request->input('status');
-            if (!in_array($status, ['approved', 'rejected'])) {
-                return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
-            }
-
-            $weekActivity->status = $status;
-            $weekActivity->save();
-
-            return response()->json(['message' => 'Actividad actualizada correctamente.']);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage(), 'stack' => $e->getTraceAsString()], 500);
+        if (!auth()->user()->hasRole('product-manager')) {
+            return response()->json(['error' => 'No autorizado.'], 403);
         }
+
+        $weekActivity = WeekActivity::findOrFail($activityId);
+
+        $status = $request->input('status');
+        $validStatuses = ['approved', 'rejected'];
+
+        if (!in_array($status, $validStatuses)) {
+            return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
+        }
+
+        $weekActivity->status = $status;
+        if (!$weekActivity->save()) {
+            Log::error("Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
+            return response()->json(['error' => 'No se pudo actualizar la actividad.'], 500);
+        }
+
+        Log::info("Actividad ID {$activityId} actualizada con estado '{$status}' por usuario ID " . auth()->id());
+
+        // Enviar notificación al creador si no es el mismo usuario
+        $creator = $weekActivity->user;
+        $approver = auth()->user();
+
+        if ($creator && $approver && $creator->id !== $approver->id) {
+            $creator->notify(new PlannerAccept($weekActivity, $approver, $status));
+            Log::info("Notificación enviada al creador ID {$creator->id} para la actividad ID {$activityId} con estado '{$status}'");
+        }
+
+        return response()->json([
+            'message' => 'Actividad actualizada correctamente.',
+            'activity_id' => $activityId,
+            'status' => $status,
+        ]);
     }
+
 
     public function getWeeklyPlanningByResponsible()
     {
