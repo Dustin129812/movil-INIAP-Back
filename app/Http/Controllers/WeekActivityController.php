@@ -43,20 +43,27 @@ class WeekActivityController extends Controller
                 if (!$activity) {
                     throw new \Exception("Actividad con ID $activityId no encontrada.");
                 }
+                 // Obtener el producto asociado a la actividad
+                $product = $activity->product; // ← Aquí definimos $product
 
                 // Obtención del user_id, similar a la explicación anterior
                 $userId = $activity->users->first()->id ?? null;
                 if (!$userId) {
-                     throw new \Exception("No se pudo determinar el user_id para la actividad {$activityId}.");
+                    throw new \Exception("No se pudo determinar el user_id para la actividad {$activityId}.");
                 }
                 $user = User::find($userId);
                 if (!$user) {
-                     throw new \Exception("Usuario con ID $userId no encontrado.");
+                    throw new \Exception("Usuario con ID $userId no encontrado.");
                 }
 
                 $dayOffsets = [
-                    'lunes' => 0, 'martes' => 1, 'miercoles' => 2, 'jueves' => 3,
-                    'viernes' => 4, 'sábado' => 5, 'domingo' => 6,
+                    'lunes' => 0,
+                    'martes' => 1,
+                    'miercoles' => 2,
+                    'jueves' => 3,
+                    'viernes' => 4,
+                    'sábado' => 5,
+                    'domingo' => 6,
                 ];
                 $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
                 $activityDate = $nextMonday->copy()->addDays($dayOffsets[$dayName] ?? 0);
@@ -75,7 +82,15 @@ class WeekActivityController extends Controller
 
                 // Asociar materiales
                 if (!empty($materials)) {
-                    $weekActivity->materials()->sync($materials);
+                    $syncData = [];
+                    foreach ($materials as $materialId) {
+                        $syncData[$materialId] = [
+                            'description' => 'Descripción predeterminada', // O usa $material['description'] si viene del frontend
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ];
+                    }
+                    $weekActivity->materials()->sync($syncData);
                 }
 
                 // --- NUEVO: Asociar los indicadores usando el modelo pivote WeeklyIndicators ---
