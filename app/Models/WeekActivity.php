@@ -42,7 +42,24 @@ class WeekActivity extends Model
             ->withTimestamps();
     }
 
+     // --- ¡IMPORTANTE! RELACIÓN MANY-TO-MANY ACTUALIZADA ---
+    public function logisticSupports()
+    {
+        return $this->belongsToMany(
+            LogisticSupport::class,
+            'weekly_logistic', // <--- ¡AQUÍ ESTÁ LA CORRECCIÓN! Tu tabla se llama 'weekly_logistic'
+            'weekly_activities_id', // Clave foránea de WeekActivity en la tabla pivote
+            'logistic_support_id'   // Clave foránea de LogisticSupport en la tabla pivote
+        )
+        ->withTimestamps()
+        ->withPivot('deleted_at'); // Para Soft Deletes en la pivote
+    }
+    // --------------------------------------------------------
 
+    public function performanceIndicators()
+    {
+        return $this->belongsToMany(Performance_Indicator::class, 'weekly_indicators', 'weekly_activities_id', 'performance_indicators_id');
+    }
 
     public function user(){
         return $this->belongsTo(User::class);

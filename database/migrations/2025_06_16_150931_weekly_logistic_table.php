@@ -11,13 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('weekly_indicators', function (Blueprint $table) {
+        Schema::create('weekly_logistic', function (Blueprint $table) {
             $table->id();
             $table->timestamps();
             $table->softDeletes();
 
             $table->foreignId('weekly_activities_id')->constrained('weekly_activities');
-            $table->foreignId('performance_indicators_id')->constrained('performance_indicators');
+            $table->foreignId('logistic_support_id')->constrained('logistic_support');
         });
     }
 
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('weekly_indicators');
+        Schema::dropIfExists('weekly_logistic');
     }
 };
