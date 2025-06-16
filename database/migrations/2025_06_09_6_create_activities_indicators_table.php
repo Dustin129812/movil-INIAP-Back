@@ -16,25 +16,11 @@ return new class extends Migration
         // Paso 1: Crear la tabla pivote 'activity_indicator'.
         Schema::create('activity_indicator', function (Blueprint $table) {
             $table->id();
-            // Llave foránea para la actividad (asume que la tabla es 'activities')
             $table->foreignId('activity_id')->constrained('activities')->onDelete('cascade');
 
-            // CORRECCIÓN: Se especifica el nombre de la tabla en singular ('indicator').
-            // Asegúrate de que 'indicator' sea el nombre exacto de tu tabla de indicadores.
             $table->foreignId('indicator_id')->constrained('performance_indicators')->onDelete('cascade');
 
             $table->timestamps();
-        });
-
-        // Paso 2: Modificar la tabla 'activities' para eliminar la antigua columna 'indicator_id'.
-        Schema::table('activities', function (Blueprint $table) {
-            // Se asume que el nombre de la restricción de llave foránea es 'activities_indicator_id_foreign'.
-            // Si tu restricción tiene un nombre diferente, puedes especificarlo así:
-            // $table->dropForeign('nombre_de_la_restriccion');
-            $table->dropForeign(['indicator_id']);
-
-            // Finalmente, eliminamos la columna que ya no es necesaria.
-            $table->dropColumn('indicator_id');
         });
     }
 
