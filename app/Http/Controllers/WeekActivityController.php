@@ -63,11 +63,6 @@ class WeekActivityController extends Controller
                     throw new \Exception("Usuario con ID $userId no encontrado.");
                 }
 
-                // Validar que el usuario esté asociado a la actividad (usando activity_user)
-                if (!$activity->users()->where('user_id', $userId)->exists()) {
-                    throw new \Exception("El usuario con ID $userId no está asignado a la actividad con ID {$data['activity_id']}.");
-                }
-
                 $dayOffset = $daysOfWeek[$day] ?? 0;
                 $activityDate = $nextMonday->copy()->addDays($dayOffset);
 
