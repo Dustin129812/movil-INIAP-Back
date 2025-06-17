@@ -8,6 +8,7 @@ use App\Models\Experimental_Station;
 use App\Models\Investigation_Area;
 use App\Models\Investigation_Line;
 use App\Models\Location;
+use App\Models\LogisticSupport;
 use App\Models\Material;
 use App\Models\Measure;
 use App\Models\Multidisciplinary_Group;
@@ -279,6 +280,25 @@ class MiscelaneoSeeder extends Seeder
 
         foreach ($materials as $material) {
             Material::create($material);
+        }
+
+         $logistics = [
+            ['name' => 'Personal'],
+            ['name' => 'Personal DI'],
+            ['name' => 'MH'],
+            ['name' => 'JM'],
+            ['name' => 'PG'],
+            ['name' => 'MA'],
+            ['name' => 'CP'],
+            ['name' => 'TC'],
+            ['name' => 'EL'],
+            ['name' => 'Personal GET y otros proyectos'],
+            ['name' => 'Personal administrativo y técnico GET'],
+            ['name' => 'Personal administrativo y técnico GET. Personal de huertos'],            
+        ];
+
+        foreach ($logistics as $logistic) {
+            LogisticSupport::create($logistic);
         }
     }
 }

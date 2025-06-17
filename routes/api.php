@@ -58,6 +58,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getPositions', [GeneralController::class, 'getPositions']);
     Route::get('getRubros', [GeneralController::class, 'getRubros']);
     Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
+    Route::get('getLogistic', [GeneralController::class, 'getLogistic']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);

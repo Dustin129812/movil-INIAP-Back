@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\ActivityResource;
 use App\Models\Ethnic_Group;
 use App\Models\Location;
+use App\Models\LogisticSupport;
 use App\Models\Nationality;
 use App\Models\Performance_Indicator;
 use App\Models\Position;
@@ -45,6 +46,12 @@ class GeneralController extends Controller
     {
         $indicators = Performance_Indicator::all(); // Usa all() para obtener todos
         return response()->json($indicators); // Devuelve la respuesta como JSON
+    }
+
+    public function getLogistic(): JsonResponse
+    {
+        $logistics = LogisticSupport::all(); // Usa all() para obtener todos
+        return response()->json($logistics); // Devuelve la respuesta como JSON
     }
 
     public function getProducts()

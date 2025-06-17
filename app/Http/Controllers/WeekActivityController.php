@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
+use App\Models\LogisticSupport;
 use App\Models\Material;
 use App\Models\Performance_Indicator;
 use App\Models\Product;
@@ -38,6 +39,9 @@ class WeekActivityController extends Controller
                 $estimatedHours = $data['hours'];
                 $materials = $data['materials'] ?? [];
                 $selectedIndicators = $data['indicators'] ?? []; // Array de IDs de indicadores
+                $observations = $data['observations'] ?? null;
+                $selectedLogisticSupports = $data['logisticSupports'] ?? [];
+
 
                 $activity = Activity::find($activityId);
                 if (!$activity) {
@@ -75,6 +79,7 @@ class WeekActivityController extends Controller
                 $weekActivity->status = $isExtraPoa ? 'approved' : 'pending';
                 $weekActivity->estimated_hours = $estimatedHours;
                 $weekActivity->work_location = $activity->work_location ?? 'Oficina';
+                $weekActivity->observations = $observations; // <-- MODIFICACIÓN CLAVE AQUÍ
                 $weekActivity->percentage = 0;
                 $weekActivity->activity_id = $activity->id;
                 $weekActivity->user_id = $userId;
@@ -108,6 +113,21 @@ class WeekActivityController extends Controller
                             'performance_indicators_id' => $indicatorId,
                         ]);
                     }
+                }
+
+                // --- ¡ESTE ES EL BLOQUE QUE FALTABA PARA ASOCIAR SOPORTES LOGÍSTICOS! ---
+                if (!empty($selectedLogisticSupports)) {
+                    // Opcional: Puedes validar si cada ID de soporte logístico existe
+                    foreach ($selectedLogisticSupports as $supportId) {
+                        if (!LogisticSupport::find($supportId)) {
+                            throw new \Exception("Soporte logístico con ID {$supportId} no encontrado.");
+                        }
+                    }
+                    // Sincroniza los soportes logísticos en la tabla pivote
+                    $weekActivity->logisticSupports()->sync($selectedLogisticSupports);
+                } else {
+                    // Si no se envían soportes logísticos, desvincula los existentes
+                    $weekActivity->logisticSupports()->detach();
                 }
 
                 // Crear la entrada en WeekPlanner
