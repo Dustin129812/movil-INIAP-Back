@@ -233,15 +233,15 @@ class PlannerController extends Controller
             return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
         }
 
+        // Actualiza y guarda el estado
         $weekActivity->status = $status;
         if (!$weekActivity->save()) {
-            Log::error("Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
+            Log::error("❌ Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
             return response()->json(['error' => 'No se pudo actualizar la actividad.'], 500);
         }
 
-        Log::info("Actividad ID {$activityId} actualizada con estado '{$status}' por usuario ID " . auth()->id());
+        Log::info("✅ Actividad ID {$activityId} actualizada con estado '{$status}' por usuario ID " . auth()->id());
 
-        // Enviar notificación al creador si no es el mismo usuario
         $creator = $weekActivity->user;
         $approver = auth()->user();
 
@@ -257,51 +257,53 @@ class PlannerController extends Controller
         ]);
     }
 
-
     public function getWeeklyPlanningByResponsible()
     {
-        $users = User::whereHas('activities.weekActivities') // solo chequea que haya al menos una actividad semanal
-        ->with([
-            'activities' => function ($q) {
-                $q->select('activities.id', 'activities.description', 'activities.product_id')
-                    ->with([
-                        'product:id,name',
-                        'weekActivities' => function ($q2) {
-                            $q2->select(
-                                'weekly_activities.id',
-                                'weekly_activities.description',
-                                'weekly_activities.date',
-                                'weekly_activities.status',
-                                'weekly_activities.activity_id',
-                                'weekly_activities.user_id'
-                            )->with('materials');
-                        }
+        // 1. Empezamos por los usuarios que SÍ han creado al menos una actividad semanal.
+        $usersWithPlans = User::whereHas('createdWeekActivities')
+            ->with([
+                // 2. Cargamos esas actividades semanales y sus relaciones anidadas.
+                'createdWeekActivities' => function ($query) {
+                    $query->with([
+                        // Para cada actividad semanal, necesitamos la actividad principal y su producto.
+                        'activity' => function ($activityQuery) {
+                            $activityQuery->select('id', 'description', 'product_id')
+                                ->with('product:id,name');
+                        },
+                        // También cargamos los materiales de la actividad semanal.
+                        'materials'
                     ]);
-            }
-        ])
+                }
+            ])
             ->get();
 
-        $formattedResult = $users->map(function ($user) {
+        // 3. Transformamos los datos para la respuesta JSON.
+        $formattedResult = $usersWithPlans->map(function ($user) {
             return [
                 'id' => $user->id,
                 'name' => $user->name,
-                'activities' => $user->activities->map(function ($activity) use ($user) {
+                // 4. Agrupamos las actividades semanales del usuario por la actividad principal a la que pertenecen.
+                'activities' => $user->createdWeekActivities->groupBy('activity_id')->map(function ($weekActivitiesGroup) {
+
+                    // La información de la actividad principal es la misma para todo el grupo.
+                    $firstWeekActivity = $weekActivitiesGroup->first();
+                    $mainActivity = $firstWeekActivity->activity;
+
                     return [
-                        'product_name' => $activity->product->name ?? null,
-                        'product_id' => $activity->product->id ?? null,
-                        'activity_description' => $activity->description ?? null,
-                        'week_activities' => $activity->weekActivities
-                            ->filter(fn($wa) => $wa->user_id === $user->id)
-                            ->map(fn($wa) => [
-                                'id' => $wa->id,
-                                'week_description' => $wa->description,
-                                'date' => $wa->date,
-                                'day_of_week' => Carbon::parse($wa->date)->format('l (d/m/Y)'),
-                                'materials' => $wa->materials,
-                                'status' => $wa->status,
-                            ])->values(),
+                        'product_name' => $mainActivity->product->name ?? null,
+                        'product_id' => $mainActivity->product->id ?? null,
+                        'activity_description' => $mainActivity->description ?? null,
+                        // Mapeamos cada actividad semanal dentro de este grupo.
+                        'week_activities' => $weekActivitiesGroup->map(fn($wa) => [
+                            'id' => $wa->id,
+                            'week_description' => $wa->description,
+                            'date' => $wa->date,
+                            'day_of_week' => \Carbon\Carbon::parse($wa->date)->format('l (d/m/Y)'),
+                            'materials' => $wa->materials,
+                            'status' => $wa->status,
+                        ])->values(),
                     ];
-                })->filter(fn($a) => $a['week_activities']->isNotEmpty())->values(),
+                })->values(), // Usamos values() para resetear las claves y obtener un array.
             ];
         });
 
