@@ -9,7 +9,6 @@ class WeeklyIndicators extends Model
 {
      use HasFactory;
 
-    // Especifica los campos que se pueden asignar masivamente
     protected $table = 'weekly_indicators';
     protected $fillable = [
         'weekly_activities_id',
