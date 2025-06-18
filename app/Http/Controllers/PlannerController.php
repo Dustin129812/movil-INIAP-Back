@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\WeekActivity;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -407,4 +408,102 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+   public function getUserAssociatedCounts(Request $request)
+    {
+        try {
+            $userId = $request->user()->id;
+
+            // Conteo de productos asociados (ya existente)
+            $totalAssociatedProducts = Product::whereUserRelated($userId)->count();
+
+            // Conteo de actividades donde el usuario es responsable (ya existente)
+            $activitiesAsResearcherCount = Activity::whereHas('users', function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            })->count();
+
+            // --- Nuevas métricas ---
+
+            // 1. Conteo de actividades completadas (con 100% de progreso en el último registro de ejecución)
+            $completedActivitiesCount = 0;
+            $userActivitiesWithProgress = Activity::whereHas('users', function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            })->with(['executionProgress' => function($query) {
+                $query->orderBy('month', 'desc'); // Asegura que el progreso más reciente esté al principio
+            }])->get();
+
+            foreach ($userActivitiesWithProgress as $activity) {
+                $latestExecution = $activity->executionProgress->first(); // Obtiene el último registro
+                if ($latestExecution && $latestExecution->percentage === 100) {
+                    $completedActivitiesCount++;
+                }
+            }
+
+            // 2. Meta de progreso mensual y progreso actual para el mes en curso
+            $currentMonth = Carbon::now()->startOfMonth();
+            $totalPlannedPercentage = 0;
+            $totalExecutedPercentage = 0;
+            $activitiesCountForMonthlyMetrics = 0; // Para calcular el promedio
+
+            $userActivitiesForMonthlyProgress = Activity::whereHas('users', function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            })
+            ->with([
+                'monthlyProgress' => function ($query) use ($currentMonth) {
+                    $query->where('month', $currentMonth);
+                },
+                'executionProgress' => function ($query) use ($currentMonth) {
+                    $query->where('month', $currentMonth);
+                }
+            ])->get();
+
+            foreach ($userActivitiesForMonthlyProgress as $activity) {
+                $planned = $activity->monthlyProgress->first();
+                $executed = $activity->executionProgress->first();
+
+                // Suma el porcentaje si existe un registro para el mes actual
+                if ($planned) {
+                    $totalPlannedPercentage += $planned->percentage;
+                    $activitiesCountForMonthlyMetrics++; // Cuenta solo las actividades que tienen un plan para el mes
+                }
+                if ($executed) {
+                    $totalExecutedPercentage += $executed->percentage;
+                    // Si una actividad tiene ejecución pero no planificado para el mes, también la contamos para el promedio
+                    if (!$planned) { // Evita duplicar el conteo si ya se sumó por 'planned'
+                        $activitiesCountForMonthlyMetrics++;
+                    }
+                }
+            }
+
+            // Calcula los promedios, evitando división por cero
+            $userPlannedMonthlyAverageProgress = $activitiesCountForMonthlyMetrics > 0 ?
+                round($totalPlannedPercentage / $activitiesCountForMonthlyMetrics, 2) : 0;
+            $userActualMonthlyAverageProgress = $activitiesCountForMonthlyMetrics > 0 ?
+                round($totalExecutedPercentage / $activitiesCountForMonthlyMetrics, 2) : 0;
+
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Éxito',
+                    'detail' => 'Conteo de asociaciones y progreso obtenido correctamente',
+                    'code' => 200,
+                ],
+                'data' => [
+                    'total_associated_products' => $totalAssociatedProducts,
+                    'activities_as_researcher' => $activitiesAsResearcherCount,
+                    'completed_activities_count' => $completedActivitiesCount,
+                    'user_planned_monthly_average_progress' => $userPlannedMonthlyAverageProgress,
+                    'user_actual_monthly_average_progress' => $userActualMonthlyAverageProgress,
+                ],
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener el conteo de asociaciones y progreso: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
 }
