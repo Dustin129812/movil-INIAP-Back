@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
+use App\Models\LogisticSupport;
 use App\Models\Material;
+use App\Models\Performance_Indicator;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\WeekActivity;
+use App\Models\WeeklyIndicators;
 use App\Models\WeekPlanner;
 use App\Notifications\CreateProduct;
 use App\Notifications\CreateWeekPlanner;
@@ -24,86 +27,112 @@ class WeekActivityController extends Controller
         DB::beginTransaction();
 
         try {
-            $productId = $request->input('product_id');
-            $weekData = $request->input('week');
+            $weeklyPlansData = $request->input('weeklyPlans');
 
-            $product = Product::find($productId);
-            if (!$product) {
-                throw new \Exception("Producto con ID $productId no encontrado.");
+            if (!is_array($weeklyPlansData)) {
+                throw new \Exception("Formato de datos de planificación semanal inválido.");
             }
 
-            // Obtenemos el lunes de la próxima semana
-            $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
+            foreach ($weeklyPlansData as $data) {
+                $activityId = $data['activityId'];
+                $dayName = $data['day'];
+                $estimatedHours = $data['hours'];
+                $materials = $data['materials'] ?? [];
+                $selectedIndicators = $data['indicators'] ?? []; // Array de IDs de indicadores
+                $observations = $data['observations'] ?? null;
+                $selectedLogisticSupports = $data['logisticSupports'] ?? [];
 
-            // Mapeo para calcular el offset de cada día
-            $daysOfWeek = [
-                'lunes' => 0,
-                'martes' => 1,
-                'miércoles' => 2,
-                'jueves' => 3,
-                'viernes' => 4,
-                'sábado' => 5,
-                'domingo' => 6,
-            ];
 
-            foreach ($weekData as $day => $data) {
-                $activity = Activity::find($data['activity_id']);
+                $activity = Activity::find($activityId);
                 if (!$activity) {
-                    throw new \Exception("Actividad con ID {$data['activity_id']} no encontrada.");
+                    throw new \Exception("Actividad con ID $activityId no encontrada.");
                 }
+                 // Obtener el producto asociado a la actividad
+                $product = $activity->product; // ← Aquí definimos $product
 
-                // Obtener el user_id del payload
-                $userId = $data['user_id'] ?? null;
+                // Obtención del user_id, similar a la explicación anterior
+                $userId = $activity->users->first()->id ?? null;
                 if (!$userId) {
-                    throw new \Exception("No se proporcionó un user_id para el día $day.");
+                    throw new \Exception("No se pudo determinar el user_id para la actividad {$activityId}.");
                 }
-
                 $user = User::find($userId);
                 if (!$user) {
                     throw new \Exception("Usuario con ID $userId no encontrado.");
                 }
 
-                // Validar que el usuario esté asociado a la actividad (usando activity_user)
-                if (!$activity->users()->where('user_id', $userId)->exists()) {
-                    throw new \Exception("El usuario con ID $userId no está asignado a la actividad con ID {$data['activity_id']}.");
-                }
-
-                $dayOffset = $daysOfWeek[$day] ?? 0;
-                $activityDate = $nextMonday->copy()->addDays($dayOffset);
+                $dayOffsets = [
+                    'lunes' => 0,
+                    'martes' => 1,
+                    'miercoles' => 2,
+                    'jueves' => 3,
+                    'viernes' => 4,
+                    'sábado' => 5,
+                    'domingo' => 6,
+                ];
+                $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
+                $activityDate = $nextMonday->copy()->addDays($dayOffsets[$dayName] ?? 0);
 
                 $weekActivity = new WeekActivity();
-                $weekActivity->description = $data['description'] ?? '';
+                $weekActivity->description = $activity->description;
                 $weekActivity->date = $activityDate;
-                $isExtraPoa = $product->name === 'Actividades Extra POA';
+                $isExtraPoa = $activity->product->name === 'Actividades Extra POA';
                 $weekActivity->status = $isExtraPoa ? 'approved' : 'pending';
-                $weekActivity->estimated_hours = $data['estimated_hours'] ?? '';
-                $weekActivity->work_location = $data['work_location'] ?? '';
+                $weekActivity->estimated_hours = $estimatedHours;
+                $weekActivity->work_location = $activity->work_location ?? 'Oficina';
+                $weekActivity->observations = $observations; // <-- MODIFICACIÓN CLAVE AQUÍ
                 $weekActivity->percentage = 0;
                 $weekActivity->activity_id = $activity->id;
-                $weekActivity->user_id = $userId; // Asociar al usuario enviado
-                $weekActivity->save();
+                $weekActivity->user_id = $userId;
+                $weekActivity->save(); // Es CRUCIAL guardar weekActivity antes de intentar asociar relaciones
 
-                // Asociar materiales (opcional)
-                if (!empty($data['materials'])) {
-                    foreach ($data['materials'] as $materialData) {
-                        $materialId = $materialData['material_id'];
-                        $materialDescription = $materialData['material_description'] ?? '';
-                        $quantity = $materialData['quantity'] ?? 1;
+                // Asociar materiales
+                if (!empty($materials)) {
+                    $syncData = [];
+                    foreach ($materials as $materialId) {
+                        $syncData[$materialId] = [
+                            'description' => 'Descripción predeterminada', // O usa $material['description'] si viene del frontend
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ];
+                    }
+                    $weekActivity->materials()->sync($syncData);
+                }
 
-                        $material = Material::find($materialId);
-                        if (!$material) {
-                            throw new \Exception("Material con ID {$materialId} no encontrado.");
+                // --- NUEVO: Asociar los indicadores usando el modelo pivote WeeklyIndicators ---
+                if (!empty($selectedIndicators)) {
+                    foreach ($selectedIndicators as $indicatorId) {
+                        // Verifica que el indicador de rendimiento exista antes de crear la relación
+                        $performanceIndicator = Performance_Indicator::find($indicatorId);
+                        if (!$performanceIndicator) {
+                            throw new \Exception("Indicador de rendimiento con ID {$indicatorId} no encontrado.");
                         }
 
-                        $weekActivity->materials()->attach($materialId, [
-                            'quantity' => $quantity,
-                            'description' => $materialDescription
+                        // Crea un nuevo registro en la tabla pivote 'weekly_indicators'
+                        WeeklyIndicators::create([
+                            'weekly_activities_id' => $weekActivity->id,
+                            'performance_indicators_id' => $indicatorId,
                         ]);
                     }
                 }
 
+                // --- ¡ESTE ES EL BLOQUE QUE FALTABA PARA ASOCIAR SOPORTES LOGÍSTICOS! ---
+                if (!empty($selectedLogisticSupports)) {
+                    // Opcional: Puedes validar si cada ID de soporte logístico existe
+                    foreach ($selectedLogisticSupports as $supportId) {
+                        if (!LogisticSupport::find($supportId)) {
+                            throw new \Exception("Soporte logístico con ID {$supportId} no encontrado.");
+                        }
+                    }
+                    // Sincroniza los soportes logísticos en la tabla pivote
+                    $weekActivity->logisticSupports()->sync($selectedLogisticSupports);
+                } else {
+                    // Si no se envían soportes logísticos, desvincula los existentes
+                    $weekActivity->logisticSupports()->detach();
+                }
+
+                // Crear la entrada en WeekPlanner
                 $planner = new WeekPlanner();
-                $planner->product()->associate($product);
+                $planner->product()->associate($activity->product);
                 $planner->weekActivity()->associate($weekActivity);
                 $planner->save();
             }

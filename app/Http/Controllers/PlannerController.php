@@ -6,14 +6,18 @@ use App\Models\Activity;
 use App\Models\Material;
 use App\Models\Product;
 use App\Notifications\CreateProduct;
+use App\Notifications\CreateWeekPlanner;
+use App\Notifications\PlannerAccept;
 use App\Notifications\ProductUpdated;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\WeekActivity;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Notifications\Notifiable;
 
 class PlannerController extends Controller
 {
@@ -217,73 +221,90 @@ class PlannerController extends Controller
 
     public function approveActivity(Request $request, $activityId)
     {
-        try {
-            if (!auth()->user()->hasRole('product-manager')) {
-                return response()->json(['error' => 'No autorizado. Solo un product-manager puede aprobar actividades.'], 403);
-            }
-
-            // Obtener la actividad
-            $weekActivity = WeekActivity::findOrFail($activityId);
-
-            // Actualizar el estado según el valor enviado
-            $status = $request->input('status');
-            if (!in_array($status, ['approved', 'rejected'])) {
-                return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
-            }
-
-            $weekActivity->status = $status;
-            $weekActivity->save();
-
-            return response()->json(['message' => 'Actividad actualizada correctamente.']);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage(), 'stack' => $e->getTraceAsString()], 500);
+        if (!auth()->user()->hasRole('product-manager')) {
+            return response()->json(['error' => 'No autorizado.'], 403);
         }
+
+        $weekActivity = WeekActivity::findOrFail($activityId);
+
+        $status = $request->input('status');
+        $validStatuses = ['approved', 'rejected'];
+
+        if (!in_array($status, $validStatuses)) {
+            return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
+        }
+
+        // Actualiza y guarda el estado
+        $weekActivity->status = $status;
+        if (!$weekActivity->save()) {
+            Log::error("❌ Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
+            return response()->json(['error' => 'No se pudo actualizar la actividad.'], 500);
+        }
+
+        Log::info("✅ Actividad ID {$activityId} actualizada con estado '{$status}' por usuario ID " . auth()->id());
+
+        $creator = $weekActivity->user;
+        $approver = auth()->user();
+
+        if ($creator && $approver && $creator->id !== $approver->id) {
+            $creator->notify(new PlannerAccept($weekActivity, $approver, $status));
+            Log::info("Notificación enviada al creador ID {$creator->id} para la actividad ID {$activityId} con estado '{$status}'");
+        }
+
+        return response()->json([
+            'message' => 'Actividad actualizada correctamente.',
+            'activity_id' => $activityId,
+            'status' => $status,
+        ]);
     }
 
     public function getWeeklyPlanningByResponsible()
     {
-        $users = User::whereHas('activities.weekActivities') // solo chequea que haya al menos una actividad semanal
-        ->with([
-            'activities' => function ($q) {
-                $q->select('activities.id', 'activities.description', 'activities.product_id')
-                    ->with([
-                        'product:id,name',
-                        'weekActivities' => function ($q2) {
-                            $q2->select(
-                                'weekly_activities.id',
-                                'weekly_activities.description',
-                                'weekly_activities.date',
-                                'weekly_activities.status',
-                                'weekly_activities.activity_id',
-                                'weekly_activities.user_id'
-                            )->with('materials');
-                        }
+        // 1. Empezamos por los usuarios que SÍ han creado al menos una actividad semanal.
+        $usersWithPlans = User::whereHas('createdWeekActivities')
+            ->with([
+                // 2. Cargamos esas actividades semanales y sus relaciones anidadas.
+                'createdWeekActivities' => function ($query) {
+                    $query->with([
+                        // Para cada actividad semanal, necesitamos la actividad principal y su producto.
+                        'activity' => function ($activityQuery) {
+                            $activityQuery->select('id', 'description', 'product_id')
+                                ->with('product:id,name');
+                        },
+                        // También cargamos los materiales de la actividad semanal.
+                        'materials'
                     ]);
-            }
-        ])
+                }
+            ])
             ->get();
 
-        $formattedResult = $users->map(function ($user) {
+        // 3. Transformamos los datos para la respuesta JSON.
+        $formattedResult = $usersWithPlans->map(function ($user) {
             return [
                 'id' => $user->id,
                 'name' => $user->name,
-                'activities' => $user->activities->map(function ($activity) use ($user) {
+                // 4. Agrupamos las actividades semanales del usuario por la actividad principal a la que pertenecen.
+                'activities' => $user->createdWeekActivities->groupBy('activity_id')->map(function ($weekActivitiesGroup) {
+
+                    // La información de la actividad principal es la misma para todo el grupo.
+                    $firstWeekActivity = $weekActivitiesGroup->first();
+                    $mainActivity = $firstWeekActivity->activity;
+
                     return [
-                        'product_name' => $activity->product->name ?? null,
-                        'product_id' => $activity->product->id ?? null,
-                        'activity_description' => $activity->description ?? null,
-                        'week_activities' => $activity->weekActivities
-                            ->filter(fn($wa) => $wa->user_id === $user->id)
-                            ->map(fn($wa) => [
-                                'id' => $wa->id,
-                                'week_description' => $wa->description,
-                                'date' => $wa->date,
-                                'day_of_week' => Carbon::parse($wa->date)->format('l (d/m/Y)'),
-                                'materials' => $wa->materials,
-                                'status' => $wa->status,
-                            ])->values(),
+                        'product_name' => $mainActivity->product->name ?? null,
+                        'product_id' => $mainActivity->product->id ?? null,
+                        'activity_description' => $mainActivity->description ?? null,
+                        // Mapeamos cada actividad semanal dentro de este grupo.
+                        'week_activities' => $weekActivitiesGroup->map(fn($wa) => [
+                            'id' => $wa->id,
+                            'week_description' => $wa->description,
+                            'date' => $wa->date,
+                            'day_of_week' => \Carbon\Carbon::parse($wa->date)->format('l (d/m/Y)'),
+                            'materials' => $wa->materials,
+                            'status' => $wa->status,
+                        ])->values(),
                     ];
-                })->filter(fn($a) => $a['week_activities']->isNotEmpty())->values(),
+                })->values(), // Usamos values() para resetear las claves y obtener un array.
             ];
         });
 
@@ -387,4 +408,102 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+   public function getUserAssociatedCounts(Request $request)
+    {
+        try {
+            $userId = $request->user()->id;
+
+            // Conteo de productos asociados (ya existente)
+            $totalAssociatedProducts = Product::whereUserRelated($userId)->count();
+
+            // Conteo de actividades donde el usuario es responsable (ya existente)
+            $activitiesAsResearcherCount = Activity::whereHas('users', function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            })->count();
+
+            // --- Nuevas métricas ---
+
+            // 1. Conteo de actividades completadas (con 100% de progreso en el último registro de ejecución)
+            $completedActivitiesCount = 0;
+            $userActivitiesWithProgress = Activity::whereHas('users', function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            })->with(['executionProgress' => function($query) {
+                $query->orderBy('month', 'desc'); // Asegura que el progreso más reciente esté al principio
+            }])->get();
+
+            foreach ($userActivitiesWithProgress as $activity) {
+                $latestExecution = $activity->executionProgress->first(); // Obtiene el último registro
+                if ($latestExecution && $latestExecution->percentage === 100) {
+                    $completedActivitiesCount++;
+                }
+            }
+
+            // 2. Meta de progreso mensual y progreso actual para el mes en curso
+            $currentMonth = Carbon::now()->startOfMonth();
+            $totalPlannedPercentage = 0;
+            $totalExecutedPercentage = 0;
+            $activitiesCountForMonthlyMetrics = 0; // Para calcular el promedio
+
+            $userActivitiesForMonthlyProgress = Activity::whereHas('users', function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            })
+            ->with([
+                'monthlyProgress' => function ($query) use ($currentMonth) {
+                    $query->where('month', $currentMonth);
+                },
+                'executionProgress' => function ($query) use ($currentMonth) {
+                    $query->where('month', $currentMonth);
+                }
+            ])->get();
+
+            foreach ($userActivitiesForMonthlyProgress as $activity) {
+                $planned = $activity->monthlyProgress->first();
+                $executed = $activity->executionProgress->first();
+
+                // Suma el porcentaje si existe un registro para el mes actual
+                if ($planned) {
+                    $totalPlannedPercentage += $planned->percentage;
+                    $activitiesCountForMonthlyMetrics++; // Cuenta solo las actividades que tienen un plan para el mes
+                }
+                if ($executed) {
+                    $totalExecutedPercentage += $executed->percentage;
+                    // Si una actividad tiene ejecución pero no planificado para el mes, también la contamos para el promedio
+                    if (!$planned) { // Evita duplicar el conteo si ya se sumó por 'planned'
+                        $activitiesCountForMonthlyMetrics++;
+                    }
+                }
+            }
+
+            // Calcula los promedios, evitando división por cero
+            $userPlannedMonthlyAverageProgress = $activitiesCountForMonthlyMetrics > 0 ?
+                round($totalPlannedPercentage / $activitiesCountForMonthlyMetrics, 2) : 0;
+            $userActualMonthlyAverageProgress = $activitiesCountForMonthlyMetrics > 0 ?
+                round($totalExecutedPercentage / $activitiesCountForMonthlyMetrics, 2) : 0;
+
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Éxito',
+                    'detail' => 'Conteo de asociaciones y progreso obtenido correctamente',
+                    'code' => 200,
+                ],
+                'data' => [
+                    'total_associated_products' => $totalAssociatedProducts,
+                    'activities_as_researcher' => $activitiesAsResearcherCount,
+                    'completed_activities_count' => $completedActivitiesCount,
+                    'user_planned_monthly_average_progress' => $userPlannedMonthlyAverageProgress,
+                    'user_actual_monthly_average_progress' => $userActualMonthlyAverageProgress,
+                ],
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener el conteo de asociaciones y progreso: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
 }
