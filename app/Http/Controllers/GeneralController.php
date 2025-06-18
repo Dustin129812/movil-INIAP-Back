@@ -73,6 +73,35 @@ class GeneralController extends Controller
         }
     }
 
+    public function getProductsByLocation()
+{
+    try {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        if (!$user->location_id) {
+            return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
+        }
+
+        $products = Product::where('location_id', $user->location_id)->get();
+
+        return response()->json(['data' => $products]);
+    } catch (\Exception $e) {
+        Log::error('Error al obtener productos por ubicación: ' . $e->getMessage(), [
+            'exception' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        return response()->json([
+            'message' => 'Error al obtener los productos por ubicación.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
     public function getActivitiesByProduct($productId)
     {
         try {
