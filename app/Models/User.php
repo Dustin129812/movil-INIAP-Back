@@ -86,9 +86,9 @@ class User extends Authenticatable  implements JWTSubject
             ->withTimestamps();
     }
 
-    public function qrTokens() // Relación en plural, para hasMany
+    public function createdWeekActivities()
     {
-        return $this->hasMany(QrToken::class);
+        return $this->hasMany(WeekActivity::class, 'user_id');
     }
 
 }
