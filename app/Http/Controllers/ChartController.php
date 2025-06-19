@@ -141,6 +141,7 @@ class ChartController extends Controller
                         'projection' => (float) $item->projection,
                         'execution' => (float) $item->execution,
                     ]);
+
             } elseif ($metric === 'researcher_products_progress') {
                 Log::info('Entrando en la lógica de researcher_products_progress (Avance General de Productos)');
 
@@ -156,6 +157,7 @@ class ChartController extends Controller
                         'label' => 'Sin Productos Asignados',
                         'value' => 0.0,
                     ]]);
+
                 } else {
                     Log::info('Productos encontrados. Calculando promedio.');
                     $overallAvg = DB::table('activity_monthly_progress')
@@ -197,6 +199,7 @@ class ChartController extends Controller
                             'value' => (float) $item->value,
                         ]);
                 }
+
             } elseif ($metric === 'researcher_activity_weighted_progress') { // Avance Ponderado de Actividades Global
                 Log::info('Entrando en la lógica de researcher_activity_weighted_progress (Avance Ponderado de Actividades GLOBAL)');
 
@@ -280,8 +283,33 @@ class ChartController extends Controller
 
                     Log::info('Avance Ponderado Mensual de Actividades calculado: ' . json_encode($data));
                 }
-            } elseif ($metric === 'researcher_monthly_product_weighted_progress') { // NUEVA MÉTRICA: Avance Ponderado Mensual de Productos
-                Log::info('Entrando en la lógica de researcher_monthly_product_weighted_progress (Avance Ponderado Mensual de Productos)');
+            }
+            elseif ($metric === 'product_user_count') {
+                Log::info('Entrando en la lógica de product_user_count con nombres de usuarios');
+
+                $productUsersRaw = DB::table('products as p')
+                    ->join('activities as a', 'a.product_id', '=', 'p.id')
+                    ->join('activity_user as au', 'au.activity_id', '=', 'a.id')
+                    ->join('users as u', 'u.id', '=', 'au.user_id')
+                    ->select('p.id as product_id', 'p.name as product_name', 'u.name as user_name')
+                    ->get();
+
+                if (!$productUsersRaw || $productUsersRaw->isEmpty()) {
+                    Log::info('No se encontraron usuarios para productos');
+                    $data = collect();
+                } else {
+                    $data = $productUsersRaw->groupBy('product_id')->map(function ($items, $productId) {
+                        return [
+                            'product_id' => $productId,
+                            'label' => $items->first()->product_name,
+                            'value' => $items->pluck('user_name')->unique()->count(),
+                            'users' => $items->pluck('user_name')->unique()->values()
+                        ];
+                    })
+                    ->values();
+                }
+            }
+             elseif ($metric === 'researcher_monthly_product_weighted_progress') { // NUEVA MÉTRICA: Avance Ponderado Mensual de Productos
 
                 $productIdsForResearcher = Activity::whereHas('users', function ($q) use ($user) {
                     $q->where('users.id', $user->id);
@@ -312,6 +340,8 @@ class ChartController extends Controller
                     Log::info('Avance Ponderado Mensual de Productos calculado: ' . json_encode($data));
                 }
             }
+
+
 
 
             return response()->json([
