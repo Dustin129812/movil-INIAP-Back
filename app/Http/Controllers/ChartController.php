@@ -315,6 +315,91 @@ class ChartController extends Controller
                     Log::info('Avance Ponderado Mensual de Productos calculado: ' . json_encode($data));
                 }
             }
+            elseif ($metric === 'rubro_progress') {
+    $data = $query
+        ->join('rubros', 'products.rubro_id', '=', 'rubros.id')
+        ->join('activities', 'products.id', '=', 'activities.product_id')
+        ->leftJoin('activity_execution_progress', 'activities.id', '=', 'activity_execution_progress.activity_id')
+        ->selectRaw("
+            rubros.name as label,
+            100 as planificado,
+            ROUND((
+                SUM(products.ponderacion * activities.ponderacion * COALESCE(activity_execution_progress.percentage, 0)) /
+                NULLIF(SUM(products.ponderacion * 100), 0)
+            )::numeric, 2) as ejecutado
+        ")
+        ->where('products.user_id', auth()->id())
+        ->groupBy('rubros.name')
+        ->get()
+        ->map(fn($item) => [
+            'label' => $item->label,
+            'planificado' => (float) $item->planificado,
+            'ejecutado' => (float) $item->ejecutado,
+        ]);
+}elseif ($metric === 'projects_by_rubro') {
+    $data = $query
+        ->join('rubros', 'rubros.id', '=', 'products.rubro_id')
+        ->leftJoin('activities', 'activities.product_id', '=', 'products.id')
+        ->leftJoin('activity_execution_progress', 'activity_execution_progress.activity_id', '=', 'activities.id')
+        ->selectRaw("
+            rubros.name as label,
+            COUNT(DISTINCT products.id) as planificado,
+            COUNT(DISTINCT CASE WHEN activity_execution_progress.percentage > 0 THEN products.id END) as ejecutado,
+            STRING_AGG(DISTINCT products.name, ', ') as nombres
+        ")
+        ->where('products.user_id', auth()->id())
+        ->groupBy('rubros.name')
+        ->get()
+        ->map(fn($item) => [
+            'label' => $item->label,
+            'planificado' => (int) $item->planificado,
+            'ejecutado' => (int) $item->ejecutado,
+            'nombres' => $item->nombres,
+        ]);
+} elseif ($metric === 'product_execution_progress') {
+    Log::info('Entrando en la lógica de product_execution_progress (Presupuesto Ejecutado por Producto)');
+
+    $productIdsForResearcher = Activity::whereHas('users', function ($q) use ($user) {
+        $q->where('users.id', $user->id);
+    })->pluck('product_id')->unique();
+
+    if ($productIdsForResearcher->isEmpty()) {
+        Log::info('No se encontraron productos. Devolviendo arreglo vacío.');
+        $data = [];
+    } else {
+        $results = DB::table('products as p')
+            ->selectRaw('
+                p.id AS producto_id,
+                p.name AS producto_nombre,
+                p.budget AS presupuesto_planificado,
+                ROUND(SUM(a.budget * COALESCE(ep.percentage, 0) / 100), 2) AS presupuesto_ejecutado
+            ')
+            ->leftJoin('activities as a', 'a.product_id', '=', 'p.id')
+            ->leftJoin(DB::raw('
+                (
+                    SELECT e1.activity_id, e1.percentage
+                    FROM activity_execution_progress e1
+                    INNER JOIN (
+                        SELECT activity_id, MAX(month) AS max_month
+                        FROM activity_execution_progress
+                        GROUP BY activity_id
+                    ) latest ON latest.activity_id = e1.activity_id AND latest.max_month = e1.month
+                ) AS ep
+            '), 'ep.activity_id', '=', 'a.id')
+            ->whereIn('p.id', $productIdsForResearcher)
+            ->groupBy('p.id', 'p.name', 'p.budget')
+            ->get();
+
+        $data = $results->map(fn($item) => [
+            'producto_id' => $item->producto_id,
+            'producto_nombre' => $item->producto_nombre,
+            'presupuesto_planificado' => (float) $item->presupuesto_planificado,
+            'presupuesto_ejecutado' => (float) $item->presupuesto_ejecutado,
+        ])->toArray();
+
+        Log::info('Presupuesto ejecutado por producto calculado: ' . json_encode($data));
+    }
+}
 
 
             return response()->json([
