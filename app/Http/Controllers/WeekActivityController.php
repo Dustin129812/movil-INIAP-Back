@@ -154,125 +154,106 @@ class WeekActivityController extends Controller
     }
 
     public function getPreviousWeekActivities(Request $request)
-    {
-        try {
-            $user = $request->user();
-            if (!$user) {
-                return response()->json(['error' => 'Usuario no autenticado'], 401);
-            }
-
-            $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
-            $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
-
-            Log::info("Rango de fechas: $lastMonday a $lastSunday");
-
-            $activities = WeekActivity::with(['activity', 'activity.product'])
-                ->whereBetween('date', [$lastMonday, $lastSunday])
-                ->where('user_id', $user->id) // Usar user_id directamente
-                ->get();
-
-            Log::info("Actividades encontradas: " . $activities->toJson());
-
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Success',
-                    'detail' => 'Actividades de la semana anterior obtenidas correctamente',
-                    'code' => 200,
-                ],
-                'data' => $activities->map(function ($weekActivity) {
-                    return [
-                        'id' => $weekActivity->id,
-                        'activity_id' => $weekActivity->activity->id,
-                        'description' => $weekActivity->description,
-                        'date' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                        'product_name' => $weekActivity->activity->product ? $weekActivity->activity->product->name : $weekActivity->product_name,
-                        'activity_name' => $weekActivity->activity->description,
-                        'status' => $weekActivity->status,
-                        'percentage' => $weekActivity->percentage,
-                        'observations' => $weekActivity->observations,
-                    ];
-                }),
-            ]);
-        } catch (\Exception $e) {
-            Log::error("Error al obtener actividades: " . $e->getMessage());
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'Error al obtener las actividades: ' . $e->getMessage(),
-                    'code' => 500,
-                ],
-            ], 500);
+{
+    try {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Usuario no autenticado'], 401);
         }
-    }
 
-    public function updateWeeklyProgress(Request $request)
-    {
-        $request->validate([
-            'progress' => ['required', 'array'],
-            'progress.*.week_activity_id' => ['required', 'exists:weekly_activities,id'],
-            'progress.*.percentage' => ['required', 'numeric', 'min:0', 'max:100'],
-            'progress.*.observations' => ['nullable', 'string'],
+        $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
+        $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
+
+        Log::info("Rango de fechas: $lastMonday a $lastSunday");
+
+        $activities = WeekActivity::with(['activity', 'activity.product'])
+            ->whereBetween('date', [$lastMonday, $lastSunday])
+            ->where('user_id', $user->id)
+            ->where(function ($query) {
+                $query->whereNull('percentage')
+                      ->orWhere('percentage', 0); // <-- Si usas 0 como no evaluado
+            })
+            ->get();
+
+        Log::info("Actividades encontradas: " . $activities->toJson());
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Success',
+                'detail' => 'Actividades de la semana anterior obtenidas correctamente',
+                'code' => 200,
+            ],
+            'data' => $activities->map(function ($weekActivity) {
+                return [
+                    'id' => $weekActivity->id,
+                    'activity_id' => $weekActivity->activity->id,
+                    'description' => $weekActivity->description,
+                    'date' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
+                    'product_name' => $weekActivity->activity->product ? $weekActivity->activity->product->name : $weekActivity->product_name,
+                    'activity_name' => $weekActivity->activity->description,
+                    'status' => $weekActivity->status,
+                    'percentage' => $weekActivity->percentage,
+                    'observations' => $weekActivity->observations,
+                ];
+            }),
         ]);
-
-        DB::beginTransaction();
-
-        try {
-            foreach ($request->progress as $progress) {
-                $weekActivity = WeekActivity::findOrFail($progress['week_activity_id']);
-
-                // Actualizar porcentaje y observaciones
-                $weekActivity->percentage = $progress['percentage'];
-                $weekActivity->observations = $progress['observations'] ?? null;
-                $weekActivity->save();
-
-                // Actualizar execution_progress en la actividad relacionada
-                $activity = $weekActivity->activity;
-                $currentMonth = Carbon::now()->startOfMonth();
-
-                $plannedProgress = $activity->monthlyProgress()->where('month', $currentMonth)->first();
-
-                if (!$plannedProgress) {
-                    throw new Exception("No se encontró un progreso mensual planificado para {$currentMonth->format('F Y')}.");
-                }
-
-                // Validar que el porcentaje semanal no exceda 100%
-                if ($progress['percentage'] > 100) {
-                    throw new Exception("El porcentaje semanal no puede exceder 100%.");
-                }
-
-                // Calcular porcentaje real a aplicar sobre el planificado
-                $weeklyExecution = ($progress['percentage'] / 100) * $plannedProgress->percentage;
-
-                // Validar que el nuevo porcentaje no exceda el planificado
-                if ($weeklyExecution > $plannedProgress->percentage) {
-                    throw new Exception("El progreso ejecutado excede el planificado para {$currentMonth->format('F Y')}.");
-                }
-
-                // Actualizar (o crear) execution_progress con el nuevo valor, sin sumar al existente
-                $activity->executionProgress()->updateOrCreate(
-                    ['month' => $currentMonth],
-                    ['percentage' => $weeklyExecution]
-                );
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Success',
-                    'detail' => 'Progreso de actividades actualizado correctamente',
-                    'code' => 200,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'Error al actualizar el progresso: ' . $e->getMessage(),
-                    'code' => 500,
-                ],
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        Log::error("Error al obtener actividades: " . $e->getMessage());
+        return response()->json([
+            'msg' => [
+                'summary' => 'Error',
+                'detail' => 'Error al obtener las actividades: ' . $e->getMessage(),
+                'code' => 500,
+            ],
+        ], 500);
     }
+}
+
+
+public function updateWeeklyProgress(Request $request)
+{
+    \Log::info('updateWeeklyProgress: Datos recibidos', $request->all());
+
+    $request->validate([
+        'progress' => ['required', 'array'],
+        'progress.*.week_activity_id' => ['required', 'exists:weekly_activities,id'],
+        'progress.*.percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+        'progress.*.observations' => ['nullable', 'string'],
+    ]);
+
+    DB::beginTransaction();
+
+    try {
+        foreach ($request->progress as $progress) {
+            $weekActivity = WeekActivity::findOrFail($progress['week_activity_id']);
+
+            $weekActivity->update([
+                'percentage' => $progress['percentage'],
+                'observations' => $progress['observations'] ?? null,
+            ]);
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Success',
+                'detail' => 'Progreso de actividades actualizado correctamente',
+                'code' => 200,
+            ],
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error("Error al actualizar progreso semanal: " . $e->getMessage());
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Error',
+                'detail' => 'Error al actualizar el progreso: ' . $e->getMessage(),
+                'code' => 500,
+            ],
+        ], 500);
+    }
+}
+
 }
