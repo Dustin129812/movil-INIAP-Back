@@ -13,10 +13,6 @@ class Rubro extends Model
         'name'
     ];
 
-    public function multidisciplinary_group(){
-        return $this->hasMany(Multidisciplinary_Group::class);
-    }
-
     public function product(){
         return $this->hasMany(Product::class);
     }

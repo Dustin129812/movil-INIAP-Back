@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PlannerController;
@@ -67,3 +68,4 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
+Route::get('/weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);

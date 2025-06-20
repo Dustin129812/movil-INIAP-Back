@@ -17,4 +17,13 @@ class Performance_Indicator extends Model
     {
         return $this->belongsTo(Activity::class);
     }
+
+    public function weekActivities()
+    {
+        return $this->belongsToMany(
+            WeekActivity::class,
+            'weekly_indicators',
+            'performance_indicators_id',
+            'weekly_activities_id');
+    }
 }
