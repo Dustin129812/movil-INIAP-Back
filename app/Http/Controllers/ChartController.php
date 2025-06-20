@@ -531,12 +531,22 @@ public function adminMaterials(Request $request)
             ]);
 
             case 'allProduct':
-                $products = DB::table('products')
+                $rubros = DB::table('rubros')
+    ->join('products', 'rubros.id', '=', 'products.rubro_id')
+    ->where('products.location_id', $user->location_id)
+    ->select('rubros.id', 'rubros.name')
+    ->distinct()
+    ->get();
+
+$result = [];
+
+foreach ($rubros as $rubro) {
+    $products = DB::table('products')
         ->where('location_id', $user->location_id)
+        ->where('rubro_id', $rubro->id)
         ->get();
 
-
-    $result = [];
+    $productos_con_materiales = [];
 
     foreach ($products as $product) {
         $materiales = DB::table('material_week_activity')
@@ -545,30 +555,37 @@ public function adminMaterials(Request $request)
             ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
             ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
             ->where('activities.product_id', $product->id)
-            ->whereIn('weekly_activities.status', ['approved','completed'])
+            ->whereIn('weekly_activities.status', ['approved', 'completed'])
             ->groupBy('materials.name')
             ->orderByDesc('total_used')
             ->get();
 
-        $result[] = [
-            'product' => $product->name,
-            'materials' => $materiales,
-        ];
+        // Solo incluir si hay materiales
+        if ($materiales->isNotEmpty()) {
+            $productos_con_materiales[] = [
+                'producto' => $product->name,
+                'materials' => $materiales,
+            ];
+        }
     }
 
-    return response()->json([
-        'msg' => [
-            'summary' => 'Materiales por productos de la ubicación',
-            'detail' => 'Consulta exitosa',
-            'code' => 200,
-        ],
-        'data' => $result,
-    ]);
+    // Solo incluir rubros que tienen productos con materiales
+    if (!empty($productos_con_materiales)) {
+        $result[] = [
+            'rubro' => $rubro->name,
+            'productos' => $productos_con_materiales,
+        ];
+    }
+}
 
-        default:
-            return response()->json([
-                'msg' => ['summary' => 'Tipo inválido', 'detail' => 'Debe ser top, producto o rubro', 'code' => 400],
-            ], 400);
+return response()->json([
+    'msg' => [
+        'summary' => 'Materiales por productos agrupados por rubro',
+        'detail' => 'Consulta exitosa',
+        'code' => 200,
+    ],
+    'data' => $result,
+]);
 
 
         }

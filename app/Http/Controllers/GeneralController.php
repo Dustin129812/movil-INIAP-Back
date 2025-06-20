@@ -79,7 +79,7 @@ class GeneralController extends Controller
             ], 500);
         }
     }
-
+//admin-Materials
     public function getProductsByLocation()
 {
     try {
@@ -104,6 +104,37 @@ class GeneralController extends Controller
 
         return response()->json([
             'message' => 'Error al obtener los productos por ubicación.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+public function getRubrosByLocation()
+{
+    try {
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        if (!$user->location_id) {
+            return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
+        }
+
+        $rubros = Rubro::whereHas('product', function ($query) use ($user) {
+            $query->where('location_id', $user->location_id);
+        })->get();
+
+        return response()->json(['data' => $rubros]);
+    } catch (\Exception $e) {
+        Log::error('Error al obtener rubros por ubicación: ' . $e->getMessage(), [
+            'exception' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        return response()->json([
+            'message' => 'Error al obtener los rubros por ubicación.',
             'error' => $e->getMessage()
         ], 500);
     }
