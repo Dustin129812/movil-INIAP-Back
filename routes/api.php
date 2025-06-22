@@ -47,6 +47,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('activities', [GeneralController::class, 'getActivitiesByProduct'] );
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
     Route::get('getProductsByLocation',[GeneralController::class,'getProductsByLocation']);
+    Route::get('getRubrosByLocation',[GeneralController::class,'getRubrosByLocation']);
 
     Route::get('chart-data', [ChartController::class, 'getChartData']);
 
