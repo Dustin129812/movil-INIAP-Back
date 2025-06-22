@@ -45,6 +45,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
     Route::get('activities', [GeneralController::class, 'getActivitiesByProduct'] );
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
+    Route::get('getProductsByLocation',[GeneralController::class,'getProductsByLocation']);
 
     Route::get('chart-data', [ChartController::class, 'getChartData']);
 
@@ -62,6 +63,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getRubros', [GeneralController::class, 'getRubros']);
     Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
     Route::get('getLogistic', [GeneralController::class, 'getLogistic']);
+    Route::get('adminMaterials',[ChartController::class,'adminMaterials']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);

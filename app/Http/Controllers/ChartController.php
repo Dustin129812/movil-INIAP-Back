@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Activity;
+use App\Models\Rubro;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log; // Importar la clase Log
+
 
 class ChartController extends Controller
 {
@@ -312,6 +315,91 @@ class ChartController extends Controller
                     Log::info('Avance Ponderado Mensual de Productos calculado: ' . json_encode($data));
                 }
             }
+            elseif ($metric === 'rubro_progress') {
+    $data = $query
+        ->join('rubros', 'products.rubro_id', '=', 'rubros.id')
+        ->join('activities', 'products.id', '=', 'activities.product_id')
+        ->leftJoin('activity_execution_progress', 'activities.id', '=', 'activity_execution_progress.activity_id')
+        ->selectRaw("
+            rubros.name as label,
+            100 as planificado,
+            ROUND((
+                SUM(products.ponderacion * activities.ponderacion * COALESCE(activity_execution_progress.percentage, 0)) /
+                NULLIF(SUM(products.ponderacion * 100), 0)
+            )::numeric, 2) as ejecutado
+        ")
+        ->where('products.user_id', auth()->id())
+        ->groupBy('rubros.name')
+        ->get()
+        ->map(fn($item) => [
+            'label' => $item->label,
+            'planificado' => (float) $item->planificado,
+            'ejecutado' => (float) $item->ejecutado,
+        ]);
+}elseif ($metric === 'projects_by_rubro') {
+    $data = $query
+        ->join('rubros', 'rubros.id', '=', 'products.rubro_id')
+        ->leftJoin('activities', 'activities.product_id', '=', 'products.id')
+        ->leftJoin('activity_execution_progress', 'activity_execution_progress.activity_id', '=', 'activities.id')
+        ->selectRaw("
+            rubros.name as label,
+            COUNT(DISTINCT products.id) as planificado,
+            COUNT(DISTINCT CASE WHEN activity_execution_progress.percentage > 0 THEN products.id END) as ejecutado,
+            STRING_AGG(DISTINCT products.name, ', ') as nombres
+        ")
+        ->where('products.user_id', auth()->id())
+        ->groupBy('rubros.name')
+        ->get()
+        ->map(fn($item) => [
+            'label' => $item->label,
+            'planificado' => (int) $item->planificado,
+            'ejecutado' => (int) $item->ejecutado,
+            'nombres' => $item->nombres,
+        ]);
+} elseif ($metric === 'product_execution_progress') {
+    Log::info('Entrando en la lógica de product_execution_progress (Presupuesto Ejecutado por Producto)');
+
+    $productIdsForResearcher = Activity::whereHas('users', function ($q) use ($user) {
+        $q->where('users.id', $user->id);
+    })->pluck('product_id')->unique();
+
+    if ($productIdsForResearcher->isEmpty()) {
+        Log::info('No se encontraron productos. Devolviendo arreglo vacío.');
+        $data = [];
+    } else {
+        $results = DB::table('products as p')
+            ->selectRaw('
+                p.id AS producto_id,
+                p.name AS producto_nombre,
+                p.budget AS presupuesto_planificado,
+                ROUND(SUM(a.budget * COALESCE(ep.percentage, 0) / 100), 2) AS presupuesto_ejecutado
+            ')
+            ->leftJoin('activities as a', 'a.product_id', '=', 'p.id')
+            ->leftJoin(DB::raw('
+                (
+                    SELECT e1.activity_id, e1.percentage
+                    FROM activity_execution_progress e1
+                    INNER JOIN (
+                        SELECT activity_id, MAX(month) AS max_month
+                        FROM activity_execution_progress
+                        GROUP BY activity_id
+                    ) latest ON latest.activity_id = e1.activity_id AND latest.max_month = e1.month
+                ) AS ep
+            '), 'ep.activity_id', '=', 'a.id')
+            ->whereIn('p.id', $productIdsForResearcher)
+            ->groupBy('p.id', 'p.name', 'p.budget')
+            ->get();
+
+        $data = $results->map(fn($item) => [
+            'producto_id' => $item->producto_id,
+            'producto_nombre' => $item->producto_nombre,
+            'presupuesto_planificado' => (float) $item->presupuesto_planificado,
+            'presupuesto_ejecutado' => (float) $item->presupuesto_ejecutado,
+        ])->toArray();
+
+        Log::info('Presupuesto ejecutado por producto calculado: ' . json_encode($data));
+    }
+}
 
 
             return response()->json([
@@ -333,4 +421,158 @@ class ChartController extends Controller
             ], 500);
         }
     }
+
+public function adminMaterials(Request $request)
+{
+    $user = auth()->user();
+    $type = $request->input('tipo');
+    $productId = $request->input('product_id');
+    $rubroId = $request->input('rubro_id');
+
+
+    if (!$user || !$user->location_id) {
+        return response()->json([
+            'msg' => [
+                'summary' => 'Error de autenticación',
+                'detail' => 'El usuario no tiene una ubicación asignada',
+                'code' => 403,
+            ],
+        ], 403);
+    }
+
+    switch ($type) {
+        case 'top':
+            $materiales = DB::table('material_week_activity')
+                ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
+                ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+                ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+                ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+                ->join('products', 'activities.product_id', '=', 'products.id')
+                ->where('products.location_id', $user->location_id)
+                ->whereIn('weekly_activities.status', ['approved','completed'])
+                ->groupBy('materials.name')
+                ->orderByDesc('total_used')
+                ->limit(10)
+                ->get();
+
+            return response()->json([
+                'msg' => ['summary' => 'Top materiales', 'detail' => 'Consulta exitosa', 'code' => 200],
+                'data' => $materiales,
+            ]);
+
+        case 'producto':
+            if (!$productId) {
+                return response()->json([
+                    'msg' => ['summary' => 'Falta product_id', 'detail' => '', 'code' => 400],
+                ], 400);
+            }
+
+            $product = Product::findOrFail($productId);
+
+            $materiales = DB::table('material_week_activity')
+                ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
+                ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+                ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+                ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+                ->where('activities.product_id', $product->id)
+                ->whereIn('weekly_activities.status', ['approved','completed'])
+                ->groupBy('materials.name')
+                ->orderByDesc('total_used')
+                ->get();
+
+            return response()->json([
+                'msg' => ['summary' => 'Materiales por producto', 'detail' => 'Consulta exitosa', 'code' => 200],
+                'data' => ['product' => $product->name, 'materials' => $materiales],
+            ]);
+
+        case 'rubro':
+            if (!$rubroId) {
+                return response()->json([
+                    'msg' => ['summary' => 'Falta rubro_id', 'detail' => '', 'code' => 400],
+                ], 400);
+            }
+
+            $rubro = Rubro::findOrFail($rubroId);
+
+            $productos = Product::where('rubro_id', $rubroId)
+                ->where('location_id', $user->location_id)
+                ->select('id', 'name')
+                ->get()
+                ->map(function ($producto) {
+
+            $materiales = DB::table('material_week_activity')
+                ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
+                ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+                ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+                ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+                ->where('activities.product_id', $producto->id)
+                ->whereIn('weekly_activities.status', ['approved','completed'])
+                ->groupBy('materials.name')
+                ->orderByDesc('total_used')
+                ->get()
+                        ->map(fn($item) => [
+                            'label' => $item->material,
+                            'value' => (float) $item->total_used,
+                        ]);
+
+                    return [
+                        'product' => $producto->name,
+                        'materials' => $materiales,
+                    ];
+                });
+
+            return response()->json([
+                'msg' => ['summary' => 'Materiales por rubro y producto', 'detail' => 'Consulta exitosa', 'code' => 200],
+                'data' => [
+                    'rubro' => $rubro->name,
+                    'products' => $productos,
+
+                ],
+            ]);
+
+            case 'allProduct':
+                $products = DB::table('products')
+        ->where('location_id', $user->location_id)
+        ->get();
+
+
+    $result = [];
+
+    foreach ($products as $product) {
+        $materiales = DB::table('material_week_activity')
+            ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
+            ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+            ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+            ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+            ->where('activities.product_id', $product->id)
+            ->whereIn('weekly_activities.status', ['approved','completed'])
+            ->groupBy('materials.name')
+            ->orderByDesc('total_used')
+            ->get();
+
+        $result[] = [
+            'product' => $product->name,
+            'materials' => $materiales,
+        ];
+    }
+
+    return response()->json([
+        'msg' => [
+            'summary' => 'Materiales por productos de la ubicación',
+            'detail' => 'Consulta exitosa',
+            'code' => 200,
+        ],
+        'data' => $result,
+    ]);
+
+        default:
+            return response()->json([
+                'msg' => ['summary' => 'Tipo inválido', 'detail' => 'Debe ser top, producto o rubro', 'code' => 400],
+            ], 400);
+
+
+        }
+}
+
+
 }
