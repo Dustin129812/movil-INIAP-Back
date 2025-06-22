@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Activity;
 use App\Models\Material;
 use App\Models\Product;
+use App\Notifications\CreateActivity;
 use App\Notifications\CreateProduct;
 use App\Notifications\CreateWeekPlanner;
 use App\Notifications\PlannerAccept;
@@ -73,6 +74,7 @@ class PlannerController extends Controller
                     $responsible = User::find($userId);
                     if ($responsible) {
                         $responsible->assignRole('researcher');
+                        $responsible->notify(new \App\Notifications\CreateActivity($activity, auth()->user()));
                     }
                 }
 
@@ -93,6 +95,7 @@ class PlannerController extends Controller
             if ($productManager && $updater && $productManager->id !== $updater->id) {
                 $productManager->notify(new CreateProduct($product, $updater));
             }
+
 
             return response()->json([
                 'msg' => [
@@ -237,11 +240,11 @@ class PlannerController extends Controller
         // Actualiza y guarda el estado
         $weekActivity->status = $status;
         if (!$weekActivity->save()) {
-            Log::error("❌ Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
+            Log::error(" Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
             return response()->json(['error' => 'No se pudo actualizar la actividad.'], 500);
         }
 
-        Log::info("✅ Actividad ID {$activityId} actualizada con estado '{$status}' por usuario ID " . auth()->id());
+        Log::info("Actividad ID {$activityId} actualizada con estado '{$status}' por usuario ID " . auth()->id());
 
         $creator = $weekActivity->user;
         $approver = auth()->user();

@@ -9,7 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
-class PlannerAccept extends Notification implements ShouldQueue
+class PlannerAccept extends Notification
 {
     use Queueable;
 

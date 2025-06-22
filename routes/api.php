@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PlannerController;
@@ -64,6 +65,9 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
     Route::get('getLogistic', [GeneralController::class, 'getLogistic']);
     Route::get('adminMaterials',[ChartController::class,'adminMaterials']);
+
+    Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
+    Route::get('user-weekly-plans', [ReportController::class, 'getUserWeeklyPlans']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);

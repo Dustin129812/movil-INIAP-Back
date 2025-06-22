@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Log;
 
 class WeekActivityController extends Controller
 {
+    // ... tus use statements (e.g., use App\Models\Material;)
+
     public function weeklyPlanner(Request $request)
     {
         DB::beginTransaction();
@@ -37,7 +39,7 @@ class WeekActivityController extends Controller
                 $activityId = $data['activityId'];
                 $dayName = $data['day'];
                 $estimatedHours = $data['hours'];
-                $materials = $data['materials'] ?? [];
+                $materialsData = $data['materials'] ?? []; // Cambiado a materialsData para diferenciar
                 $selectedIndicators = $data['indicators'] ?? []; // Array de IDs de indicadores
                 $observations = $data['observations'] ?? null;
                 $selectedLogisticSupports = $data['logisticSupports'] ?? [];
@@ -47,10 +49,10 @@ class WeekActivityController extends Controller
                 if (!$activity) {
                     throw new \Exception("Actividad con ID $activityId no encontrada.");
                 }
-                 // Obtener el producto asociado a la actividad
-                $product = $activity->product; // ← Aquí definimos $product
+                // Obtener el producto asociado a la actividad
+                $product = $activity->product;
 
-                // Obtención del user_id, similar a la explicación anterior
+                // Obtención del user_id
                 $userId = $activity->users->first()->id ?? null;
                 if (!$userId) {
                     throw new \Exception("No se pudo determinar el user_id para la actividad {$activityId}.");
@@ -69,53 +71,66 @@ class WeekActivityController extends Controller
                     'sábado' => 5,
                     'domingo' => 6,
                 ];
+                // Aseguramos que la fecha de planificación sea para la semana que viene.
+                // Carbon::now()->startOfWeek(Carbon::MONDAY) da el lunes de la semana actual.
+                // Si la planificación es el viernes/lunes, y es para la semana siguiente, addWeek() es correcto.
                 $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
                 $activityDate = $nextMonday->copy()->addDays($dayOffsets[$dayName] ?? 0);
 
                 $weekActivity = new WeekActivity();
-                $weekActivity->description = $activity->description;
+                $weekActivity->description = $activity->description; // Esto toma la descripción de la actividad base. El front también envía 'description' en el activity object, ¿debería ser ese? Asumo que quieres la del Activity model.
                 $weekActivity->date = $activityDate;
                 $isExtraPoa = $activity->product->name === 'Actividades Extra POA';
                 $weekActivity->status = $isExtraPoa ? 'approved' : 'pending';
                 $weekActivity->estimated_hours = $estimatedHours;
-                $weekActivity->work_location = $activity->work_location ?? 'Oficina';
-                $weekActivity->observations = $observations; // <-- MODIFICACIÓN CLAVE AQUÍ
+                $weekActivity->work_location = $activity->work_location ?? 'Oficina'; // Asumo que work_location viene del Activity model. Si quieres el del frontend (activity.work_location), cámbialo.
+                $weekActivity->observations = $observations;
                 $weekActivity->percentage = 0;
                 $weekActivity->activity_id = $activity->id;
                 $weekActivity->user_id = $userId;
-                $weekActivity->save(); // Es CRUCIAL guardar weekActivity antes de intentar asociar relaciones
+                $weekActivity->save();
 
-                // Asociar materiales
-                if (!empty($materials)) {
+                // Asociar materiales CON quantity y description del frontend
+                if (!empty($materialsData)) { // Usamos materialsData que es el array de objetos del frontend
                     $syncData = [];
-                    foreach ($materials as $materialId) {
-                        $syncData[$materialId] = [
-                            'description' => 'Descripción predeterminada', // O usa $material['description'] si viene del frontend
-                            'created_at' => now(),
-                            'updated_at' => now()
-                        ];
+                    foreach ($materialsData as $materialInput) {
+                        $materialFromDb = Material::where('name', $materialInput['name'])->first(); // Busca el material por nombre
+                        if ($materialFromDb) {
+                            $syncData[$materialFromDb->id] = [
+                                'quantity' => $materialInput['quantity'] ?? null,
+                                'description' => $materialInput['description'] ?? null,
+                                'created_at' => now(),
+                                'updated_at' => now()
+                            ];
+                        }
                     }
-                    $weekActivity->materials()->sync($syncData);
+                    if (!empty($syncData)) {
+                        $weekActivity->materials()->sync($syncData);
+                    }
+                } else {
+                    $weekActivity->materials()->detach(); // Si no se envían materiales, desvincula los existentes
                 }
 
-                // --- NUEVO: Asociar los indicadores usando el modelo pivote WeeklyIndicators ---
+
+                // Asociar los indicadores usando el modelo pivote WeeklyIndicators
                 if (!empty($selectedIndicators)) {
+                    $syncIndicators = [];
                     foreach ($selectedIndicators as $indicatorId) {
-                        // Verifica que el indicador de rendimiento exista antes de crear la relación
                         $performanceIndicator = Performance_Indicator::find($indicatorId);
                         if (!$performanceIndicator) {
                             throw new \Exception("Indicador de rendimiento con ID {$indicatorId} no encontrado.");
                         }
-
-                        // Crea un nuevo registro en la tabla pivote 'weekly_indicators'
-                        WeeklyIndicators::create([
-                            'weekly_activities_id' => $weekActivity->id,
-                            'performance_indicators_id' => $indicatorId,
-                        ]);
+                        $syncIndicators[$indicatorId] = [
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ];
                     }
+                    $weekActivity->performanceIndicators()->sync($syncIndicators);
+                } else {
+                    $weekActivity->performanceIndicators()->detach();
                 }
 
-                // --- ¡ESTE ES EL BLOQUE QUE FALTABA PARA ASOCIAR SOPORTES LOGÍSTICOS! ---
+                // Asociar soportes logísticos
                 if (!empty($selectedLogisticSupports)) {
                     // Opcional: Puedes validar si cada ID de soporte logístico existe
                     foreach ($selectedLogisticSupports as $supportId) {
@@ -123,10 +138,8 @@ class WeekActivityController extends Controller
                             throw new \Exception("Soporte logístico con ID {$supportId} no encontrado.");
                         }
                     }
-                    // Sincroniza los soportes logísticos en la tabla pivote
                     $weekActivity->logisticSupports()->sync($selectedLogisticSupports);
                 } else {
-                    // Si no se envían soportes logísticos, desvincula los existentes
                     $weekActivity->logisticSupports()->detach();
                 }
 
