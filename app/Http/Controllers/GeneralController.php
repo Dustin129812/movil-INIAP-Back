@@ -79,7 +79,7 @@ class GeneralController extends Controller
             ], 500);
         }
     }
-//admin-Materials
+//admin-Station
     public function getProductsByLocation()
 {
     try {
