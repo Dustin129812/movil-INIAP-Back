@@ -69,8 +69,6 @@
             margin-bottom: 2px;
         }
         .observations {
-            background-color: #fffacd; /* Color amarillo claro */
-            border: 1px solid #daa520; /* Borde amarillo */
             padding: 5px;
             margin-top: 5px;
             font-size: 9px;
@@ -86,8 +84,8 @@
 <div class="header">
     {{-- <img src="{{ $iniap_logo_path }}" alt="INIAP Logo"> --}}
     {{-- <img src="{{ $ecuador_shield_path }}" alt="Escudo de Ecuador"> --}}
-    <h1>ESTACIÓN EXPERIMENTAL SANTA CATALINA</h1>
-    <p>PLANIFICACIÓN SEMANAL DE ACTIVIDADES – (Programa Nacional de Fruticultura)</p>
+    <h1>{{ $technician_location }}</h1>
+    <p>PLANIFICACIÓN SEMANAL DE ACTIVIDADES – (Programa: {{ $program_rubro }})</p>
 </div>
 
 <table class="info-table">
@@ -132,17 +130,7 @@
             <td>
                 @forelse ($currentDayActivities as $activity)
                     <div class="activity-details">
-                        <p><strong>Producto:</strong> {{ $activity->activity->product->rubro->name ?? '' }} - {{ $activity->activity->product->name ?? 'N/A' }}</p>
-                        <p><strong>Actividad Base:</strong> {{ $activity->activity->description ?? 'N/A' }}</p>
-                        <p><strong>Horas Estimadas:</strong> {{ $activity->estimated_hours }}</p>
-                        <p><strong>Ubicación:</strong> {{ $activity->work_location ?? 'N/A' }}</p>
-                        <p><strong>Responsables:</strong>
-                            @if (!empty($activity->activity->users) && $activity->activity->users->isNotEmpty())
-                                {{ $activity->activity->users->pluck('name')->implode(', ') }}
-                            @else
-                                N/A
-                            @endif
-                        </p>
+                        <p>{{ $activity->activity->description ?? 'N/A' }}</p>
                     </div>
                 @empty
                     <p>No hay actividades planificadas.</p>
