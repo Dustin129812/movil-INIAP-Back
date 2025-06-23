@@ -94,7 +94,7 @@ class ReportController extends Controller
         ->with([
             'activity.product.rubro',
             'activity.users',
-            'materials.pivot',
+            'materials',
             'performanceIndicators',
             'logisticSupports'
         ]);
