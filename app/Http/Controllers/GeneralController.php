@@ -240,4 +240,36 @@ public function getRubrosByLocation()
             return response()->json(['error' => 'Error al crear el indicador', 'details' => $e->getMessage()], 500);
         }
     }
+
+
+    public function addLogisticSupport(Request $request): JsonResponse
+    {
+        try {
+            $supportName = $request->input('name');
+
+            //Validar que el nombre no sea nulo o vacío
+            if (empty($supportName)) {
+                return response()->json(['error' => 'El nombre del Soporte no puede estar vacío.'], 400);
+            }
+
+            //Buscar si ya existe un indicador con ese nombre (ignorando mayúsculas/minúsculas)
+            $existingSupport = LogisticSupport::whereRaw('LOWER(name) = ?', [strtolower($supportName)])->first();
+
+            if ($existingSupport) {
+                //Si ya existe, devuelve un error 409 Conflict
+                return response()->json(['error' => 'El Soporte logístico "' . $supportName . '" ya existe.'], 409);
+            }
+
+            //Si no existe, procede a crearlo
+            $support = new LogisticSupport();
+            $support->name = $supportName;
+            $support->save();
+
+            return response()->json($support, 201);
+
+        } catch (\Exception $e) {
+            // Un error general de servidor
+            return response()->json(['error' => 'Error al crear el Soporte Logístico', 'details' => $e->getMessage()], 500);
+        }
+    }
 }
