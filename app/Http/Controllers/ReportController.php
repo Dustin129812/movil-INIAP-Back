@@ -21,6 +21,9 @@ class ReportController extends Controller
             'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
         ]);
 
+        $iniap_logo_path = asset('storage/app/public/images/iniap_logo.png');
+        $ecuador_shield_path = asset('storage/app/public/images/ecuador_shield.jpg');
+
         $userId = $request->input('user_id');
         $startDate = Carbon::parse($request->input('start_date'));
         $endDate = Carbon::parse($request->input('end_date'));
@@ -60,6 +63,8 @@ class ReportController extends Controller
         }
 
         $reportData = [
+            'iniap_logo_path' => $iniap_logo_path,
+            'ecuador_shield_path' => $ecuador_shield_path,
             'technician' => $technician,
             'technician_location' => $technician->location->name ?? 'Ubicación Desconocida', // <-- Pasa la ubicación
             'program_rubro' => $mainRubro, // <-- Pasa el rubro principal
@@ -74,7 +79,7 @@ class ReportController extends Controller
 
         $pdf = Pdf::loadView('reports.weekly_plan', $reportData);
 
-        return $pdf->download('plan_semanal_' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf');
+        return $pdf->download('Plan Semanal' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf');
     }
 
     public function getUserWeeklyPlans(Request $request)
