@@ -58,6 +58,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::post('addRubro', [GeneralController::class, 'addRubro']);
     Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
+    Route::post('addLogistic', [GeneralController::class, 'addLogisticSupport']);
     Route::get('getLocations', [GeneralController::class, 'getLocations']);
     Route::get('getNationality', [GeneralController::class, 'getNationality']);
     Route::get('getEthnics', [GeneralController::class, 'getEthnics']);
