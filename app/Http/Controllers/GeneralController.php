@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\Rubro;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
@@ -80,7 +81,7 @@ class GeneralController extends Controller
         }
     }
 //admin-Station
-    public function getProductsByLocation()
+public function getProductsByLocation()
 {
     try {
         $user = Auth::user();
@@ -92,18 +93,42 @@ class GeneralController extends Controller
             return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
         }
 
-        $products = Product::where('location_id', $user->location_id)->get();
+        $products = DB::table('products')
+            ->where('location_id', $user->location_id)
+            ->get();
 
-        return response()->json(['data' => $products]);
+        $productos_con_materiales = [];
+
+        foreach ($products as $product) {
+            $materiales = DB::table('material_week_activity')
+                ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+                ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+                ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+                ->where('activities.product_id', $product->id)
+                ->whereIn('weekly_activities.status', ['approved', 'completed'])
+                ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
+                ->groupBy('materials.name')
+                ->get();
+
+            if ($materiales->isNotEmpty()) {
+                $productos_con_materiales[] = [
+                    'id' => $product->id,
+                    'producto' => $product->name,
+                    'materials' => $materiales,
+                ];
+            }
+        }
+
+        return response()->json(['data' => $productos_con_materiales]);
     } catch (\Exception $e) {
-        Log::error('Error al obtener productos por ubicación: ' . $e->getMessage(), [
+        Log::error('Error al obtener productos con materiales: ' . $e->getMessage(), [
             'exception' => get_class($e),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
         ]);
 
         return response()->json([
-            'message' => 'Error al obtener los productos por ubicación.',
+            'message' => 'Error al obtener los productos con materiales.',
             'error' => $e->getMessage()
         ], 500);
     }
@@ -121,11 +146,61 @@ public function getRubrosByLocation()
             return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
         }
 
-        $rubros = Rubro::whereHas('product', function ($query) use ($user) {
-            $query->where('location_id', $user->location_id);
-        })->get();
+        $rubros = DB::table('rubros')
+            ->join('products', 'rubros.id', '=', 'products.rubro_id')
+            ->where('products.location_id', $user->location_id)
+            ->select('rubros.id', 'rubros.name')
+            ->distinct()
+            ->get();
 
-        return response()->json(['data' => $rubros]);
+        $result = [];
+
+        foreach ($rubros as $rubro) {
+            $products = DB::table('products')
+                ->where('location_id', $user->location_id)
+                ->where('rubro_id', $rubro->id)
+                ->get();
+
+            $productos_con_materiales = [];
+
+            foreach ($products as $product) {
+                $materiales = DB::table('material_week_activity')
+                    ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
+                    ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+                    ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+                    ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+                    ->where('activities.product_id', $product->id)
+                    ->whereIn('weekly_activities.status', ['approved', 'completed'])
+                    ->groupBy('materials.name')
+                    ->orderByDesc('total_used')
+                    ->get();
+
+                if ($materiales->isNotEmpty()) {
+                    $productos_con_materiales[] = [
+                        'id' => $product->id,
+                        'producto' => $product->name,
+                        'materials' => $materiales,
+                    ];
+                }
+            }
+
+            if (!empty($productos_con_materiales)) {
+                $result[] = [
+                    'id' => $rubro->id,
+                    'rubro' => $rubro->name,
+                    'productos' => $productos_con_materiales,
+                ];
+            }
+        }
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Materiales por productos agrupados por rubro',
+                'detail' => 'Consulta exitosa',
+                'code' => 200,
+            ],
+            'data' => $result,
+        ]);
     } catch (\Exception $e) {
         Log::error('Error al obtener rubros por ubicación: ' . $e->getMessage(), [
             'exception' => get_class($e),
