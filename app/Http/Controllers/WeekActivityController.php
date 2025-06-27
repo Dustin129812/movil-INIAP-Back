@@ -225,7 +225,6 @@ class WeekActivityController extends Controller
 
 public function updateWeeklyProgress(Request $request)
 {
-    \Log::info('updateWeeklyProgress: Datos recibidos', $request->all());
 
     $request->validate([
         'progress' => ['required', 'array'],
