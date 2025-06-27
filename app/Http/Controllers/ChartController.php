@@ -580,16 +580,19 @@ foreach ($rubros as $rubro) {
 
     foreach ($products as $product) {
         $materiales = DB::table('material_week_activity')
-            ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
-            ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
-            ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
-            ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
-            ->where('activities.product_id', $product->id)
-            ->whereIn('weekly_activities.status', ['approved', 'completed'])
-            ->groupBy('materials.name')
-            ->orderByDesc('total_used')
-            ->get();
-
+    ->select(
+        'materials.name as material',
+        'material_week_activity.description',
+        DB::raw('SUM(material_week_activity.quantity) as total_used')
+    )
+    ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+    ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+    ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+    ->where('activities.product_id', $product->id)
+    ->whereIn('weekly_activities.status', ['approved', 'completed'])
+    ->groupBy('materials.name', 'material_week_activity.description') // importante agrupar también por description
+    ->orderByDesc('total_used')
+    ->get();
         // Solo incluir si hay materiales
         if ($materiales->isNotEmpty()) {
             $productos_con_materiales[] = [
