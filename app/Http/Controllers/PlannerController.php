@@ -24,7 +24,6 @@ class PlannerController extends Controller
 {
     public function addProductAndActivity(Request $request)
     {
-        // Iniciar una transacción para garantizar la integridad de los datos
         DB::beginTransaction();
 
         try {
@@ -263,18 +262,14 @@ class PlannerController extends Controller
 
     public function getWeeklyPlanningByResponsible()
     {
-        // 1. Empezamos por los usuarios que SÍ han creado al menos una actividad semanal.
         $usersWithPlans = User::whereHas('createdWeekActivities')
             ->with([
-                // 2. Cargamos esas actividades semanales y sus relaciones anidadas.
                 'createdWeekActivities' => function ($query) {
                     $query->with([
-                        // Para cada actividad semanal, necesitamos la actividad principal y su producto.
                         'activity' => function ($activityQuery) {
                             $activityQuery->select('id', 'description', 'product_id')
                                 ->with('product:id,name');
                         },
-                        // También cargamos los materiales de la actividad semanal.
                         'materials'
                     ]);
                 }
@@ -286,7 +281,6 @@ class PlannerController extends Controller
             return [
                 'id' => $user->id,
                 'name' => $user->name,
-                // 4. Agrupamos las actividades semanales del usuario por la actividad principal a la que pertenecen.
                 'activities' => $user->createdWeekActivities->groupBy('activity_id')->map(function ($weekActivitiesGroup) {
 
                     // La información de la actividad principal es la misma para todo el grupo.
@@ -297,7 +291,6 @@ class PlannerController extends Controller
                         'product_name' => $mainActivity->product->name ?? null,
                         'product_id' => $mainActivity->product->id ?? null,
                         'activity_description' => $mainActivity->description ?? null,
-                        // Mapeamos cada actividad semanal dentro de este grupo.
                         'week_activities' => $weekActivitiesGroup->map(fn($wa) => [
                             'id' => $wa->id,
                             'week_description' => $wa->description,
@@ -330,9 +323,9 @@ class PlannerController extends Controller
             ])->get();
 
             // Filtrar el producto "Actividades Extra POA"
-            $products = $products->filter(function ($product) {
-                return $product->name !== 'Actividades Extra POA';
-            });
+            //$products = $products->filter(function ($product) {
+            //   return $product->name !== 'Actividades Extra POA';
+            //});
 
             // Mapear los datos
             $formattedProducts = $products->map(function ($product) {
