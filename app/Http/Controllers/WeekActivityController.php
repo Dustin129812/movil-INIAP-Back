@@ -22,7 +22,6 @@ use Illuminate\Support\Facades\Log;
 
 class WeekActivityController extends Controller
 {
-    // ... tus use statements (e.g., use App\Models\Material;)
 
     public function weeklyPlanner(Request $request)
     {
@@ -52,15 +51,11 @@ class WeekActivityController extends Controller
                 // Obtener el producto asociado a la actividad
                 $product = $activity->product;
 
-                // Obtención del user_id
-                $userId = $activity->users->first()->id ?? null;
+                $userId = Auth::id();
                 if (!$userId) {
-                    throw new \Exception("No se pudo determinar el user_id para la actividad {$activityId}.");
+                    throw new \Exception("No se pudo determinar el usuario autenticado.");
                 }
-                $user = User::find($userId);
-                if (!$user) {
-                    throw new \Exception("Usuario con ID $userId no encontrado.");
-                }
+
 
                 $dayOffsets = [
                     'lunes' => 0,
@@ -71,9 +66,6 @@ class WeekActivityController extends Controller
                     'sábado' => 5,
                     'domingo' => 6,
                 ];
-                // Aseguramos que la fecha de planificación sea para la semana que viene.
-                // Carbon::now()->startOfWeek(Carbon::MONDAY) da el lunes de la semana actual.
-                // Si la planificación es el viernes/lunes, y es para la semana siguiente, addWeek() es correcto.
                 $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
                 $activityDate = $nextMonday->copy()->addDays($dayOffsets[$dayName] ?? 0);
 
@@ -90,8 +82,7 @@ class WeekActivityController extends Controller
                 $weekActivity->user_id = $userId;
                 $weekActivity->save();
 
-                // Asociar materiales CON quantity y description del frontend
-                if (!empty($materialsData)) { // Usamos materialsData que es el array de objetos del frontend
+                if (!empty($materialsData)){
                     $syncData = [];
                     foreach ($materialsData as $materialInput) {
                         $materialFromDb = Material::where('name', $materialInput['name'])->first(); // Busca el material por nombre
@@ -111,8 +102,6 @@ class WeekActivityController extends Controller
                     $weekActivity->materials()->detach(); // Si no se envían materiales, desvincula los existentes
                 }
 
-
-                // Asociar los indicadores usando el modelo pivote WeeklyIndicators
                 if (!empty($selectedIndicators)) {
                     $syncIndicators = [];
                     foreach ($selectedIndicators as $indicatorId) {
@@ -130,9 +119,7 @@ class WeekActivityController extends Controller
                     $weekActivity->performanceIndicators()->detach();
                 }
 
-                // Asociar soportes logísticos
                 if (!empty($selectedLogisticSupports)) {
-                    // Opcional: Puedes validar si cada ID de soporte logístico existe
                     foreach ($selectedLogisticSupports as $supportId) {
                         if (!LogisticSupport::find($supportId)) {
                             throw new \Exception("Soporte logístico con ID {$supportId} no encontrado.");
@@ -143,7 +130,6 @@ class WeekActivityController extends Controller
                     $weekActivity->logisticSupports()->detach();
                 }
 
-                // Crear la entrada en WeekPlanner
                 $planner = new WeekPlanner();
                 $planner->product()->associate($activity->product);
                 $planner->weekActivity()->associate($weekActivity);
