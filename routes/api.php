@@ -9,6 +9,7 @@ use App\Http\Controllers\WeekActivityController;
 use App\Http\Controllers\GeneralController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChartController;
+use App\Http\Controllers\WordPressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -73,3 +74,5 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
+Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
+

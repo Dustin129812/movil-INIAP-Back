@@ -243,14 +243,11 @@ class PlannerController extends Controller
             return response()->json(['error' => 'No se pudo actualizar la actividad.'], 500);
         }
 
-        Log::info("Actividad ID {$activityId} actualizada con estado '{$status}' por usuario ID " . auth()->id());
-
         $creator = $weekActivity->user;
         $approver = auth()->user();
 
         if ($creator && $approver && $creator->id !== $approver->id) {
             $creator->notify(new PlannerAccept($weekActivity, $approver, $status));
-            Log::info("Notificación enviada al creador ID {$creator->id} para la actividad ID {$activityId} con estado '{$status}'");
         }
 
         return response()->json([
@@ -321,11 +318,6 @@ class PlannerController extends Controller
                     $query->with(['users', 'indicators', 'monthlyProgress', 'executionProgress']);
                 },
             ])->get();
-
-            // Filtrar el producto "Actividades Extra POA"
-            //$products = $products->filter(function ($product) {
-            //   return $product->name !== 'Actividades Extra POA';
-            //});
 
             // Mapear los datos
             $formattedProducts = $products->map(function ($product) {

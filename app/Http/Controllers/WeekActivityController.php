@@ -163,8 +163,6 @@ class WeekActivityController extends Controller
         $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
         $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
 
-        Log::info("Rango de fechas: $lastMonday a $lastSunday");
-
         $activities = WeekActivity::with(['activity', 'activity.product'])
             ->whereBetween('date', [$lastMonday, $lastSunday])
             ->where('user_id', $user->id)
@@ -173,8 +171,6 @@ class WeekActivityController extends Controller
                       ->orWhere('percentage', 0); // <-- Si usas 0 como no evaluado
             })
             ->get();
-
-        Log::info("Actividades encontradas: " . $activities->toJson());
 
         return response()->json([
             'msg' => [
@@ -242,7 +238,6 @@ public function updateWeeklyProgress(Request $request)
         ]);
     } catch (\Exception $e) {
         DB::rollBack();
-        \Log::error("Error al actualizar progreso semanal: " . $e->getMessage());
 
         return response()->json([
             'msg' => [
