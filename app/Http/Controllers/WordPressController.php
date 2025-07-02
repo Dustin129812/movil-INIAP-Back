@@ -11,12 +11,11 @@ class WordPressController extends Controller
     public function getPosts()
     {
         $wordpressApiBaseUrl = 'https://tecnologia.iniap.gob.ec/wp-json/wp/v2/';
-        $postsEndpoint = $wordpressApiBaseUrl . 'posts';
+        $postsEndpoint = $wordpressApiBaseUrl . 'posts?per_page=3';
 
         try {
             // Fetch posts from WordPress API
             $response = Http::withOptions([
-                'verify' => false, // ¡ADVERTENCIA: SOLO PARA DESARROLLO! QUITAR EN PRODUCCIÓN.
             ])->get($postsEndpoint);
 
             if ($response->successful()) {

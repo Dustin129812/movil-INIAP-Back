@@ -71,8 +71,9 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
     Route::get('user-weekly-plans', [ReportController::class, 'getUserWeeklyPlans']);
+
+    Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 });
 
 Route::post('importUserFile', [ImportController::class, 'importUserFile']);
-Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 
