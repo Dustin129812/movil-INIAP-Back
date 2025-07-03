@@ -41,7 +41,8 @@ class WeekActivityController extends Controller
                 $materialsData = $data['materials'] ?? []; // Cambiado a materialsData para diferenciar
                 $selectedIndicators = $data['indicators'] ?? []; // Array de IDs de indicadores
                 $observations = $data['observations'] ?? null;
-                $selectedLogisticSupports = $data['logisticSupports'] ?? [];
+                // Ahora $selectedLogisticSupports contendrá un array de IDs de usuario
+                $selectedLogisticSupportUserIds = $data['logisticSupports'] ?? [];
 
 
                 $activity = Activity::find($activityId);
@@ -119,15 +120,15 @@ class WeekActivityController extends Controller
                     $weekActivity->performanceIndicators()->detach();
                 }
 
-                if (!empty($selectedLogisticSupports)) {
-                    foreach ($selectedLogisticSupports as $supportId) {
-                        if (!LogisticSupport::find($supportId)) {
-                            throw new \Exception("Soporte logístico con ID {$supportId} no encontrado.");
-                        }
-                    }
-                    $weekActivity->logisticSupports()->sync($selectedLogisticSupports);
+                // Manejar los usuarios de soporte logístico
+                if (!empty($selectedLogisticSupportUserIds)) {
+                    // Sincroniza los usuarios directamente.
+                    // Asegúrate de que tu modelo WeekActivity tenga una relación many-to-many
+                    // llamada 'logisticSupportUsers' o similar que apunte al modelo User.
+                    // No es necesario buscar cada usuario si ya vienen como IDs válidos.
+                    $weekActivity->logisticSupportUsers()->sync($selectedLogisticSupportUserIds);
                 } else {
-                    $weekActivity->logisticSupports()->detach();
+                    $weekActivity->logisticSupportUsers()->detach();
                 }
 
                 $planner = new WeekPlanner();
@@ -153,56 +154,67 @@ class WeekActivityController extends Controller
     }
 
     public function getPreviousWeekActivities(Request $request)
-{
-    try {
-        $user = $request->user();
-        if (!$user) {
-            return response()->json(['error' => 'Usuario no autenticado'], 401);
+    {
+        try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['error' => 'Usuario no autenticado'], 401);
+            }
+
+            $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
+            $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
+
+            $activities = WeekActivity::with([
+                'activity',
+                'activity.product',
+                'logisticSupportUsers' // Carga la relación de usuarios de soporte logístico
+            ])
+                ->whereBetween('date', [$lastMonday, $lastSunday])
+                ->where('user_id', $user->id)
+                ->where(function ($query) {
+                    $query->whereNull('percentage')
+                        ->orWhere('percentage', 0); // <-- Si usas 0 como no evaluado
+                })
+                ->get();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Actividades de la semana anterior obtenidas correctamente',
+                    'code' => 200,
+                ],
+                'data' => $activities->map(function ($weekActivity) {
+                    return [
+                        'id' => $weekActivity->id,
+                        'activity_id' => $weekActivity->activity->id,
+                        'description' => $weekActivity->description,
+                        'date' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
+                        'product_name' => $weekActivity->activity->product ? $weekActivity->activity->product->name : $weekActivity->product_name,
+                        'activity_name' => $weekActivity->activity->description,
+                        'status' => $weekActivity->status,
+                        'percentage' => $weekActivity->percentage,
+                        'observations' => $weekActivity->observations,
+                        // Mapea los usuarios de soporte logístico para incluirlos en la respuesta
+                        'logistic_supports' => $weekActivity->logisticSupportUsers->map(function ($user) {
+                            return [
+                                'id' => $user->id,
+                                'name' => $user->name,
+                            ];
+                        })->toArray(),
+                    ];
+                }),
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error al obtener actividades: " . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener las actividades: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
         }
-
-        $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
-        $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
-
-        $activities = WeekActivity::with(['activity', 'activity.product'])
-            ->whereBetween('date', [$lastMonday, $lastSunday])
-            ->where('user_id', $user->id)
-            ->where(function ($query) {
-                $query->whereNull('percentage')
-                      ->orWhere('percentage', 0); // <-- Si usas 0 como no evaluado
-            })
-            ->get();
-
-        return response()->json([
-            'msg' => [
-                'summary' => 'Success',
-                'detail' => 'Actividades de la semana anterior obtenidas correctamente',
-                'code' => 200,
-            ],
-            'data' => $activities->map(function ($weekActivity) {
-                return [
-                    'id' => $weekActivity->id,
-                    'activity_id' => $weekActivity->activity->id,
-                    'description' => $weekActivity->description,
-                    'date' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                    'product_name' => $weekActivity->activity->product ? $weekActivity->activity->product->name : $weekActivity->product_name,
-                    'activity_name' => $weekActivity->activity->description,
-                    'status' => $weekActivity->status,
-                    'percentage' => $weekActivity->percentage,
-                    'observations' => $weekActivity->observations,
-                ];
-            }),
-        ]);
-    } catch (\Exception $e) {
-        Log::error("Error al obtener actividades: " . $e->getMessage());
-        return response()->json([
-            'msg' => [
-                'summary' => 'Error',
-                'detail' => 'Error al obtener las actividades: ' . $e->getMessage(),
-                'code' => 500,
-            ],
-        ], 500);
     }
-}
 
 
 public function updateWeeklyProgress(Request $request)

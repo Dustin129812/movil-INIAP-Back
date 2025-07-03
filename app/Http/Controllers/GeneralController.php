@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ActivityResource;
+use App\Models\Activity;
 use App\Models\Ethnic_Group;
 use App\Models\Location;
 use App\Models\LogisticSupport;
@@ -215,7 +216,14 @@ public function getRubrosByLocation()
     }
 }
 
-    public function getActivitiesByProduct($productId)
+   /**
+     * Obtiene actividades para un producto específico, filtradas por el usuario autenticado
+     * que es responsable de esas actividades.
+     *
+     * @param int $productId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getActivitiesByProduct(int $productId): JsonResponse
     {
         try {
             $userId = Auth::id();
@@ -223,23 +231,30 @@ public function getRubrosByLocation()
                 return response()->json(['message' => 'No autenticado.'], 401);
             }
 
-            $product = Product::with(['activity.users', 'activity.indicators'])
-                ->whereUserRelated($userId)
-                ->find($productId);
-
+            // Verificar si el producto existe (opcional, pero buena práctica)
+            $product = Product::find($productId);
             if (!$product) {
                 return response()->json([
-                    'message' => 'Producto no encontrado o no autorizado.'
+                    'message' => 'Producto no encontrado.'
                 ], 404);
             }
 
-            if ($product->activity->isEmpty()) {
+            // Obtener actividades relacionadas a este producto Y donde el usuario autenticado es un responsable
+            $activities = Activity::where('product_id', $productId)
+                ->whereHas('users', function ($query) use ($userId) {
+                    $query->where('user_id', $userId);
+                })
+                ->with(['users', 'indicators']) // Cargar relaciones necesarias para ActivityResource
+                ->get();
+
+            if ($activities->isEmpty()) {
                 return response()->json([
-                    'message' => 'No hay actividades para este producto.'
+                    'message' => 'No hay actividades relacionadas a este producto para el usuario autenticado.'
                 ], 404);
             }
 
-            return response()->json(['data' => ActivityResource::collection($product->activity)]);
+            // Usar ActivityResource para formatear la colección de actividades
+            return response()->json(['data' => ActivityResource::collection($activities)]);
         } catch (\Exception $e) {
             Log::error('Error al obtener actividades: ' . $e->getMessage(), [
                 'exception' => get_class($e),

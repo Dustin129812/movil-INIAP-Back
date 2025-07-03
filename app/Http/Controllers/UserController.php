@@ -15,9 +15,20 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    public function getUsers()
+    public function getUsers(Request $request)
     {
-        $users = User::with('roles')->get();
+        $query = User::with('roles');
+
+        // Verifica si se proporcionó un término de búsqueda
+        if ($request->has('search')) {
+            $searchTerm = strtolower($request->input('search'));
+            $query->where(function ($q) use ($searchTerm) {
+                $q->whereRaw('LOWER(name) LIKE ?', ['%' . $searchTerm . '%'])
+                    ->orWhereRaw('LOWER(dni) LIKE ?', ['%' . $searchTerm . '%']);
+            });
+        }
+
+        $users = $query->get();
         $totalUsers = $users->count();
 
         return (new UserCollection($users))->additional([
@@ -34,12 +45,12 @@ class UserController extends Controller
     {
         $user = new User();
         $user->dni = $request->input('dni');
-        $user->name= $request->input('name');
-        $user->email= $request->input('email');
-        $user->password= Hash::make ($request->input('dni'));
-        $user->birth_date= $request->input('birth_date');
-        $user->gender= $request->input('gender');
-        $user->phone= $request->input('phone');
+        $user->name = $request->input('name');
+        $user->email = $request->input('email');
+        $user->password = Hash::make($request->input('dni'));
+        $user->birth_date = $request->input('birth_date');
+        $user->gender = $request->input('gender');
+        $user->phone = $request->input('phone');
 
         $user->locations()->associate(Location::find($request->input('location')));
         $user->nationalities()->associate(Nationality::find($request->input('nationality')));
@@ -51,7 +62,7 @@ class UserController extends Controller
         $user->assignRole('user');
 
         return (new UserResource($user))->additional([
-            'msg'=>[
+            'msg' => [
                 'summary' => 'success',
                 'detail' => 'El usuario a sido creado',
                 'code' => '200'
@@ -109,7 +120,4 @@ class UserController extends Controller
             'location' => $user->location->name ?? null, // <- retornamos el nombre de la ubicación
         ]);
     }
-
-
 }
-

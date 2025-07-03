@@ -144,7 +144,12 @@ class ReportController extends Controller
                     ];
                 }),
                 'indicators' => $plan->performanceIndicators->pluck('name')->implode(' - '), // Concatenar indicadores
-                'logistic_supports' => $plan->logisticSupports->pluck('name')->implode(', '),
+                'logistic_supports' => $plan->logisticSupportUsers->map(function($user) {
+                    return [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                    ];
+                })->toArray(), // Convertir la colección a un array
             ];
         });
 
