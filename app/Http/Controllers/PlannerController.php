@@ -315,7 +315,9 @@ class PlannerController extends Controller
                 'rubro',
                 'user', // Responsable del producto
                 'activities' => function ($query) {
-                    $query->with(['users', 'indicators', 'monthlyProgress', 'executionProgress']);
+                    // Carga la relación 'users' (responsables de la actividad), 'indicators',
+                    // 'monthlyProgress' y 'weeklyActivities' (para el progreso de ejecución)
+                    $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
                 },
             ])->get();
 
@@ -367,10 +369,12 @@ class PlannerController extends Controller
                                     'percentage' => $progress->percentage,
                                 ];
                             })->toArray(),
-                            'execution_progress' => ($activity->executionProgress ?? collect([]))->map(function ($progress) {
+                            // Mapea las weeklyActivities para formar el array execution_progress
+                            'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) {
                                 return [
-                                    'month' => Carbon::parse($progress->month)->format('Y-m-d'),
-                                    'percentage' => $progress->percentage,
+                                    'month' => Carbon::parse($weekActivity->date)->format('Y-m-d'), // Usa la fecha de la WeekActivity
+                                    'percentage' => (string)$weekActivity->percentage, // Usa el porcentaje de la WeekActivity
+                                    'observations' => $weekActivity->observations, // Incluye observaciones si es necesario
                                 ];
                             })->toArray(),
                         ];
@@ -387,6 +391,7 @@ class PlannerController extends Controller
                 'data' => $formattedProducts,
             ]);
         } catch (Exception $e) {
+            Log::error('Error al obtener los productos en getProductsWithActivities: ' . $e->getMessage());
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',
