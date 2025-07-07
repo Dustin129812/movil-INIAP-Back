@@ -67,7 +67,7 @@ class WeekActivityController extends Controller
                     'sábado' => 5,
                     'domingo' => 6,
                 ];
-                $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY)->addWeek();
+                $nextMonday = Carbon::now()->startOfWeek(Carbon::MONDAY);
                 $activityDate = $nextMonday->copy()->addDays($dayOffsets[$dayName] ?? 0);
 
                 $weekActivity = new WeekActivity();
