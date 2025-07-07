@@ -16,7 +16,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->string('name');
+            $table->text('name');
             $table->decimal('budget', 15, 2)->default(0);
             $table->decimal('ponderacion', 5, 2)->default(0);
 

@@ -8,10 +8,11 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use Tymon\JWTAuth\Contracts\JWTSubject;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable  implements JWTSubject
 {
-    use HasFactory, Notifiable, HasApiTokens, HasRoles;
+    use HasFactory, SoftDeletes, Notifiable, HasApiTokens, HasRoles;
     protected $guard_name = 'api';
     protected $fillable = [
         'dni',

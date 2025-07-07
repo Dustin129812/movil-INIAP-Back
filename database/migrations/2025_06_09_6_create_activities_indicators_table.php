@@ -21,6 +21,8 @@ return new class extends Migration
             $table->foreignId('indicator_id')->constrained('performance_indicators')->onDelete('cascade');
 
             $table->timestamps();
+             $table->softDeletes();
+            
         });
     }
 
