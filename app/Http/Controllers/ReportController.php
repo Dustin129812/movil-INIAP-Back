@@ -29,7 +29,7 @@ class ReportController extends Controller
         $startDate = Carbon::parse($request->input('start_date'));
         $endDate = Carbon::parse($request->input('end_date'));
 
-        $technician = User::with('location')->find($userId); // <-- Carga la relación 'location' del usuario
+        $technician = User::with('location')->find($userId);
         if (!$technician) {
             return response()->json(['error' => 'Técnico no encontrado.'], 404);
         }
@@ -49,7 +49,40 @@ class ReportController extends Controller
                 return Carbon::parse($item->date)->format('Y-m-d');
             });
 
-        $mainRubro = 'Varios Rubros'; // Valor por defecto
+        // --- LÓGICA SIMPLIFICADA PARA GENERAR INICIALES/CÓDIGOS (MODIFICADO para unirse) ---
+        $weekActivities->each(function ($dayActivities) {
+            $dayActivities->each(function ($weekActivity) {
+                $productInitialCode = ''; // Renombrado para claridad
+                $activityInitialCode = ''; // Renombrado para claridad
+                $combinedCodePrefix = ''; // Nuevo para el código combinado
+
+                // Obtener las 2 primeras letras del nombre del producto
+                if ($weekActivity->activity && $weekActivity->activity->product && !empty($weekActivity->activity->product->name)) {
+                    $productInitialCode = strtoupper(substr($weekActivity->activity->product->name, 0, 2));
+                }
+
+                // Obtener las 2 primeras letras de la descripción de la actividad
+                if ($weekActivity->activity && !empty($weekActivity->activity->description)) {
+                    $activityInitialCode = strtoupper(substr($weekActivity->activity->description, 0, 2));
+                }
+
+                // Combinar los códigos si existen
+                if (!empty($productInitialCode) && !empty($activityInitialCode)) {
+                    $combinedCodePrefix = $productInitialCode . $activityInitialCode . ': ';
+                } elseif (!empty($productInitialCode)) { // Si solo hay código de producto
+                    $combinedCodePrefix = $productInitialCode . ': ';
+                } elseif (!empty($activityInitialCode)) { // Si solo hay código de actividad
+                    $combinedCodePrefix = $activityInitialCode . ': ';
+                }
+
+
+                // Añadir la descripción formateada al objeto WeekActivity para usarla en Blade
+                $weekActivity->formatted_description = $combinedCodePrefix . ($weekActivity->description ?? '');
+            });
+        });
+        // --- FIN DE LA LÓGICA DE INICIALES/CÓDIGOS ---
+
+        $mainRubro = 'Varios Rubros';
         if ($weekActivities->isNotEmpty()) {
             $rubros = $weekActivities->flatten()->map(function($item) {
                 return $item->activity->product->rubro->name ?? null;
@@ -66,10 +99,10 @@ class ReportController extends Controller
             'iniap_logo_path' => $iniap_logo_path,
             'ecuador_shield_path' => $ecuador_shield_path,
             'technician' => $technician,
-            'technician_location' => $technician->location->name ?? 'Ubicación Desconocida', // <-- Pasa la ubicación
-            'program_rubro' => $mainRubro, // <-- Pasa el rubro principal
+            'technician_location' => $technician->location->name ?? 'Ubicación Desconocida',
+            'program_rubro' => $mainRubro,
             'presentation_date' => Carbon::now()->translatedFormat('d \d\e F \d\e Y'),
-            'week_range' => 'Del ' . $startDate->translatedFormat('d \d\e F \d\e Y') . ' al ' . $endDate->translatedFormat('d \d\e F \d\e Y'), // <-- CAMBIO AQUÍ
+            'week_range' => 'Del ' . $startDate->translatedFormat('d \d\e F \d\e Y') . ' al ' . $endDate->translatedFormat('d \d\e F \d\e Y'),
             'weekActivities' => $weekActivities,
             'days_of_week' => [
                 'lunes', 'martes', 'miercoles', 'jueves', 'viernes',
@@ -84,50 +117,72 @@ class ReportController extends Controller
 
     public function getUserWeeklyPlans(Request $request)
     {
-        $user = Auth::user(); // Obtener el usuario autenticado
+        $user = Auth::user();
         if (!$user) {
             return response()->json(['message' => 'No autenticado.'], 401);
         }
 
         $request->validate([
-            'start_date' => 'nullable|date_format:Y-m-d', // Hacemos opcional para ver todas o filtrar
+            'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
-            'status' => 'nullable|in:pending,approved,rejected,in progress,completed', // Filtrar por status
+            'status' => 'nullable|in:pending,approved,rejected,in progress,completed',
         ]);
 
-        $query = WeekActivity::where('user_id', $user->id) // Filtrar por el usuario logueado
-        ->with([
-            'activity.product.rubro',
-            'activity.users',
-            'materials',
-            'performanceIndicators',
-            'logisticSupports'
-        ]);
+        $query = WeekActivity::where('user_id', $user->id)
+            ->with([
+                'activity.product.rubro',
+                'activity.users',
+                'materials',
+                'performanceIndicators',
+                'logisticSupportUsers'
+            ]);
 
-        // Aplicar filtros de fecha si se proporcionan
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
             $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
             $query->whereBetween('date', [$startDate, $endDate]);
         }
 
-        // Aplicar filtro de estado
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
         } else {
-            // Por defecto, solo mostrar las 'approved' si no se especifica otro estado
-            $query->where('status', 'approved'); // Filtrar por 'approved' por defecto si no se pide otro estado
+            $query->where('status', 'approved');
         }
-
 
         $weeklyPlans = $query->orderBy('date', 'desc')->get();
 
-        // Transformar los datos para el frontend (opcional, pero útil para consolidar)
+        // --- LÓGICA SIMPLIFICADA PARA GENERAR INICIALES/CÓDIGOS PARA EL FRONTEND (MODIFICADO para unirse) ---
         $formattedPlans = $weeklyPlans->map(function($plan) {
+            $productInitialCode = ''; // Renombrado para claridad
+            $activityInitialCode = ''; // Renombrado para claridad
+            $combinedCodePrefix = ''; // Nuevo para el código combinado
+
+            // Obtener las 2 primeras letras del nombre del producto
+            if ($plan->activity && $plan->activity->product && !empty($plan->activity->product->name)) {
+                $productInitialCode = strtoupper(substr($plan->activity->product->name, 0, 2));
+            }
+
+            // Obtener las 2 primeras letras de la descripción de la actividad
+            if ($plan->activity && !empty($plan->activity->description)) {
+                $activityInitialCode = strtoupper(substr($plan->activity->description, 0, 2));
+            }
+
+            // Combinar los códigos si existen
+            if (!empty($productInitialCode) && !empty($activityInitialCode)) {
+                $combinedCodePrefix = $productInitialCode . $activityInitialCode . ': ';
+            } elseif (!empty($productInitialCode)) { // Si solo hay código de producto
+                $combinedCodePrefix = $productInitialCode . ': ';
+            } elseif (!empty($activityInitialCode)) { // Si solo hay código de actividad
+                $combinedCodePrefix = $activityInitialCode . ': ';
+            }
+
+            // --- FIN DE LA LÓGICA DE INICIALES/CÓDIGOS ---
+
             return [
                 'id' => $plan->id,
-                'date' => Carbon::parse($plan->date)->isoFormat('dddd, D [de] MMMM [de] YYYY'), // Formato legible en español
-                'description' => $plan->description ?? ($plan->activity->description ?? 'N/A'), // Usa la descripción de WeekActivity, o Activity
+                'date' => Carbon::parse($plan->date)->isoFormat('dddd, D [de] MMMM [de]YYYY'),
+                // Usa la descripción formateada aquí para el frontend
+                'description' => $combinedCodePrefix . ($plan->description ?? 'N/A'),
                 'estimated_hours' => $plan->estimated_hours,
                 'work_location' => $plan->work_location,
                 'observations' => $plan->observations,
@@ -143,13 +198,13 @@ class ReportController extends Controller
                         'description' => $material->pivot->description,
                     ];
                 }),
-                'indicators' => $plan->performanceIndicators->pluck('name')->implode(' - '), // Concatenar indicadores
+                'indicators' => $plan->performanceIndicators->pluck('name')->implode(' - '),
                 'logistic_supports' => $plan->logisticSupportUsers->map(function($user) {
                     return [
                         'id' => $user->id,
                         'name' => $user->name,
                     ];
-                })->toArray(), // Convertir la colección a un array
+                })->toArray(),
             ];
         });
 

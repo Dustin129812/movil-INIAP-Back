@@ -36,6 +36,7 @@ class WeekActivityController extends Controller
 
             foreach ($weeklyPlansData as $data) {
                 $activityId = $data['activityId'];
+                $description = $data['description'];
                 $dayName = $data['day'];
                 $estimatedHours = $data['hours'];
                 $materialsData = $data['materials'] ?? []; // Cambiado a materialsData para diferenciar
@@ -71,7 +72,7 @@ class WeekActivityController extends Controller
                 $activityDate = $nextMonday->copy()->addDays($dayOffsets[$dayName] ?? 0);
 
                 $weekActivity = new WeekActivity();
-                $weekActivity->description = $activity->description; // Esto toma la descripción de la actividad base. El front también envía 'description' en el activity object, ¿debería ser ese? Asumo que quieres la del Activity model.
+                $weekActivity->description = $description;
                 $weekActivity->date = $activityDate;
                 $isExtraPoa = $activity->product->name === 'Actividades Extra POA';
                 $weekActivity->status = $isExtraPoa ? 'approved' : 'pending';
