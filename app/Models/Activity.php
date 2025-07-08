@@ -56,5 +56,10 @@ class Activity extends Model
             ];
         })->toArray();
     }
+     // Relación One-to-Many con WeekActivity
+    public function weeklyActivities()
+    {
+        return $this->hasMany(WeekActivity::class);
+    }
 
 }

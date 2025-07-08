@@ -341,11 +341,14 @@ class PlannerController extends Controller
                         'name' => $product->rubro->name,
                     ] : null,
                     'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
+                        // Log para depuración: muestra las weeklyActivities cargadas
+                        Log::info('Actividad ID: ' . $activity->id . ' - Weekly Activities:', $activity->weeklyActivities->toArray());
+
                         return [
                             'id' => $activity->id,
                             'description' => $activity->description,
                             'budget' => $activity->budget,
-                            'ponderacion' => $activity->ponderacion,
+                            'ponderacion' => $activity->ponderacion, // Asegurarse de que la ponderación de la actividad esté disponible
                             'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
                             'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
                             'user' => ($activity->users ?? collect([]))->map(function ($user) {
@@ -370,10 +373,18 @@ class PlannerController extends Controller
                                 ];
                             })->toArray(),
                             // Mapea las weeklyActivities para formar el array execution_progress
-                            'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) {
+                            // Lógica de cálculo basada en la ponderación de la actividad
+                            'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activity) {
+                                $activityPonderacion = (float) $activity->ponderacion;
+                                $weekActivityPercentage = (float) $weekActivity->percentage;
+
+                                // Cálculo: (Ponderación de la Actividad / 100) * Porcentaje de Avance Semanal
+                                // Ejemplo: (25 / 100) * 50 = 12.5
+                                $effectivePercentage = ($activityPonderacion / 100) * $weekActivityPercentage;
+
                                 return [
                                     'month' => Carbon::parse($weekActivity->date)->format('Y-m-d'), // Usa la fecha de la WeekActivity
-                                    'percentage' => (string)$weekActivity->percentage, // Usa el porcentaje de la WeekActivity
+                                    'percentage' => (string) round($effectivePercentage, 2), // Usa el porcentaje calculado, redondeado a 2 decimales
                                     'observations' => $weekActivity->observations, // Incluye observaciones si es necesario
                                 ];
                             })->toArray(),
