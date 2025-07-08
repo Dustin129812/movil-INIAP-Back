@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class ReportController extends Controller
 {
@@ -21,8 +22,8 @@ class ReportController extends Controller
             'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
         ]);
 
-        $iniap_logo_path = asset('storage/app/public/images/iniap_logo.png');
-        $ecuador_shield_path = asset('storage/app/public/images/ecuador_shield.jpg');
+        $iniap_logo_path = public_path('storage/images/iniap_logo.png');
+        $ecuador_shield_path = public_path('storage/images/ecuador_shield.jpg');
 
         $userId = $request->input('user_id');
         $startDate = Carbon::parse($request->input('start_date'));
