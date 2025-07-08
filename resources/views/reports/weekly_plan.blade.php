@@ -221,9 +221,9 @@
 
             {{-- ACTIVIDADES --}}
             <td>
-                @forelse ($currentDayActivities as $activity)
+                @forelse ($currentDayActivities as $weekActivity)
                     <div class="activity-details">
-                        {{ $activity->activity->description ?? '' }} {{-- Si es N/A, dejar vacío para no sobrecargar --}}
+                        {{ $weekActivity->formatted_description ?? ($weekActivity->description ?? '') }} {{-- Usa la propiedad calculada --}}
                     </div>
                 @empty
                     <p class="text-center">--</p> {{-- Marcador visual para "No hay actividades" --}}
