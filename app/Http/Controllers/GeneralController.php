@@ -20,26 +20,32 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GeneralController extends Controller
 {
-    public function getLocations(){
+    public function getLocations()
+    {
         $locations = Location::get();
         return $locations;
     }
 
-    public function getNationality(){
+    public function getNationality()
+    {
         $nationality = Nationality::get();
         return $nationality;
     }
 
-    public function getEthnics(){
+    public function getEthnics()
+    {
         $ethnic = Ethnic_Group::get();
         return $ethnic;
     }
 
-    public function getPositions(){
+    public function getPositions()
+    {
         $position = Position::get();
         return $position;
     }
-    public function getRubros(){
+
+    public function getRubros()
+    {
         $rubro = Rubro::get();
         return $rubro;
     }
@@ -81,99 +87,35 @@ class GeneralController extends Controller
             ], 500);
         }
     }
+
 //admin-Station
-public function getProductsByLocation()
-{
-    try {
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['message' => 'No autenticado.'], 401);
-        }
-
-        if (!$user->location_id) {
-            return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
-        }
-
-        $products = DB::table('products')
-            ->where('location_id', $user->location_id)
-            ->get();
-
-        $productos_con_materiales = [];
-
-        foreach ($products as $product) {
-            $materiales = DB::table('material_week_activity')
-                ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
-                ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
-                ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
-                ->where('activities.product_id', $product->id)
-                ->whereIn('weekly_activities.status', ['approved', 'completed'])
-                ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
-                ->groupBy('materials.name')
-                ->get();
-
-            if ($materiales->isNotEmpty()) {
-                $productos_con_materiales[] = [
-                    'id' => $product->id,
-                    'producto' => $product->name,
-                    'materials' => $materiales,
-                ];
+    public function getProductsByLocation()
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['message' => 'No autenticado.'], 401);
             }
-        }
 
-        return response()->json(['data' => $productos_con_materiales]);
-    } catch (\Exception $e) {
-        Log::error('Error al obtener productos con materiales: ' . $e->getMessage(), [
-            'exception' => get_class($e),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ]);
+            if (!$user->location_id) {
+                return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
+            }
 
-        return response()->json([
-            'message' => 'Error al obtener los productos con materiales.',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
-public function getRubrosByLocation()
-{
-    try {
-        $user = Auth::user();
-
-        if (!$user) {
-            return response()->json(['message' => 'No autenticado.'], 401);
-        }
-
-        if (!$user->location_id) {
-            return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
-        }
-
-        $rubros = DB::table('rubros')
-            ->join('products', 'rubros.id', '=', 'products.rubro_id')
-            ->where('products.location_id', $user->location_id)
-            ->select('rubros.id', 'rubros.name')
-            ->distinct()
-            ->get();
-
-        $result = [];
-
-        foreach ($rubros as $rubro) {
             $products = DB::table('products')
                 ->where('location_id', $user->location_id)
-                ->where('rubro_id', $rubro->id)
                 ->get();
 
             $productos_con_materiales = [];
 
             foreach ($products as $product) {
                 $materiales = DB::table('material_week_activity')
-                    ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
                     ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
                     ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
                     ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
                     ->where('activities.product_id', $product->id)
                     ->whereIn('weekly_activities.status', ['approved', 'completed'])
+                    ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
                     ->groupBy('materials.name')
-                    ->orderByDesc('total_used')
                     ->get();
 
                 if ($materiales->isNotEmpty()) {
@@ -185,44 +127,103 @@ public function getRubrosByLocation()
                 }
             }
 
-            if (!empty($productos_con_materiales)) {
-                $result[] = [
-                    'id' => $rubro->id,
-                    'rubro' => $rubro->name,
-                    'productos' => $productos_con_materiales,
-                ];
-            }
+            return response()->json(['data' => $productos_con_materiales]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener productos con materiales: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'message' => 'Error al obtener los productos con materiales.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        return response()->json([
-            'msg' => [
-                'summary' => 'Materiales por productos agrupados por rubro',
-                'detail' => 'Consulta exitosa',
-                'code' => 200,
-            ],
-            'data' => $result,
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Error al obtener rubros por ubicación: ' . $e->getMessage(), [
-            'exception' => get_class($e),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ]);
-
-        return response()->json([
-            'message' => 'Error al obtener los rubros por ubicación.',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
-   /**
-     * Obtiene actividades para un producto específico, filtradas por el usuario autenticado
-     * que es responsable de esas actividades.
-     *
-     * @param int $productId
-     * @return \Illuminate\Http\JsonResponse
-     */
+    public function getRubrosByLocation()
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json(['message' => 'No autenticado.'], 401);
+            }
+
+            if (!$user->location_id) {
+                return response()->json(['message' => 'El usuario no tiene una ubicación asignada.'], 400);
+            }
+
+            $rubros = DB::table('rubros')
+                ->join('products', 'rubros.id', '=', 'products.rubro_id')
+                ->where('products.location_id', $user->location_id)
+                ->select('rubros.id', 'rubros.name')
+                ->distinct()
+                ->get();
+
+            $result = [];
+
+            foreach ($rubros as $rubro) {
+                $products = DB::table('products')
+                    ->where('location_id', $user->location_id)
+                    ->where('rubro_id', $rubro->id)
+                    ->get();
+
+                $productos_con_materiales = [];
+
+                foreach ($products as $product) {
+                    $materiales = DB::table('material_week_activity')
+                        ->selectRaw('materials.name as material, SUM(material_week_activity.quantity) as total_used')
+                        ->join('materials', 'material_week_activity.material_id', '=', 'materials.id')
+                        ->join('weekly_activities', 'material_week_activity.week_activity_id', '=', 'weekly_activities.id')
+                        ->join('activities', 'weekly_activities.activity_id', '=', 'activities.id')
+                        ->where('activities.product_id', $product->id)
+                        ->whereIn('weekly_activities.status', ['approved', 'completed'])
+                        ->groupBy('materials.name')
+                        ->orderByDesc('total_used')
+                        ->get();
+
+                    if ($materiales->isNotEmpty()) {
+                        $productos_con_materiales[] = [
+                            'id' => $product->id,
+                            'producto' => $product->name,
+                            'materials' => $materiales,
+                        ];
+                    }
+                }
+
+                if (!empty($productos_con_materiales)) {
+                    $result[] = [
+                        'id' => $rubro->id,
+                        'rubro' => $rubro->name,
+                        'productos' => $productos_con_materiales,
+                    ];
+                }
+            }
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Materiales por productos agrupados por rubro',
+                    'detail' => 'Consulta exitosa',
+                    'code' => 200,
+                ],
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener rubros por ubicación: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'message' => 'Error al obtener los rubros por ubicación.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function getActivitiesByProduct(int $productId): JsonResponse
     {
         try {
@@ -231,7 +232,7 @@ public function getRubrosByLocation()
                 return response()->json(['message' => 'No autenticado.'], 401);
             }
 
-            // Verificar si el producto existe (opcional, pero buena práctica)
+            // Obtener el producto para verificar si es "Actividades Extra POA"
             $product = Product::find($productId);
             if (!$product) {
                 return response()->json([
@@ -239,12 +240,24 @@ public function getRubrosByLocation()
                 ], 404);
             }
 
-            // Obtener actividades relacionadas a este producto Y donde el usuario autenticado es un responsable
+            // Determinar si el producto actual es "Actividades Extra POA"
+            // Asegúrate de que 'name' sea el nombre de la columna donde guardas el nombre del producto
+            $isExtraPOACategory = ($product->name === 'Actividades Extra POA');
+
             $activities = Activity::where('product_id', $productId)
-                ->whereHas('users', function ($query) use ($userId) {
-                    $query->where('user_id', $userId);
+                ->where(function ($query) use ($userId, $isExtraPOACategory) {
+                    if ($isExtraPOACategory) {
+                        // Si es "Actividades Extra POA", no aplicamos el filtro por usuario
+                        // todas las actividades de este producto deben ser visibles
+                        $query->orWhereNotNull('id'); // Una condición que siempre es verdadera para incluir todas
+                    } else {
+                        // Para otros productos, solo mostrar actividades donde el usuario es responsable
+                        $query->whereHas('users', function ($subQuery) use ($userId) {
+                            $subQuery->where('user_id', $userId);
+                        });
+                    }
                 })
-                ->with(['users', 'indicators']) // Cargar relaciones necesarias para ActivityResource
+                ->with(['users', 'indicators'])
                 ->get();
 
             if ($activities->isEmpty()) {
@@ -253,7 +266,6 @@ public function getRubrosByLocation()
                 ], 404);
             }
 
-            // Usar ActivityResource para formatear la colección de actividades
             return response()->json(['data' => ActivityResource::collection($activities)]);
         } catch (\Exception $e) {
             Log::error('Error al obtener actividades: ' . $e->getMessage(), [
