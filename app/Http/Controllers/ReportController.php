@@ -41,7 +41,7 @@ class ReportController extends Controller
                 'activity.users',
                 'materials',
                 'performanceIndicators',
-                'logisticSupports'
+                'logisticSupportUsers'
             ])
             ->orderBy('date')
             ->get()
@@ -49,7 +49,6 @@ class ReportController extends Controller
                 return Carbon::parse($item->date)->format('Y-m-d');
             });
 
-        // Intentar determinar el rubro principal de las actividades de esa semana
         $mainRubro = 'Varios Rubros'; // Valor por defecto
         if ($weekActivities->isNotEmpty()) {
             $rubros = $weekActivities->flatten()->map(function($item) {
