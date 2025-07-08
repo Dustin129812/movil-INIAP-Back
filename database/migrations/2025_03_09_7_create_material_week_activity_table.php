@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('material_id')->constrained('materials')->onDelete('cascade');
             $table->integer('quantity')->default(1);
             $table->string('description');
+            $table->softDeletes();
             $table->timestamps();
         });
     }
