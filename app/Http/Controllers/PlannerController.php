@@ -341,8 +341,6 @@ class PlannerController extends Controller
                         'name' => $product->rubro->name,
                     ] : null,
                     'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
-                        // Log para depuración: muestra las weeklyActivities cargadas
-                        Log::info('Actividad ID: ' . $activity->id . ' - Weekly Activities:', $activity->weeklyActivities->toArray());
 
                         return [
                             'id' => $activity->id,
