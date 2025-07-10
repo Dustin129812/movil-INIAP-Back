@@ -221,9 +221,9 @@
 
             {{-- ACTIVIDADES --}}
             <td>
-                @forelse ($currentDayActivities as $activity)
+                @forelse ($currentDayActivities as $weekActivity)
                     <div class="activity-details">
-                        {{ $activity->activity->description ?? '' }} {{-- Si es N/A, dejar vacío para no sobrecargar --}}
+                        {{ $weekActivity->formatted_description ?? ($weekActivity->description ?? '') }} {{-- Usa la propiedad calculada --}}
                     </div>
                 @empty
                     <p class="text-center">--</p> {{-- Marcador visual para "No hay actividades" --}}
@@ -280,9 +280,9 @@
             <td>
                 @forelse ($currentDayActivities as $activity)
                     <div class="activity-details">
-                        @if (!empty($activity->logisticSupports) && is_iterable($activity->logisticSupports) && $activity->logisticSupports->isNotEmpty())
+                        @if (!empty($activity->logisticSupportUsers) && is_iterable($activity->logisticSupportUsers) && $activity->logisticSupportUsers->isNotEmpty())
                             <ul>
-                                @foreach ($activity->logisticSupports as $support)
+                                @foreach ($activity->logisticSupportUsers as $support)
                                     <li>{{ $support->name }}</li>
                                 @endforeach
                             </ul>

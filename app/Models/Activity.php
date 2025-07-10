@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Activity extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
     protected $table = 'activities';
     protected $fillable = [
         'description',
@@ -54,6 +55,11 @@ class Activity extends Model
                 'absolute_percentage' => $this->ponderacion * ($progress->percentage / 100),
             ];
         })->toArray();
+    }
+     // Relación One-to-Many con WeekActivity
+    public function weeklyActivities()
+    {
+        return $this->hasMany(WeekActivity::class);
     }
 
 }

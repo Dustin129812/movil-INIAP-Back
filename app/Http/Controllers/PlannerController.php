@@ -315,7 +315,9 @@ class PlannerController extends Controller
                 'rubro',
                 'user', // Responsable del producto
                 'activities' => function ($query) {
-                    $query->with(['users', 'indicators', 'monthlyProgress', 'executionProgress']);
+                    // Carga la relación 'users' (responsables de la actividad), 'indicators',
+                    // 'monthlyProgress' y 'weeklyActivities' (para el progreso de ejecución)
+                    $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
                 },
             ])->get();
 
@@ -339,11 +341,12 @@ class PlannerController extends Controller
                         'name' => $product->rubro->name,
                     ] : null,
                     'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
+
                         return [
                             'id' => $activity->id,
                             'description' => $activity->description,
                             'budget' => $activity->budget,
-                            'ponderacion' => $activity->ponderacion,
+                            'ponderacion' => $activity->ponderacion, // Asegurarse de que la ponderación de la actividad esté disponible
                             'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
                             'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
                             'user' => ($activity->users ?? collect([]))->map(function ($user) {
@@ -367,10 +370,20 @@ class PlannerController extends Controller
                                     'percentage' => $progress->percentage,
                                 ];
                             })->toArray(),
-                            'execution_progress' => ($activity->executionProgress ?? collect([]))->map(function ($progress) {
+                            // Mapea las weeklyActivities para formar el array execution_progress
+                            // Lógica de cálculo basada en la ponderación de la actividad
+                            'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activity) {
+                                $activityPonderacion = (float) $activity->ponderacion;
+                                $weekActivityPercentage = (float) $weekActivity->percentage;
+
+                                // Cálculo: (Ponderación de la Actividad / 100) * Porcentaje de Avance Semanal
+                                // Ejemplo: (25 / 100) * 50 = 12.5
+                                $effectivePercentage = ($activityPonderacion / 100) * $weekActivityPercentage;
+
                                 return [
-                                    'month' => Carbon::parse($progress->month)->format('Y-m-d'),
-                                    'percentage' => $progress->percentage,
+                                    'month' => Carbon::parse($weekActivity->date)->format('Y-m-d'), // Usa la fecha de la WeekActivity
+                                    'percentage' => (string) round($effectivePercentage, 2), // Usa el porcentaje calculado, redondeado a 2 decimales
+                                    'observations' => $weekActivity->observations, // Incluye observaciones si es necesario
                                 ];
                             })->toArray(),
                         ];
@@ -387,6 +400,7 @@ class PlannerController extends Controller
                 'data' => $formattedProducts,
             ]);
         } catch (Exception $e) {
+            Log::error('Error al obtener los productos en getProductsWithActivities: ' . $e->getMessage());
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',

@@ -7,7 +7,8 @@ return [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'https://simpagi.online',
-        'http://172.18.11.113:3000'
+        'http://172.18.11.91:3000'
+
     ],
     'allowed_origins_patterns' => [],
     'allowed_headers' => ['*'],

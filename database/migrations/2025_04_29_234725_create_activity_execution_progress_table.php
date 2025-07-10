@@ -14,6 +14,7 @@ return new class extends Migration
             $table->date('month');
             $table->decimal('percentage', 5, 2)->default(0.00);
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
