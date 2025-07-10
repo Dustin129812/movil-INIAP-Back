@@ -37,6 +37,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
     Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
     Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
+    Route::get('getProductsWithActivitiesExtraPoa', [PlannerController::class, 'getProductsWithActivitiesExtraPoa']);
+
     Route::get('materials', [PlannerController::class, 'getMaterial']);
     Route::put('/products/{id}', [PlannerController::class, 'updateProductAndActivity']);
 
