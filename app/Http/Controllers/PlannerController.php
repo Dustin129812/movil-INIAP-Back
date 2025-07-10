@@ -259,6 +259,7 @@ class PlannerController extends Controller
 
     public function getWeeklyPlanningByResponsible()
     {
+        $user = Auth()->user();
         $usersWithPlans = User::whereHas('createdWeekActivities')
             ->with([
                 'createdWeekActivities' => function ($query) {
@@ -270,7 +271,7 @@ class PlannerController extends Controller
                         'materials'
                     ]);
                 }
-            ])
+            ])->where('location_id',$user->location_id)
             ->get();
 
         // 3. Transformamos los datos para la respuesta JSON.

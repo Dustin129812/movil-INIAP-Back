@@ -74,8 +74,7 @@ class WeekActivityController extends Controller
                 $weekActivity = new WeekActivity();
                 $weekActivity->description = $description;
                 $weekActivity->date = $activityDate;
-                $isExtraPoa = $activity->product->name === 'Actividades Extra POA';
-                $weekActivity->status = $isExtraPoa ? 'approved' : 'pending';
+                $weekActivity->status = 'pending';
                 $weekActivity->estimated_hours = $estimatedHours;
                 $weekActivity->work_location = $activity->work_location ?? 'Oficina'; // Asumo que work_location viene del Activity model. Si quieres el del frontend (activity.work_location), cámbialo.
                 $weekActivity->observations = $observations;
