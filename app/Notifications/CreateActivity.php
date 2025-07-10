@@ -8,6 +8,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Str; // ¡Importa Str!
 
 class CreateActivity extends Notification
 {
@@ -37,12 +38,25 @@ class CreateActivity extends Notification
      */
     public function toArray(object $notifiable): array
     {
+        $title = "Nueva Actividad Asignada: {$this->activity->description}";
+        $fullMessage = "La actividad '{$this->activity->description}' ha sido asignada a su cargo por {$this->updater->name}.";
+        $messagePreview = Str::limit($fullMessage, 150, '...');
+
         return [
+            // Campos esperados por el frontend
+            'id' => $this->id,
+            'type' => 'activity_assignment', // Tipo específico
+            'title' => $title,
+            'body_preview' => $messagePreview,
+            'full_body' => $fullMessage,
+
+            // Datos específicos
             'activity_id' => $this->activity->id,
             'activity_name' => $this->activity->description,
             'updater_id' => $this->updater->id,
             'updater_name' => $this->updater->name,
-            'message' => "La actividad '{$this->activity->description}' ha sido asignada a su cargo por {$this->updater->name}.",
+            'action_url' => '/dashboard/activities/' . $this->activity->id, // Ejemplo: URL a la actividad
+            'created_at' => now()->toDateTimeString(),
         ];
     }
 }
