@@ -13,12 +13,14 @@ use App\Models\WeeklyIndicators;
 use App\Models\WeekPlanner;
 use App\Notifications\CreateProduct;
 use App\Notifications\CreateWeekPlanner;
+use App\Notifications\OursWeekPlanner; 
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+
 
 class WeekActivityController extends Controller
 {
@@ -33,6 +35,8 @@ class WeekActivityController extends Controller
             if (!is_array($weeklyPlansData)) {
                 throw new \Exception("Formato de datos de planificación semanal inválido.");
             }
+
+            $entries = [];
 
             foreach ($weeklyPlansData as $data) {
                 $activityId = $data['activityId'];
@@ -82,6 +86,8 @@ class WeekActivityController extends Controller
                 $weekActivity->activity_id = $activity->id;
                 $weekActivity->user_id = $userId;
                 $weekActivity->save();
+
+                $entries[] = $weekActivity;
 
                 if (!empty($materialsData)){
                     $syncData = [];
@@ -137,16 +143,21 @@ class WeekActivityController extends Controller
                 $planner->save();
             }
 
-            DB::commit();
+             DB::commit();
 
-            $productManager = User::find($product->user_id);
-            $updater = Auth::user();
+        // 4️⃣ Enviamos 1 notificación con todas las entradas
+        $productManager = User::find($product->user_id);
+        $updater        = Auth::user();
 
-            if ($productManager && $updater && $productManager->id !== $updater->id) {
-                $productManager->notify(new CreateWeekPlanner($product, $updater));
-            }
+        if ($productManager && $updater && $productManager->id !== $updater->id) {
+            $productManager->notify(
+                new OursWeekPlanner($entries, $updater)
+            );
+        }
 
-            return response()->json(['message' => 'Planificación guardada correctamente.']);
+        return response()->json([
+            'message' => 'Planificación guardada correctamente.'
+        ]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => $e->getMessage()], 500);
