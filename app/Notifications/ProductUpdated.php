@@ -45,7 +45,7 @@ class ProductUpdated extends Notification
             'product_name' => $this->product->name,
             'updater_id' => $this->updater->id,
             'updater_name' => $this->updater->name,
-            'action_url' => '/dashboard/products/' . $this->product->id, // Ejemplo: URL al producto
+            'action_url' => 'poa-list' . $this->product->id, // Ejemplo: URL al producto
             'created_at' => now()->toDateTimeString(),
         ];
     }

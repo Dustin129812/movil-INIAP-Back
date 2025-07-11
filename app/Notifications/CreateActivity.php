@@ -55,7 +55,7 @@ class CreateActivity extends Notification
             'activity_name' => $this->activity->description,
             'updater_id' => $this->updater->id,
             'updater_name' => $this->updater->name,
-            'action_url' => '/dashboard/activities/' . $this->activity->id, // Ejemplo: URL a la actividad
+            'action_url' => 'poa-list' . $this->activity->id, // Ejemplo: URL a la actividad
             'created_at' => now()->toDateTimeString(),
         ];
     }

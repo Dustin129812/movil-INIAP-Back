@@ -70,7 +70,7 @@ class CreateProduct extends Notification
             'product_name' => $this->product->name,
             'updater_id' => $this->updater->id,
             'updater_name' => $this->updater->name,
-            'action_url' => '/dashboard/products/' . $this->product->id, // Ejemplo de URL para "Ver más detalles"
+            'action_url' => 'poa-list' . $this->product->id, // Ejemplo de URL para "Ver más detalles"
             'created_at' => now()->toDateTimeString(), // Asegúrate de enviar la fecha de creación
         ];
     }

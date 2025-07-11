@@ -5,7 +5,8 @@ namespace App\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use App\Models\User;
-use Carbon\Carbon;             // ← importa Carbon
+use Carbon\Carbon;
+use Illuminate\Support\Str;
 
 class OursWeekPlanner extends Notification
 {
@@ -26,51 +27,77 @@ class OursWeekPlanner extends Notification
     }
 
     public function toArray(object $notifiable): array
-{
-    Carbon::setLocale('es');
+    {
+        Carbon::setLocale('es');
 
-    $payloadEntries = [];
-    $messageLines   = ["{$this->updater->name} actualizó el planner semanal:"];
+        $messageLines = [];
+        $totalMissingHours = 0;
+        $daysWithMissingHours = []; // Para listar los días con déficit
 
-    foreach ($this->entries as $entry) {
-        $activity = $entry->activity;
-        $product  = $activity->product;
-        $dayName  = Carbon::parse($entry->date)->isoFormat('dddd');
-        $hours    = $entry->estimated_hours;
-        $leftover = max(0, 8 - $hours);
+        // Filtrar solo las entradas con horas faltantes y preparar el mensaje
+        foreach ($this->entries as $entry) {
+            // Asegúrate de que la actividad y el producto estén cargados en el modelo WeekActivity
+            // Si $entry es una WeekActivity, necesitarías $entry->activity y $entry->activity->product
+            $activity = $entry->activity;
+            $product  = $activity->product; // Accede al producto a través de la actividad
+            $entryDate = Carbon::parse($entry->date);
+            $dayName  = $entryDate->isoFormat('dddd'); // Nombre del día de la semana
+            $exactDate = $entryDate->isoFormat('DD/MM/YYYY'); // Fecha exacta en formato DD/MM/YYYY
 
-        // ——— aquí cambiamos el orden ———
-        $line = "- {$dayName}:";
+            $hoursLogged = $entry->estimated_hours;
+            $hoursRequired = 8; // Asumiendo 8 horas por día como el requisito
+            $missingHours = max(0, $hoursRequired - $hoursLogged);
 
-        if ($product) {
-            $line .= " Producto: {$product->name},";
+            if ($missingHours > 0) {
+                $totalMissingHours += $missingHours;
+                $daysWithMissingHours[] = "{$dayName} {$exactDate} (faltan {$missingHours}h)";
+
+                $productName = $product ? $product->name : 'N/A';
+                $activityDescription = $activity->description;
+
+                // Mensaje detallado para cada entrada con horas faltantes
+                $messageLines[] = "• El {$dayName} {$exactDate}, en el Producto \"{$productName}\" y Actividad \"{$activityDescription}\", planificaste {$hoursLogged}h, faltando {$missingHours}h para completar la jornada de {$hoursRequired}h.";
+            }
         }
 
-        $line .= " Actividad: “{$activity->description}”,";
+        $title = "⚠️ Planificación Semanal con Horas Incompletas";
+        $fullMessage = "Estimado(a) {$this->updater->name}, \n\nSe ha detectado un déficit en las horas planificadas para tu semana. Por favor, revisa los siguientes detalles:\n\n";
 
-        $line .= " {$hours}h registradas";
-
-        if ($leftover > 0) {
-            $line .= ", faltan {$leftover}h";
+        if (empty($messageLines)) {
+            // Este caso debería ser raro si la notificación se dispara solo por déficit
+            $fullMessage = "Estimado(a) {$this->updater->name}, \n\nTu planificación semanal está completa y cumple con el requisito de horas. ¡Buen trabajo!";
+            $title = "✅ Planificación Semanal Completa";
+        } else {
+            $fullMessage .= implode("\n\n", $messageLines); // Separar cada detalle de entrada con doble salto de línea
+            $fullMessage .= "\n\nEn total, faltan *{$totalMissingHours} horas* por planificar en la semana. Es crucial que completes tu jornada para asegurar el cumplimiento de tus actividades.";
+            $fullMessage .= "\n\nPor favor, ingresa al sistema para ajustar tu planificación semanal lo antes posible.";
         }
 
-        $messageLines[] = $line;
+        // Construir la previsualización (body_preview)
+        $bodyPreview = "Alerta: {$this->updater->name} tiene {$totalMissingHours}h incompletas en su planificación semanal.";
+        if (!empty($daysWithMissingHours)) {
+            $bodyPreview .= " Días afectados: " . implode(', ', array_slice($daysWithMissingHours, 0, 2)); // Muestra hasta 2 días afectados
+            if (count($daysWithMissingHours) > 2) {
+                $bodyPreview .= " y más.";
+            } else {
+                $bodyPreview .= ".";
+            }
+        }
+        $bodyPreview = Str::limit($bodyPreview, 150, '...');
 
-        $payloadEntries[] = [
-            'day'            => $dayName,
-            'product_id'     => $product?->id,
-            'product_name'   => $product?->name,
-            'activity_id'    => $activity->id,
-            'activity_name'  => $activity->description,
-            'hours_logged'   => $hours,
-            'hours_missing'  => $leftover,
+
+        return [
+            'id' => $this->id,
+            'type' => 'weekly_planner_incomplete_hours',
+            'title' => $title,
+            'body_preview' => $bodyPreview,
+            'full_body' => $fullMessage,
+            'updater_id' => $this->updater->id,
+            'updater_name' => $this->updater->name,
+            'missing_hours_details' => $daysWithMissingHours, // Útil para el frontend si necesita un desglose
+            'total_missing_hours' => $totalMissingHours,
+            'action_url' => '/dashboard/week-planner',
+            'created_at' => now()->toDateTimeString(),
         ];
     }
-
-    return [
-        'entries' => $payloadEntries,
-        'message' => implode("\n", $messageLines),
-    ];
-}
-
 }

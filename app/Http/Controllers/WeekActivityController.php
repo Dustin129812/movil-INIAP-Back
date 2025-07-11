@@ -13,7 +13,7 @@ use App\Models\WeeklyIndicators;
 use App\Models\WeekPlanner;
 use App\Notifications\CreateProduct;
 use App\Notifications\CreateWeekPlanner;
-use App\Notifications\OursWeekPlanner; 
+use App\Notifications\OursWeekPlanner;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
@@ -126,12 +126,7 @@ class WeekActivityController extends Controller
                     $weekActivity->performanceIndicators()->detach();
                 }
 
-                // Manejar los usuarios de soporte logístico
                 if (!empty($selectedLogisticSupportUserIds)) {
-                    // Sincroniza los usuarios directamente.
-                    // Asegúrate de que tu modelo WeekActivity tenga una relación many-to-many
-                    // llamada 'logisticSupportUsers' o similar que apunte al modelo User.
-                    // No es necesario buscar cada usuario si ya vienen como IDs válidos.
                     $weekActivity->logisticSupportUsers()->sync($selectedLogisticSupportUserIds);
                 } else {
                     $weekActivity->logisticSupportUsers()->detach();
@@ -149,11 +144,11 @@ class WeekActivityController extends Controller
         $productManager = User::find($product->user_id);
         $updater        = Auth::user();
 
-        if ($productManager && $updater && $productManager->id !== $updater->id) {
-            $productManager->notify(
-                new OursWeekPlanner($entries, $updater)
-            );
-        }
+            if ($productManager && $updater) { // Solo verifica que existan ambos
+                $productManager->notify(
+                    new OursWeekPlanner($entries, $updater)
+                );
+            }
 
         return response()->json([
             'message' => 'Planificación guardada correctamente.'
