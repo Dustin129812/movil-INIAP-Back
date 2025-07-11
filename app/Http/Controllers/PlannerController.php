@@ -311,7 +311,121 @@ class PlannerController extends Controller
         try {
             $user = $request->user();
 
-            $products = Product::with([
+            $products = Product::where('location_id', $user->location_id)
+            ->whereHas('rubro', function ($query) {
+                $query->where('name', '!=', 'OFICIAL');
+            })
+            ->with([
+                'location',
+                'rubro',
+                'user', // Responsable del producto
+                'activities' => function ($query) {
+                    // Carga la relación 'users' (responsables de la actividad), 'indicators',
+                    // 'monthlyProgress' y 'weeklyActivities' (para el progreso de ejecución)
+                    $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
+                },
+            ])->get();
+
+            // Mapear los datos
+            $formattedProducts = $products->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'budget' => $product->budget,
+                    'ponderacion' => $product->ponderacion,
+                    'user' => $product->user ? [
+                        'id' => $product->user->id,
+                        'name' => $product->user->name ?? 'Sin nombre',
+                    ] : null,
+                    'location' => $product->location ? [
+                        'id' => $product->location->id,
+                        'name' => $product->location->name,
+                    ] : null,
+                    'rubro' => $product->rubro ? [
+                        'id' => $product->rubro->id,
+                        'name' => $product->rubro->name,
+                    ] : null,
+                    'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
+
+                        return [
+                            'id' => $activity->id,
+                            'description' => $activity->description,
+                            'budget' => $activity->budget,
+                            'ponderacion' => $activity->ponderacion, // Asegurarse de que la ponderación de la actividad esté disponible
+                            'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                            'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                            'user' => ($activity->users ?? collect([]))->map(function ($user) {
+                                return [
+                                    'id' => $user->id,
+                                    'name' => $user->name ?? 'Sin nombre',
+                                ];
+                            })->toArray(),
+
+                            // Se mapea la colección de indicadores, igual que se hace con los usuarios.
+                            'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicators) {
+                                return [
+                                    'id' => $indicators->id,
+                                    'name' => $indicators->name,
+                                ];
+                            })->toArray(),
+
+                            'monthly_progress' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                                return [
+                                    'month' => Carbon::parse($progress->month)->format('Y-m-d'),
+                                    'percentage' => $progress->percentage,
+                                ];
+                            })->toArray(),
+                            // Mapea las weeklyActivities para formar el array execution_progress
+                            // Lógica de cálculo basada en la ponderación de la actividad
+                            'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activity) {
+                                $activityPonderacion = (float) $activity->ponderacion;
+                                $weekActivityPercentage = (float) $weekActivity->percentage;
+
+                                // Cálculo: (Ponderación de la Actividad / 100) * Porcentaje de Avance Semanal
+                                // Ejemplo: (25 / 100) * 50 = 12.5
+                                $effectivePercentage = ($activityPonderacion / 100) * $weekActivityPercentage;
+
+                                return [
+                                    'month' => Carbon::parse($weekActivity->date)->format('Y-m-d'), // Usa la fecha de la WeekActivity
+                                    'percentage' => (string) round($effectivePercentage, 2), // Usa el porcentaje calculado, redondeado a 2 decimales
+                                    'observations' => $weekActivity->observations, // Incluye observaciones si es necesario
+                                ];
+                            })->toArray(),
+                        ];
+                    })->toArray(),
+                ];
+            })->values()->toArray(); // Usamos values() para re-indexar el array después de filter()
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Productos obtenidos correctamente',
+                    'code' => 200,
+                ],
+                'data' => $formattedProducts,
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error al obtener los productos en getProductsWithActivities: ' . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener los productos: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
+        public function getProductsWithActivitiesExtraPoa(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            $products = Product::where('location_id', $user->location_id)
+            ->whereHas('rubro', function ($query) {
+                $query->where('name', '=', 'OFICIAL');
+            })
+            ->with([
                 'location',
                 'rubro',
                 'user', // Responsable del producto
