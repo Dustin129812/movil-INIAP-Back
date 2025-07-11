@@ -24,6 +24,9 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/read/{notificationId}', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::post('/notifications/mark-as-read-batch', [NotificationController::class, 'markAsReadBatch']);
+    Route::post('/notifications/mark-as-unread-batch', [NotificationController::class, 'markAsUnreadBatch']); // Si necesitas desmarcar
+    Route::delete('/notifications/batch', [NotificationController::class, 'destroyBatch']); // Para eliminar o archivar
 
     Route::post('logout', [AuthController::class, 'logout']);
     Route::get('user/roles', [AuthController::class, 'getUserRoles']);
@@ -37,6 +40,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
     Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
     Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
+    Route::get('getProductsWithActivitiesExtraPoa', [PlannerController::class, 'getProductsWithActivitiesExtraPoa']);
+
     Route::get('materials', [PlannerController::class, 'getMaterial']);
     Route::put('/products/{id}', [PlannerController::class, 'updateProductAndActivity']);
 
