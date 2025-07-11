@@ -14,6 +14,7 @@ use App\Models\WeekPlanner;
 use App\Notifications\CreateProduct;
 use App\Notifications\CreateWeekPlanner;
 use App\Notifications\OursWeekPlanner;
+use App\Notifications\RateWeeklyActivityNo;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
@@ -89,7 +90,7 @@ class WeekActivityController extends Controller
 
                 $entries[] = $weekActivity;
 
-                if (!empty($materialsData)){
+                if (!empty($materialsData)) {
                     $syncData = [];
                     foreach ($materialsData as $materialInput) {
                         $materialFromDb = Material::where('name', $materialInput['name'])->first(); // Busca el material por nombre
@@ -138,11 +139,11 @@ class WeekActivityController extends Controller
                 $planner->save();
             }
 
-             DB::commit();
+            DB::commit();
 
-        // 4️⃣ Enviamos 1 notificación con todas las entradas
-        $productManager = User::find($product->user_id);
-        $updater        = Auth::user();
+            // 4️⃣ Enviamos 1 notificación con todas las entradas
+            $productManager = User::find($product->user_id);
+            $updater = Auth::user();
 
             if ($productManager && $updater) { // Solo verifica que existan ambos
                 $productManager->notify(
@@ -150,9 +151,9 @@ class WeekActivityController extends Controller
                 );
             }
 
-        return response()->json([
-            'message' => 'Planificación guardada correctamente.'
-        ]);
+            return response()->json([
+                'message' => 'Planificación guardada correctamente.'
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => $e->getMessage()], 500);
@@ -222,59 +223,80 @@ class WeekActivityController extends Controller
         }
     }
 
-
-public function updateWeeklyProgress(Request $request)
-{
-
-    $request->validate([
-        'progress' => ['required', 'array'],
-        'progress.*.week_activity_id' => ['required', 'exists:weekly_activities,id'],
-        'progress.*.percentage' => ['required', 'numeric', 'min:0', 'max:100'],
-        'progress.*.observations' => ['nullable', 'string'],
-    ]);
-
-    DB::beginTransaction();
-
-    try {
-        foreach ($request->progress as $progress) {
-            $weekActivity = WeekActivity::findOrFail($progress['week_activity_id']);
-
-            $weekActivity->update([
-                'percentage' => $progress['percentage'],
-                'observations' => $progress['observations'] ?? null,
-            ]);
-        }
-        // Si el porcentaje está entre 0 y 99, enviar notificación al responsable
-        if ($progress['percentage'] >= 0 && $progress['percentage'] < 100) {
-             $responsable = $weekActivity->activity->product->user; 
-             $investigador = auth()->user();
-
-        if ($responsable && $responsable->id !== $investigador->id) {
-               $responsable->notify(new RateWeeklyActivityNo($weekActivity->activity, $investigador));
-            }
-        }
-
-
-        DB::commit();
-
-        return response()->json([
-            'msg' => [
-                'summary' => 'Success',
-                'detail' => 'Progreso de actividades actualizado correctamente',
-                'code' => 200,
-            ],
+    public function updateWeeklyProgress(Request $request)
+    {
+        $request->validate([
+            'progress' => ['required', 'array'],
+            'progress.*.week_activity_id' => ['required', 'exists:weekly_activities,id'],
+            'progress.*.percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+            'progress.*.observations' => ['nullable', 'string'],
         ]);
-    } catch (\Exception $e) {
-        DB::rollBack();
 
-        return response()->json([
-            'msg' => [
-                'summary' => 'Error',
-                'detail' => 'Error al actualizar el progreso: ' . $e->getMessage(),
-                'code' => 500,
-            ],
-        ], 500);
+        DB::beginTransaction();
+
+        try {
+            $investigador = Auth::user(); // La persona que está realizando la actualización
+
+            foreach ($request->progress as $progressItem) { // Cambié $progress a $progressItem para evitar confusión
+                // Cargar la WeekActivity y sus relaciones necesarias de una vez
+                $weekActivity = WeekActivity::with(['activity.product.user']) // Carga: WeekActivity -> Activity -> Product -> User (responsable del producto)
+                ->findOrFail($progressItem['week_activity_id']);
+
+                $updatedPercentage = $progressItem['percentage'];
+                $observations = $progressItem['observations'] ?? null;
+
+                $weekActivity->update([
+                    'percentage' => $updatedPercentage,
+                    'observations' => $observations,
+                ]);
+
+                if ($updatedPercentage >= 0 && $updatedPercentage < 100) {
+                    $responsable = null;
+
+                    // El responsable a notificar es el 'user' del 'product' al que pertenece la 'activity' de la 'weekActivity'
+                    if ($weekActivity->activity && $weekActivity->activity->product && $weekActivity->activity->product->user) {
+                        $responsable = $weekActivity->activity->product->user;
+                    }
+
+                    // Asegurarse de que hay un responsable y que no sea el mismo que actualiza
+                    if ($responsable && $responsable->id !== $investigador->id) {
+                        $responsable->notify(
+                            new RateWeeklyActivityNo(
+                                $weekActivity->activity, // Pasas la actividad padre
+                                $investigador,             // Quien califica
+                                $updatedPercentage,        // El porcentaje de la calificación
+                                $observations              // Las observaciones/justificante
+                            )
+                        );
+                    }
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Progreso de actividades actualizado correctamente',
+                    'code' => 200,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Es buena práctica loguear el error completo para depuración
+            Log::error("Error al actualizar el progreso de actividad: " . $e->getMessage(), [
+                'exception' => $e,
+                'request_data' => $request->all(),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al actualizar el progreso: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
     }
-}
-
 }
