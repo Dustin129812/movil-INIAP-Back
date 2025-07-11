@@ -249,6 +249,16 @@ public function updateWeeklyProgress(Request $request)
                 'observations' => $progress['observations'] ?? null,
             ]);
         }
+        // Si el porcentaje está entre 0 y 99, enviar notificación al responsable
+        if ($progress['percentage'] >= 0 && $progress['percentage'] < 100) {
+             $responsable = $weekActivity->activity->product->user; 
+             $investigador = auth()->user();
+
+        if ($responsable && $responsable->id !== $investigador->id) {
+               $responsable->notify(new RateWeeklyActivityNo($weekActivity->activity, $investigador));
+            }
+        }
+
 
         DB::commit();
 
