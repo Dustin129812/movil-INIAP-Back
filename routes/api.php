@@ -42,6 +42,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
     Route::get('getProductsWithActivitiesExtraPoa', [PlannerController::class, 'getProductsWithActivitiesExtraPoa']);
 
+
     Route::get('materials', [PlannerController::class, 'getMaterial']);
     Route::put('/products/{id}', [PlannerController::class, 'updateProductAndActivity']);
 
@@ -49,6 +50,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('getProducts', [GeneralController::class, 'getProducts']);
     Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
+    Route::get('getUniqueLocations', [PlannerController::class, 'getUniqueLocations']);
+    Route::get('products-by-location/{locationId}', [PlannerController::class, 'getProductsByLocationId']);
     Route::get('activities', [GeneralController::class, 'getActivitiesByProduct'] );
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
     Route::get('getProductsByLocation',[GeneralController::class,'getProductsByLocation']);

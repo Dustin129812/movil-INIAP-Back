@@ -62,19 +62,24 @@ class GeneralController extends Controller
         return response()->json($logistics); // Devuelve la respuesta como JSON
     }
 
-    public function getProducts()
+    public function getProducts(Request $request) // Se añade Request para poder leer parámetros
     {
         try {
-            $userId = Auth::id();
+            if ($request->has('user_id') && $request->user_id) {
+                $userId = $request->input('user_id');
+            } else {
+                $userId = Auth::id();
+            }
             if (!$userId) {
-                return response()->json(['message' => 'No autenticado.'], 401);
+                return response()->json(['message' => 'No se pudo determinar el usuario.'], 401);
             }
 
             $products = Product::with(['activity.users'])
                 ->whereUserRelated($userId)
                 ->get();
 
-            return response()->json(['data' => $products]); // Devuelve { data: [...] }
+            return response()->json(['data' => $products]);
+
         } catch (\Exception $e) {
             Log::error('Error al obtener productos: ' . $e->getMessage(), [
                 'exception' => get_class($e),
