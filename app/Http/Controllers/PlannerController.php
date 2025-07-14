@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
+use App\Models\Location;
 use App\Models\Material;
 use App\Models\Product;
 use App\Notifications\CreateActivity;
@@ -622,5 +623,126 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+
+    //// Para obtener producto por estación 
+    public function getUniqueLocations()
+    {
+        try {
+            $locations = Location::select('id', 'name')->get(); // Solo selecciona ID y nombre
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Ubicaciones únicas obtenidas correctamente',
+                    'code' => 200,
+                ],
+                'data' => $locations,
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error al obtener las ubicaciones únicas: ' . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener las ubicaciones únicas: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
+    public function getProductsByLocationId(Request $request, $locationId)
+{
+    try {
+        $products = Product::where('location_id', $locationId)
+            ->whereHas('rubro', function ($query) {
+                $query->where('name', '!=', 'OFICIAL');
+            })
+            ->with([
+                'location',
+                'rubro',
+                'user', // Responsable del producto
+                'activities' => function ($query) {
+                    $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
+                },
+            ])->get();
+
+        // Mapear los datos de la misma forma que en getProductsWithActivities
+        $formattedProducts = $products->map(function ($product) {
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'budget' => $product->budget,
+                'ponderacion' => $product->ponderacion,
+                'user' => $product->user ? [
+                    'id' => $product->user->id,
+                    'name' => $product->user->name ?? 'Sin nombre',
+                ] : null,
+                'location' => $product->location ? [
+                    'id' => $product->location->id,
+                    'name' => $product->location->name,
+                ] : null,
+                'rubro' => $product->rubro ? [
+                    'id' => $product->rubro->id,
+                    'name' => $product->rubro->name,
+                ] : null,
+                'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
+                    return [
+                        'id' => $activity->id,
+                        'description' => $activity->description,
+                        'budget' => $activity->budget,
+                        'ponderacion' => $activity->ponderacion,
+                        'start_date' => $activity->start_date ? \Carbon\Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                        'end_date'   => $activity->end_date ? \Carbon\Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                        'user' => ($activity->users ?? collect([]))->map(function ($user) {
+                            return [
+                                'id' => $user->id,
+                                'name' => $user->name ?? 'Sin nombre',
+                            ];
+                        })->toArray(),
+                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicators) {
+                            return [
+                                'id' => $indicators->id,
+                                'name' => $indicators->name,
+                            ];
+                        })->toArray(),
+                        'monthly_progress' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                            return [
+                                'month' => \Carbon\Carbon::parse($progress->month)->format('Y-m-d'),
+                                'percentage' => $progress->percentage,
+                            ];
+                        })->toArray(),
+                        'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activity) {
+                            $activityPonderacion = (float) $activity->ponderacion;
+                            $weekActivityPercentage = (float) $weekActivity->percentage;
+                            $effectivePercentage = ($activityPonderacion / 100) * $weekActivityPercentage;
+                            return [
+                                'month' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
+                                'percentage' => (string) round($effectivePercentage, 2),
+                                'observations' => $weekActivity->observations,
+                            ];
+                        })->toArray(),
+                    ];
+                })->toArray(),
+            ];
+        })->values()->toArray();
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Success',
+                'detail' => 'Productos obtenidos por ubicación correctamente',
+                'code' => 200,
+            ],
+            'data' => $formattedProducts,
+        ]);
+    } catch (Exception $e) {
+        Log::error('Error al obtener productos por ubicación: ' . $e->getMessage());
+        return response()->json([
+            'msg' => [
+                'summary' => 'Error',
+                'detail' => 'Error al obtener productos por ubicación: ' . $e->getMessage(),
+                'code' => 500,
+            ],
+        ], 500);
+    }
+}
 
 }
