@@ -210,4 +210,84 @@ class ReportController extends Controller
 
         return response()->json($formattedPlans);
     }
+public function getUserWeeklyPlansbyLocation()
+{
+    $user = Auth::user();
+    if (!$user) {
+        return response()->json(['message' => 'No autenticado.'], 401);
+    }
+
+    // Obtener IDs de usuarios con la misma location_id
+    $locationUserIds = User::where('location_id', $user->location_id)->pluck('id');
+
+    if ($locationUserIds->isEmpty()) {
+        return response()->json([]); // No hay usuarios con la misma ubicación
+    }
+
+    $weeklyPlans = WeekActivity::whereIn('user_id', $locationUserIds)
+        ->where('status', 'approved') // puedes quitar esto si quieres traer todos
+        ->with([
+            'activity.product.rubro',
+            'activity.users',
+            'materials',
+            'performanceIndicators',
+            'logisticSupportUsers',
+            'user'
+        ])
+        ->orderBy('date', 'desc')
+        ->get();
+
+    $formattedPlans = $weeklyPlans->map(function ($plan) {
+        $productInitialCode = '';
+        $activityInitialCode = '';
+        $combinedCodePrefix = '';
+
+        if ($plan->activity && $plan->activity->product && !empty($plan->activity->product->name)) {
+            $productInitialCode = strtoupper(substr($plan->activity->product->name, 0, 2));
+        }
+
+        if ($plan->activity && !empty($plan->activity->description)) {
+            $activityInitialCode = strtoupper(substr($plan->activity->description, 0, 2));
+        }
+
+        if (!empty($productInitialCode) && !empty($activityInitialCode)) {
+            $combinedCodePrefix = $productInitialCode . $activityInitialCode . ': ';
+        } elseif (!empty($productInitialCode)) {
+            $combinedCodePrefix = $productInitialCode . ': ';
+        } elseif (!empty($activityInitialCode)) {
+            $combinedCodePrefix = $activityInitialCode . ': ';
+        }
+
+        return [
+            'id' => $plan->id,
+            'date' => Carbon::parse($plan->date)->isoFormat('dddd, D [de] MMMM [de]YYYY'),
+            'description' => $combinedCodePrefix . ($plan->description ?? 'N/A'),
+            'estimated_hours' => $plan->estimated_hours,
+            'work_location' => $plan->work_location,
+            'observations' => $plan->observations,
+            'status' => $plan->status,
+            'activity_base_id' => $plan->activity->id ?? null,
+            'product_name' => $plan->activity->product->name ?? 'N/A',
+            'rubro_name' => $plan->activity->product->rubro->name ?? 'N/A',
+            'responsables' => $plan->activity->users->pluck('name')->implode(', ') ?? 'N/A',
+            'user_name' => $plan->user->name ?? 'N/A',
+            'materials' => $plan->materials->map(function ($material) {
+                return [
+                    'name' => $material->name,
+                    'quantity' => $material->pivot->quantity,
+                    'description' => $material->pivot->description,
+                ];
+            }),
+            'indicators' => $plan->performanceIndicators->pluck('name')->implode(' - '),
+            'logistic_supports' => $plan->logisticSupportUsers->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                ];
+            })->toArray(),
+        ];
+    });
+
+    return response()->json($formattedPlans);
+}
 }
