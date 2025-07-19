@@ -230,61 +230,40 @@ class GeneralController extends Controller
     }
 
     public function getActivitiesByProduct(int $productId): JsonResponse
-    {
-        try {
-            $userId = Auth::id();
-            if (!$userId) {
-                return response()->json(['message' => 'No autenticado.'], 401);
-            }
-
-            // Obtener el producto para verificar si es "Actividades Extra POA"
-            $product = Product::find($productId);
-            if (!$product) {
-                return response()->json([
-                    'message' => 'Producto no encontrado.'
-                ], 404);
-            }
-
-            // Determinar si el producto actual es "Actividades Extra POA"
-            // Asegúrate de que 'name' sea el nombre de la columna donde guardas el nombre del producto
-            $isExtraPOACategory = ($product->name === 'Actividades Extra POA');
-
-            $activities = Activity::where('product_id', $productId)
-                ->where(function ($query) use ($userId, $isExtraPOACategory) {
-                    if ($isExtraPOACategory) {
-                        // Si es "Actividades Extra POA", no aplicamos el filtro por usuario
-                        // todas las actividades de este producto deben ser visibles
-                        $query->orWhereNotNull('id'); // Una condición que siempre es verdadera para incluir todas
-                    } else {
-                        // Para otros productos, solo mostrar actividades donde el usuario es responsable
-                        $query->whereHas('users', function ($subQuery) use ($userId) {
-                            $subQuery->where('user_id', $userId);
-                        });
-                    }
-                })
-                ->with(['users', 'indicators'])
-                ->get();
-
-            if ($activities->isEmpty()) {
-                return response()->json([
-                    'message' => 'No hay actividades relacionadas a este producto para el usuario autenticado.'
-                ], 404);
-            }
-
-            return response()->json(['data' => ActivityResource::collection($activities)]);
-        } catch (\Exception $e) {
-            Log::error('Error al obtener actividades: ' . $e->getMessage(), [
-                'exception' => get_class($e),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'product_id' => $productId,
-            ]);
+{
+    try {
+        $product = Product::find($productId);
+        if (!$product) {
             return response()->json([
-                'message' => 'Error al obtener las actividades.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Producto no encontrado.'
+            ], 404);
         }
+
+        //Traer todas las actividades del producto, sin importar el usuario
+        $activities = Activity::where('product_id', $productId)
+            ->with(['users', 'indicators'])
+            ->get();
+
+        if ($activities->isEmpty()) {
+            return response()->json([
+                'message' => 'Este producto no tiene actividades registradas.'
+            ], 404);
+        }
+
+        return response()->json(['data' => ActivityResource::collection($activities)]);
+    } catch (\Exception $e) {
+        Log::error('Error al obtener actividades: ' . $e->getMessage(), [
+            'exception' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'product_id' => $productId,
+        ]);
+        return response()->json([
+            'message' => 'Error al obtener las actividades.',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function addRubro(Request $request): JsonResponse
     {
