@@ -210,8 +210,11 @@ class ReportController extends Controller
 
         return response()->json($formattedPlans);
     }
-public function getUserWeeklyPlansbyLocation()
+public function getUserWeeklyPlansbyLocation(Request $request)
 {
+    $request->validate([
+            'id' => 'nullable',
+        ]);
     $user = Auth::user();
     if (!$user) {
         return response()->json(['message' => 'No autenticado.'], 401);
@@ -224,8 +227,9 @@ public function getUserWeeklyPlansbyLocation()
         return response()->json([]); // No hay usuarios con la misma ubicación
     }
 
-    $weeklyPlans = WeekActivity::whereIn('user_id', $locationUserIds)
-        ->where('status', 'approved') // puedes quitar esto si quieres traer todos
+    $weeklyPlans = WeekActivity::whereIn('user_id', $locationUserIds) ->when($request->filled('id'), function ($query) use ($request) {
+        $query->where('user_id', $request->id);
+    }) ->where('status', 'approved') // puedes quitar esto si quieres traer todos
         ->with([
             'activity.product.rubro',
             'activity.users',

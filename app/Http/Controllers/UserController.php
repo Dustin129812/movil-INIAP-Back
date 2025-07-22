@@ -121,19 +121,4 @@ class UserController extends Controller
             'location' => $user->location->name ?? null, // <- retornamos el nombre de la ubicación
         ]);
     }
-
-     public function getUsersbyLocation()
-    {
-      $user = User::first();
-      
-      $users=User::where("location_id",$user->location_id)->get(); 
-    
-    return (new UserCollection($users))->additional([
-            'msg' => [
-                'summary' => 'success',
-                'detail' => 'Usuarios devueltos correctamente',
-                'code' => 200
-            ],
-        ])->response()->setStatusCode(200);
-    }
 }
