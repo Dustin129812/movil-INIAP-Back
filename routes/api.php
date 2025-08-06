@@ -78,6 +78,9 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
     Route::get('user-weekly-plans', [ReportController::class, 'getUserWeeklyPlans']);
+    Route::get('getUserWeeklyPlansbyLocation',[ReportController::class, 'getUserWeeklyPlansbyLocation']);
+    Route::get('getUsersbyLocation',[UserController::class, 'getUsersbyLocation']); 
+    Route::get('getUserWeeklyPlansbyLocation',[ReportController::class, 'getUserWeeklyPlansbyLocation']);
 
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 });
