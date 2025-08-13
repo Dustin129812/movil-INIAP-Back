@@ -34,7 +34,6 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::apiResource('incidents', IncidentController::class);
 
     // Gestión de Funcionalidades (Feature Flags)
-    Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
     Route::put('/feature-flags/{featureFlag}', [FeatureFlagController::class, 'update']);
 
 });
@@ -107,3 +106,5 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 });
+
+Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
