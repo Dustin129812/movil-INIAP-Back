@@ -230,10 +230,10 @@ class PlannerController extends Controller
         $weekActivity = WeekActivity::findOrFail($activityId);
 
         $status = $request->input('status');
-        $validStatuses = ['approved', 'rejected'];
+        $validStatuses = ['approved', 'rejected', 'reassigned'];
 
         if (!in_array($status, $validStatuses)) {
-            return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
+            return response()->json(['error' => 'El estado proporcionado no es válido.'], 400);
         }
 
         // Actualiza y guarda el estado
@@ -627,7 +627,7 @@ class PlannerController extends Controller
         }
     }
 
-    //// Para obtener producto por estación 
+    //// Para obtener producto por estación
     public function getUniqueLocations()
     {
         try {

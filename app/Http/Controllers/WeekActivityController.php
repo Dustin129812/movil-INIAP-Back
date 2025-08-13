@@ -47,22 +47,18 @@ class WeekActivityController extends Controller
                 $materialsData = $data['materials'] ?? []; // Cambiado a materialsData para diferenciar
                 $selectedIndicators = $data['indicators'] ?? []; // Array de IDs de indicadores
                 $observations = $data['observations'] ?? null;
-                // Ahora $selectedLogisticSupports contendrá un array de IDs de usuario
                 $selectedLogisticSupportUserIds = $data['logisticSupports'] ?? [];
-
 
                 $activity = Activity::find($activityId);
                 if (!$activity) {
                     throw new \Exception("Actividad con ID $activityId no encontrada.");
                 }
-                // Obtener el producto asociado a la actividad
                 $product = $activity->product;
 
                 $userId = Auth::id();
                 if (!$userId) {
                     throw new \Exception("No se pudo determinar el usuario autenticado.");
                 }
-
 
                 $dayOffsets = [
                     'lunes' => 0,
@@ -127,8 +123,9 @@ class WeekActivityController extends Controller
                     $weekActivity->performanceIndicators()->detach();
                 }
 
-                if (!empty($selectedLogisticSupportUserIds)) {
-                    $weekActivity->logisticSupportUsers()->sync($selectedLogisticSupportUserIds);
+                $validUserIds = array_filter($selectedLogisticSupportUserIds);
+                if (!empty($validUserIds)) {
+                    $weekActivity->logisticSupportUsers()->sync($validUserIds);
                 } else {
                     $weekActivity->logisticSupportUsers()->detach();
                 }

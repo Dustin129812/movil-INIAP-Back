@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\FeatureFlagController;
+use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserController;
@@ -15,6 +19,25 @@ use Illuminate\Support\Facades\Route;
 
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
+
+Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(function () {
+
+    // Gestión de Usuarios y Roles
+    Route::get('/users', [AdminUserController::class, 'index']);
+    Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
+    Route::post('/import-users', [ImportController::class, 'importUserFile']);
+
+    // Gestión de Roles (CRUD)
+    Route::apiResource('roles', RoleController::class)->except(['show']);
+
+    // Gestión de Tickets de Soporte (CRUD)
+    Route::apiResource('incidents', IncidentController::class);
+
+    // Gestión de Funcionalidades (Feature Flags)
+    Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
+    Route::put('/feature-flags/{featureFlag}', [FeatureFlagController::class, 'update']);
+
+});
 
 Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/user', function (Request $request) {
@@ -79,11 +102,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
     Route::get('user-weekly-plans', [ReportController::class, 'getUserWeeklyPlans']);
     Route::get('getUserWeeklyPlansbyLocation',[ReportController::class, 'getUserWeeklyPlansbyLocation']);
-    Route::get('getUsersbyLocation',[UserController::class, 'getUsersbyLocation']); 
+    Route::get('getUsersbyLocation',[UserController::class, 'getUsersbyLocation']);
     Route::get('getUserWeeklyPlansbyLocation',[ReportController::class, 'getUserWeeklyPlansbyLocation']);
 
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 });
-
-Route::post('importUserFile', [ImportController::class, 'importUserFile']);
-
