@@ -105,6 +105,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getUserWeeklyPlansbyLocation',[ReportController::class, 'getUserWeeklyPlansbyLocation']);
 
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
-});
 
-Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
+    Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
+});
