@@ -107,4 +107,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 
     Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
+
+    Route::get('/unified-poa-by-station', [PlannerController::class, 'getUnifiedPoaData']);
+
+    Route::post('incidents',[IncidentController::class]);
 });
