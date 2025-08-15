@@ -43,8 +43,7 @@ class WeekActivityController extends Controller
                 $activityId = $data['activityId'];
                 $description = $data['description'];
                 $dayName = $data['day'];
-                $estimatedHours = $data['hours'];
-                $materialsData = $data['materials'] ?? []; // Cambiado a materialsData para diferenciar
+                $materialsData = $data['materials'] ?? [];
                 $selectedIndicators = $data['indicators'] ?? []; // Array de IDs de indicadores
                 $observations = $data['observations'] ?? null;
                 $selectedLogisticSupportUserIds = $data['logisticSupports'] ?? [];
@@ -76,7 +75,6 @@ class WeekActivityController extends Controller
                 $weekActivity->description = $description;
                 $weekActivity->date = $activityDate;
                 $weekActivity->status = 'pending';
-                $weekActivity->estimated_hours = $estimatedHours;
                 $weekActivity->work_location = $activity->work_location ?? 'Oficina'; // Asumo que work_location viene del Activity model. Si quieres el del frontend (activity.work_location), cámbialo.
                 $weekActivity->observations = $observations;
                 $weekActivity->percentage = 0;
