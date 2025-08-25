@@ -3,7 +3,9 @@
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\IncidentController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserController;
@@ -20,6 +22,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
 
+Route::apiResource('incidents', IncidentController::class);
+
 Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(function () {
 
     // Gestión de Usuarios y Roles
@@ -30,11 +34,10 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     // Gestión de Roles (CRUD)
     Route::apiResource('roles', RoleController::class)->except(['show']);
 
-    // Gestión de Tickets de Soporte (CRUD)
-
     // Gestión de Funcionalidades (Feature Flags)
     Route::put('/feature-flags/{featureFlag}', [FeatureFlagController::class, 'update']);
 
+    Route::get('/conversations', [ConversationController::class, 'index']);
 });
 
 Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
@@ -109,6 +112,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('/unified-poa-by-station', [PlannerController::class, 'getUnifiedPoaData']);
 
+    Route::post('/conversations', [ConversationController::class, 'create']);
+    Route::get('/conversations/{id}/messages', [MessageController::class, 'list']);
+    Route::post('/conversations/{id}/messages', [MessageController::class, 'store']);
 });
-
-Route::apiResource('incidents', IncidentController::class);

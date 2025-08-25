@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('conversation_id');
             $table->text('content');
-            $table->string('sender_type'); // 'user', 'guest', 'admin'
             $table->unsignedBigInteger('sender_id')->nullable(); // ID del usuario o admin
             $table->string('guest_id')->nullable(); // ID para invitados
             $table->timestamps();
