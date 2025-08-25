@@ -31,7 +31,6 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::apiResource('roles', RoleController::class)->except(['show']);
 
     // Gestión de Tickets de Soporte (CRUD)
-    Route::apiResource('incidents', IncidentController::class);
 
     // Gestión de Funcionalidades (Feature Flags)
     Route::put('/feature-flags/{featureFlag}', [FeatureFlagController::class, 'update']);
@@ -110,5 +109,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('/unified-poa-by-station', [PlannerController::class, 'getUnifiedPoaData']);
 
-    Route::post('incidents',[IncidentController::class]);
 });
+
+Route::apiResource('incidents', IncidentController::class);
