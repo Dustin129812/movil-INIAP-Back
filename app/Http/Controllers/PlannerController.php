@@ -753,4 +753,40 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+    public function getPlannableProductsForCurrentUser(Request $request)
+    {
+        $user = $request->user();
+
+        // 1. Obtener IDs de rubro y ubicación de los grupos del usuario.
+        // Usamos `pluck` para obtener directamente los pares de IDs.
+        $groupPermissions = $user->groups()
+            ->select('rubro_id', 'location_id')
+            ->distinct()
+            ->get()
+            ->map(fn($item) => "{$item->rubro_id}-{$item->location_id}"); // "rubro_id-location_id"
+
+        // 2. Obtener productos que coincidan con los permisos de grupo.
+        $productsFromGroups = collect(); // Inicializamos como colección vacía
+        if ($groupPermissions->isNotEmpty()) {
+            $productsFromGroups = Product::whereIn(DB::raw("CONCAT(rubro_id, '-', location_id)"), $groupPermissions)
+                ->with(['activities.users', 'rubro', 'user', 'location'])
+                ->get();
+        }
+
+        // 3. Obtener productos donde el usuario es responsable directo.
+        $directlyAssignedProducts = Product::where('user_id', $user->id)
+            ->orWhereHas('activities', function($query) use ($user) {
+                $query->whereHas('users', function ($subQuery) use ($user) {
+                    $subQuery->where('users.id', $user->id);
+                });
+            })
+            ->with(['activities.users', 'rubro', 'user', 'location'])
+            ->get();
+
+        // 4. Unir, eliminar duplicados por ID y devolver la respuesta.
+        $allPlannableProducts = $productsFromGroups->merge($directlyAssignedProducts)->unique('id');
+
+        // Puedes crear un ProductResource si quieres estandarizar esta salida también
+        return response()->json(['data' => $allPlannableProducts->values()]);
+    }
 }

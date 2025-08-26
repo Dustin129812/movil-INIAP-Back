@@ -3,18 +3,19 @@
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ChartController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\GeneralController;
+use App\Http\Controllers\GroupController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PlannerController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\ImportController;
-use App\Http\Controllers\PlannerController;
 use App\Http\Controllers\WeekActivityController;
-use App\Http\Controllers\GeneralController;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ChartController;
 use App\Http\Controllers\WordPressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -115,4 +116,13 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::post('/conversations', [ConversationController::class, 'create']);
     Route::get('/conversations/{id}/messages', [MessageController::class, 'list']);
     Route::post('/conversations/{id}/messages', [MessageController::class, 'store']);
+
+    //--GESTION DEG RUPOS--
+    Route::get('/groups', [GroupController::class, 'index']);
+    Route::post('/groups', [GroupController::class, 'store']);
+    Route::get('/groups/{group}', [GroupController::class, 'show']);
+    Route::put('/groups/{group}', [GroupController::class, 'update']);
+    Route::delete('/groups/{group}', [GroupController::class, 'destroy']);
+    Route::put('/groups/{group}/members', [GroupController::class, 'syncMembers']);
+    Route::get('/plannable-products', [PlannerController::class, 'getPlannableProductsForCurrentUser']);
 });
