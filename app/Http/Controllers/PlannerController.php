@@ -6,6 +6,7 @@ use App\Models\Activity;
 use App\Models\Location;
 use App\Models\Material;
 use App\Models\Product;
+use App\Models\Rubro;
 use App\Notifications\CreateActivity;
 use App\Notifications\CreateProduct;
 use App\Notifications\CreateWeekPlanner;
@@ -257,58 +258,105 @@ class PlannerController extends Controller
         ]);
     }
 
-    public function getWeeklyPlanningByResponsible()
+    public function getWeeklyPlanningByResponsible(Request $request)
     {
-        $user = Auth()->user();
-        $usersWithPlans = User::whereHas('createdWeekActivities')
-            ->with([
-                'createdWeekActivities' => function ($query) {
-                    $query->with([
-                        'activity' => function ($activityQuery) {
-                            $activityQuery->select('id', 'description', 'product_id')
-                                ->with('product:id,name');
-                        },
-                        'materials'
-                    ]);
+        try {
+            $revisor = $request->user();
+            $revisor->load('groups');
+
+            // --- 👇 CAMBIO 1: Define todos los estados que el dashboard necesita ver ---
+            $relevantStatuses = ['pending', 'approved', 'rejected', 'reassigned'];
+
+            $officialRubro = Rubro::whereRaw('LOWER(name) = ?', ['oficial'])->first();
+            $officialRubroId = $officialRubro ? $officialRubro->id : null;
+
+            $officialActivities = collect();
+            if ($officialRubroId) {
+                $officialActivities = WeekActivity::whereIn('status', $relevantStatuses) // <-- Usa whereIn
+                ->whereHas('activity.product', function ($query) use ($officialRubroId, $revisor) {
+                    $query->where('rubro_id', $officialRubroId);
+                    // ->where('location_id', $revisor->location_id);
+                })
+                    ->get();
+            }
+
+            $groupActivities = collect();
+            if ($revisor->groups->isNotEmpty()) {
+                $groupPermissions = $revisor->groups->map(function ($group) {
+                    return ['rubro_id' => $group->rubro_id, 'location_id' => $group->location_id];
+                })->unique(function ($item) {
+                    return $item['rubro_id'] . '-' . $item['location_id'];
+                });
+
+                if ($groupPermissions->isNotEmpty()) {
+                    $groupActivities = WeekActivity::whereIn('status', $relevantStatuses) // <-- Usa whereIn
+                    ->whereHas('activity.product', function ($query) use ($groupPermissions) {
+                        $query->where(function ($q) use ($groupPermissions) {
+                            foreach ($groupPermissions as $permission) {
+                                $q->orWhere(function ($subQ) use ($permission) {
+                                    $subQ->where('rubro_id', $permission['rubro_id'])
+                                        ->where('location_id', $permission['location_id']);
+                                });
+                            }
+                        });
+                    })
+                        ->get();
                 }
-            ])->where('location_id', $user->location_id)
-            ->get();
+            }
 
-        // 3. Transformamos los datos para la respuesta JSON.
-        $formattedResult = $usersWithPlans->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'activities' => $user->createdWeekActivities->groupBy('activity_id')->map(function ($weekActivitiesGroup) {
+            $allPendingActivities = $officialActivities->merge($groupActivities)->unique('id');
 
-                    // La información de la actividad principal es la misma para todo el grupo.
-                    $firstWeekActivity = $weekActivitiesGroup->first();
-                    $mainActivity = $firstWeekActivity->activity;
+            $allPendingActivities->load([
+                'activity.product.rubro', 'activity.product.location', 'user',
+                'materials', 'activity.indicators', 'logisticSupports'
+            ]);
 
-                    return [
-                        'product_name' => $mainActivity->product->name ?? null,
-                        'product_id' => $mainActivity->product->id ?? null,
-                        'activity_description' => $mainActivity->description ?? null,
-                        'week_activities' => $weekActivitiesGroup->map(fn($wa) => [
-                            'id' => $wa->id,
-                            'week_description' => $wa->description,
-                            'date' => $wa->date,
-                            'day_of_week' => $wa->date ? (
-                                preg_match('/^\d{4}-\d{2}-\d{2}$/', $wa->date)
-                                ? \Carbon\Carbon::parse($wa->date)->format('l (d/m/Y)')
-                                : $wa->date // Si ya viene formateada, úsala tal cual
-                            ) : null,
-                            'materials' => $wa->materials,
-                            'status' => $wa->status,
-                        ])->values(),
-                    ];
-                })->values(), // Usamos values() para resetear las claves y obtener un array.
-            ];
-        });
+            // (El resto del código de validación y formateo no necesita cambios)
+            $groupedByUser = [];
+            foreach ($allPendingActivities as $weekActivity) {
+                if (!$weekActivity->user || !$weekActivity->activity || !$weekActivity->activity->product) {
+                    continue;
+                }
+                $groupedByUser[$weekActivity->user_id][] = $weekActivity;
+            }
 
-        return response()->json(['data' => $formattedResult]);
+            $userIds = array_keys($groupedByUser);
+            $users = User::whereIn('id', $userIds)->get()->keyBy('id');
+
+            $formattedData = [];
+            foreach ($groupedByUser as $userId => $activities) {
+                if (!isset($users[$userId])) continue;
+
+                $user = $users[$userId];
+                $groupedByProduct = collect($activities)->groupBy('activity.product_id');
+
+                $formattedData[] = [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'activities' => $groupedByProduct->map(function ($activitiesForProduct) {
+                        $firstActivity = $activitiesForProduct->first();
+                        return [
+                            'product_id' => $firstActivity->activity->product->id,
+                            'product_name' => $firstActivity->activity->product->name,
+                            'activity_description' => $firstActivity->activity->name,
+                            'week_activities' => $activitiesForProduct->values(),
+                        ];
+                    })->values()->toArray()
+                ];
+            }
+
+            return response()->json(['data' => $formattedData]);
+
+        } catch (Exception $e) {
+            Log::error('Error en getWeeklyPlanningByResponsible: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'msg' => ['summary' => 'Error', 'detail' => 'No se pudieron cargar las planificaciones para revisión.', 'code' => 500]
+            ], 500);
+        }
     }
-
 
     public function getProductsWithActivities(Request $request)
     {
@@ -753,40 +801,57 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+
     public function getPlannableProductsForCurrentUser(Request $request)
     {
         $user = $request->user();
-
-        // 1. Obtener IDs de rubro y ubicación de los grupos del usuario.
-        // Usamos `pluck` para obtener directamente los pares de IDs.
-        $groupPermissions = $user->groups()
-            ->select('rubro_id', 'location_id')
-            ->distinct()
-            ->get()
-            ->map(fn($item) => "{$item->rubro_id}-{$item->location_id}"); // "rubro_id-location_id"
-
-        // 2. Obtener productos que coincidan con los permisos de grupo.
-        $productsFromGroups = collect(); // Inicializamos como colección vacía
-        if ($groupPermissions->isNotEmpty()) {
-            $productsFromGroups = Product::whereIn(DB::raw("CONCAT(rubro_id, '-', location_id)"), $groupPermissions)
+        $user->load('groups');
+        $officialRubro = Rubro::whereRaw('LOWER(name) = ?', ['oficial'])->first();
+        $officialRubroId = $officialRubro ? $officialRubro->id : null;
+        $officialProducts = collect();
+        if ($officialRubroId) {
+            $officialProducts = Product::where('rubro_id', $officialRubroId)
+                // ->where('location_id', $user->location_id) // <-- LÓGICA CLAVE: Filtra por la ubicación del usuario.
                 ->with(['activities.users', 'rubro', 'user', 'location'])
                 ->get();
         }
-
-        // 3. Obtener productos donde el usuario es responsable directo.
-        $directlyAssignedProducts = Product::where('user_id', $user->id)
-            ->orWhereHas('activities', function($query) use ($user) {
-                $query->whereHas('users', function ($subQuery) use ($user) {
-                    $subQuery->where('users.id', $user->id);
+        $specificProducts = collect();
+        if ($user->groups->isNotEmpty()) {
+            $groupPermissions = $user->groups->map(function ($group) {
+                return ['rubro_id' => $group->rubro_id, 'location_id' => $group->location_id];
+            })->unique(function ($item) {
+                return $item['rubro_id'] . '-' . $item['location_id'];
+            });
+            if ($groupPermissions->isNotEmpty()) {
+                $query = Product::query();
+                $query->where(function ($q) use ($groupPermissions) {
+                    foreach ($groupPermissions as $permission) {
+                        $q->orWhere(function ($subQ) use ($permission) {
+                            $subQ->where('rubro_id', $permission['rubro_id'])
+                                ->where('location_id', $permission['location_id']);
+                        });
+                    }
                 });
-            })
-            ->with(['activities.users', 'rubro', 'user', 'location'])
-            ->get();
-
-        // 4. Unir, eliminar duplicados por ID y devolver la respuesta.
-        $allPlannableProducts = $productsFromGroups->merge($directlyAssignedProducts)->unique('id');
-
-        // Puedes crear un ProductResource si quieres estandarizar esta salida también
+                if ($officialRubroId) {
+                    $query->where('rubro_id', '!=', $officialRubroId);
+                }
+                $specificProducts = $query->with(['activities.users', 'rubro', 'user', 'location'])->get();
+            }
+        }
+        else {
+            $query = Product::query();
+            $query->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhereHas('activities.users', function($subQ) use ($user) {
+                        $subQ->where('users.id', $user->id);
+                    });
+            });
+            if ($officialRubroId) {
+                $query->where('rubro_id', '!=', $officialRubroId);
+            }
+            $specificProducts = $query->with(['activities.users', 'rubro', 'user', 'location'])->get();
+        }
+        $allPlannableProducts = $officialProducts->merge($specificProducts)->unique('id');
         return response()->json(['data' => $allPlannableProducts->values()]);
     }
 }

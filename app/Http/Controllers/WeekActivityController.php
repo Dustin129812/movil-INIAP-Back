@@ -3,20 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
-use App\Models\LogisticSupport;
 use App\Models\Material;
 use App\Models\Performance_Indicator;
-use App\Models\Product;
 use App\Models\User;
 use App\Models\WeekActivity;
-use App\Models\WeeklyIndicators;
 use App\Models\WeekPlanner;
-use App\Notifications\CreateProduct;
-use App\Notifications\CreateWeekPlanner;
 use App\Notifications\OursWeekPlanner;
 use App\Notifications\RateWeeklyActivityNo;
 use Carbon\Carbon;
-use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -173,10 +167,7 @@ class WeekActivityController extends Controller
             ])
                 ->whereBetween('date', [$lastMonday, $lastSunday])
                 ->where('user_id', $user->id)
-                ->where(function ($query) {
-                    $query->whereNull('percentage')
-                        ->orWhere('percentage', 0); // <-- Si usas 0 como no evaluado
-                })
+                ->where('status', '!=', 'rated')
                 ->get();
 
             return response()->json([
@@ -230,11 +221,10 @@ class WeekActivityController extends Controller
         DB::beginTransaction();
 
         try {
-            $investigador = Auth::user(); // La persona que está realizando la actualización
+            $investigador = Auth::user();
 
-            foreach ($request->progress as $progressItem) { // Cambié $progress a $progressItem para evitar confusión
-                // Cargar la WeekActivity y sus relaciones necesarias de una vez
-                $weekActivity = WeekActivity::with(['activity.product.user']) // Carga: WeekActivity -> Activity -> Product -> User (responsable del producto)
+            foreach ($request->progress as $progressItem) {
+                $weekActivity = WeekActivity::with(['activity.product.user'])
                 ->findOrFail($progressItem['week_activity_id']);
 
                 $updatedPercentage = $progressItem['percentage'];
@@ -243,24 +233,24 @@ class WeekActivityController extends Controller
                 $weekActivity->update([
                     'percentage' => $updatedPercentage,
                     'observations' => $observations,
+                    'status' => 'rated',
+
                 ]);
 
                 if ($updatedPercentage >= 0 && $updatedPercentage < 100) {
                     $responsable = null;
 
-                    // El responsable a notificar es el 'user' del 'product' al que pertenece la 'activity' de la 'weekActivity'
                     if ($weekActivity->activity && $weekActivity->activity->product && $weekActivity->activity->product->user) {
                         $responsable = $weekActivity->activity->product->user;
                     }
 
-                    // Asegurarse de que hay un responsable y que no sea el mismo que actualiza
                     if ($responsable && $responsable->id !== $investigador->id) {
                         $responsable->notify(
                             new RateWeeklyActivityNo(
-                                $weekActivity->activity, // Pasas la actividad padre
-                                $investigador,             // Quien califica
-                                $updatedPercentage,        // El porcentaje de la calificación
-                                $observations              // Las observaciones/justificante
+                                $weekActivity->activity,
+                                $investigador,
+                                $updatedPercentage,
+                                $observations,
                             )
                         );
                     }
@@ -278,7 +268,6 @@ class WeekActivityController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            // Es buena práctica loguear el error completo para depuración
             Log::error("Error al actualizar el progreso de actividad: " . $e->getMessage(), [
                 'exception' => $e,
                 'request_data' => $request->all(),

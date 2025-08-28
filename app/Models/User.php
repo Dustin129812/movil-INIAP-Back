@@ -97,4 +97,9 @@ class User extends Authenticatable  implements JWTSubject
         return $this->belongsToMany(Group::class, 'group_user');
     }
 
+    public function weeklyPulses()
+    {
+        return $this->hasMany(WeeklyPulse::class);
+    }
+
 }

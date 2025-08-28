@@ -20,7 +20,7 @@ return new class extends Migration
             $table->date('date');
             $table->integer('percentage');
             $table->string('work_location');
-            $table->enum('status', ['pending', 'approved', 'rejected', 'in progress', 'completed'])->default('pending');
+            $table->enum('status', ['pending', 'approved', 'rejected', 'in progress', 'completed', 'rated', 'reassigned'])->default('pending');
             $table->text('observations')->nullable()->after('percentage');
 
             $table->foreignId('activity_id')->constrained('activities');
