@@ -3,18 +3,21 @@
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ChartController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GeneralController;
+use App\Http\Controllers\GroupController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PlannerController;
+use App\Http\Controllers\PulseController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\ImportController;
-use App\Http\Controllers\PlannerController;
 use App\Http\Controllers\WeekActivityController;
-use App\Http\Controllers\GeneralController;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ChartController;
 use App\Http\Controllers\WordPressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -65,8 +68,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
     Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
     Route::get('getProductsWithActivitiesExtraPoa', [PlannerController::class, 'getProductsWithActivitiesExtraPoa']);
-
-
+    Route::get('/plannable-products', [PlannerController::class, 'getPlannableProductsForCurrentUser']);
     Route::get('materials', [PlannerController::class, 'getMaterial']);
     Route::put('/products/{id}', [PlannerController::class, 'updateProductAndActivity']);
 
@@ -87,6 +89,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
     Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
     Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress']);
+    Route::get('/previous-week-activities', [WeekActivityController::class, 'getPreviousWeekActivitiesForReview']);
 
     Route::post('addRubro', [GeneralController::class, 'addRubro']);
     Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
@@ -115,4 +118,19 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::post('/conversations', [ConversationController::class, 'create']);
     Route::get('/conversations/{id}/messages', [MessageController::class, 'list']);
     Route::post('/conversations/{id}/messages', [MessageController::class, 'store']);
+
+    //--GESTION DEG RUPOS--
+    Route::get('/groups', [GroupController::class, 'index']);
+    Route::post('/groups', [GroupController::class, 'store']);
+    Route::get('/groups/{group}', [GroupController::class, 'show']);
+    Route::put('/groups/{group}', [GroupController::class, 'update']);
+    Route::delete('/groups/{group}', [GroupController::class, 'destroy']);
+    Route::put('/groups/{group}/members', [GroupController::class, 'syncMembers']);
+
+    Route::post('/weekly-pulse', [PulseController::class, 'store']);
+
+    Route::get('/dashboard/researcher', [DashboardController::class, 'getResearcherDashboardData']);
+    Route::get('/dashboard/product-manager', [DashboardController::class, 'getProductManagerDashboardData']);
+
+    Route::get('team-pulse-report', [ReportController::class, 'generateTeamPulseReport']);
 });
