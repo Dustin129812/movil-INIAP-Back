@@ -262,58 +262,33 @@ class PlannerController extends Controller
     {
         try {
             $revisor = $request->user();
-            $revisor->load('groups');
+            $revisor->load('groups.members');
 
-            // --- 👇 CAMBIO 1: Define todos los estados que el dashboard necesita ver ---
+            $teamMemberIds = $revisor->groups->flatMap(function ($group) {
+                return $group->members->pluck('id');
+            })->unique();
+
+            if ($teamMemberIds->isEmpty()) {
+                return response()->json(['data' => []]);
+            }
+
             $relevantStatuses = ['pending', 'approved', 'rejected', 'reassigned'];
 
-            $officialRubro = Rubro::whereRaw('LOWER(name) = ?', ['oficial'])->first();
-            $officialRubroId = $officialRubro ? $officialRubro->id : null;
+            $allPendingActivities = WeekActivity::whereIn('status', $relevantStatuses)
+                ->whereIn('user_id', $teamMemberIds) // <-- ¡ESTA ES LA LÍNEA CLAVE QUE SOLUCIONA TODO!
+                ->with([
+                    'activity.product.rubro',
+                    'activity.product.location',
+                    'user',
+                    'materials',
+                    'activity.indicators',
+                    'logisticSupports'
+                ])
+                ->get();
 
-            $officialActivities = collect();
-            if ($officialRubroId) {
-                $officialActivities = WeekActivity::whereIn('status', $relevantStatuses) // <-- Usa whereIn
-                ->whereHas('activity.product', function ($query) use ($officialRubroId, $revisor) {
-                    $query->where('rubro_id', $officialRubroId);
-                    // ->where('location_id', $revisor->location_id);
-                })
-                    ->get();
-            }
-
-            $groupActivities = collect();
-            if ($revisor->groups->isNotEmpty()) {
-                $groupPermissions = $revisor->groups->map(function ($group) {
-                    return ['rubro_id' => $group->rubro_id, 'location_id' => $group->location_id];
-                })->unique(function ($item) {
-                    return $item['rubro_id'] . '-' . $item['location_id'];
-                });
-
-                if ($groupPermissions->isNotEmpty()) {
-                    $groupActivities = WeekActivity::whereIn('status', $relevantStatuses) // <-- Usa whereIn
-                    ->whereHas('activity.product', function ($query) use ($groupPermissions) {
-                        $query->where(function ($q) use ($groupPermissions) {
-                            foreach ($groupPermissions as $permission) {
-                                $q->orWhere(function ($subQ) use ($permission) {
-                                    $subQ->where('rubro_id', $permission['rubro_id'])
-                                        ->where('location_id', $permission['location_id']);
-                                });
-                            }
-                        });
-                    })
-                        ->get();
-                }
-            }
-
-            $allPendingActivities = $officialActivities->merge($groupActivities)->unique('id');
-
-            $allPendingActivities->load([
-                'activity.product.rubro', 'activity.product.location', 'user',
-                'materials', 'activity.indicators', 'logisticSupports'
-            ]);
-
-            // (El resto del código de validación y formateo no necesita cambios)
             $groupedByUser = [];
             foreach ($allPendingActivities as $weekActivity) {
+                // Se asegura de no procesar datos incompletos
                 if (!$weekActivity->user || !$weekActivity->activity || !$weekActivity->activity->product) {
                     continue;
                 }
