@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Exports\PoaReportExport;
 use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeeklyPulse;
@@ -10,8 +9,6 @@ use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
-use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
@@ -114,6 +111,7 @@ class ReportController extends Controller
         ];
 
         $pdf = Pdf::loadView('reports.weekly_plan', $reportData);
+        $pdf->setPaper('a4', 'landscape');
 
         return $pdf->download('Plan Semanal' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf');
     }
@@ -128,7 +126,7 @@ class ReportController extends Controller
         $request->validate([
             'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
-            'status' => 'nullable|in:pending,approved,rejected,in progress,completed',
+            'status' => 'nullable|string',
         ]);
 
         $query = WeekActivity::where('user_id', $user->id)
@@ -147,25 +145,27 @@ class ReportController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->input('status'));
+            if ($request->input('status') === 'all') {
+                $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending']);
+            } else {
+                $statuses = explode(',', $request->input('status'));
+                $query->whereIn('status', $statuses);
+            }
         } else {
-            $query->where('status', 'approved');
+            $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending']);
         }
 
         $weeklyPlans = $query->orderBy('date', 'desc')->get();
 
-        // --- LÓGICA SIMPLIFICADA PARA GENERAR INICIALES/CÓDIGOS PARA EL FRONTEND (MODIFICADO para unirse) ---
         $formattedPlans = $weeklyPlans->map(function ($plan) {
-            $productInitialCode = ''; // Renombrado para claridad
-            $activityInitialCode = ''; // Renombrado para claridad
-            $combinedCodePrefix = ''; // Nuevo para el código combinado
+            $productInitialCode = '';
+            $activityInitialCode = '';
+            $combinedCodePrefix = '';
 
-            // Obtener las 2 primeras letras del nombre del producto
             if ($plan->activity && $plan->activity->product && !empty($plan->activity->product->name)) {
                 $productInitialCode = strtoupper(substr($plan->activity->product->name, 0, 2));
             }
 
-            // Obtener las 2 primeras letras de la descripción de la actividad
             if ($plan->activity && !empty($plan->activity->description)) {
                 $activityInitialCode = strtoupper(substr($plan->activity->description, 0, 2));
             }
@@ -173,18 +173,16 @@ class ReportController extends Controller
             // Combinar los códigos si existen
             if (!empty($productInitialCode) && !empty($activityInitialCode)) {
                 $combinedCodePrefix = $productInitialCode . $activityInitialCode . ': ';
-            } elseif (!empty($productInitialCode)) { // Si solo hay código de producto
+            } elseif (!empty($productInitialCode)) {
                 $combinedCodePrefix = $productInitialCode . ': ';
-            } elseif (!empty($activityInitialCode)) { // Si solo hay código de actividad
+            } elseif (!empty($activityInitialCode)) {
                 $combinedCodePrefix = $activityInitialCode . ': ';
             }
 
-            // --- FIN DE LA LÓGICA DE INICIALES/CÓDIGOS ---
 
             return [
                 'id' => $plan->id,
                 'date' => Carbon::parse($plan->date)->isoFormat('dddd, D [de] MMMM [de]YYYY'),
-                // Usa la descripción formateada aquí para el frontend
                 'description' => $combinedCodePrefix . ($plan->description ?? 'N/A'),
                 'estimated_hours' => $plan->estimated_hours,
                 'work_location' => $plan->work_location,
@@ -233,7 +231,7 @@ class ReportController extends Controller
 
         $weeklyPlans = WeekActivity::whereIn('user_id', $locationUserIds)->when($request->filled('id'), function ($query) use ($request) {
             $query->where('user_id', $request->id);
-        })->where('status', 'approved') // puedes quitar esto si quieres traer todos
+        })->where('status', 'approved', 'rejected', 'reassigned', 'rated') // puedes quitar esto si quieres traer todos
         ->with([
             'activity.product.rubro',
             'activity.users',
@@ -364,4 +362,73 @@ class ReportController extends Controller
         // Descargar el PDF
         return $pdf->download('informe-pulso-semanal-' . $startDate->format('Y-m-d') . '.pdf');
     }
+
+    public function generateWeeklyMonitoringReport(Request $request)
+    {
+        Carbon::setLocale('es');
+
+        // 1. Validación de los parámetros de entrada
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'start_date' => 'required|date_format:Y-m-d',
+            'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+        ]);
+
+        // 2. Rutas a los logos para el encabezado del PDF
+        $iniap_logo_path = public_path('storage/images/iniap_logo.png');
+        $ecuador_shield_path = public_path('storage/images/ecuador_shield.jpg');
+
+        // 3. Obtención de datos del usuario y fechas
+        $userId = $request->input('user_id');
+        $startDate = Carbon::parse($request->input('start_date'));
+        $endDate = Carbon::parse($request->input('end_date'));
+
+        $technician = User::with('location')->find($userId);
+        if (!$technician) {
+            return response()->json(['error' => 'Técnico no encontrado.'], 404);
+        }
+
+        // 4. Obtención de las actividades CLAVE: Solo se buscan las que tengan estado 'rated'
+        $weekActivities = WeekActivity::where('user_id', $userId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->where('status', 'rated') // Filtro esencial para el reporte de monitoreo
+            ->orderBy('date')
+            ->get();
+
+        // 5. Cálculo del resumen de cumplimiento
+        $totalActivities = $weekActivities->count();
+        $completed = $weekActivities->where('percentage', 100)->count();
+        $partial = $weekActivities->where('percentage', '>', 0)->where('percentage', '<', 100)->count();
+        $notDone = $weekActivities->where('percentage', 0)->count();
+        // El total de actividades en el rango de fechas con estado 'rated'
+        $overallCompliance = ($totalActivities > 0) ? ($weekActivities->sum('percentage') / $totalActivities) : 0;
+
+        $summary = [
+            'overall_compliance' => $overallCompliance,
+            'completed' => $completed,
+            'partial' => $partial,
+            'not_done' => $notDone,
+            'not_rated' => 0, // Siempre será 0 por el filtro 'rated', pero se mantiene por consistencia
+        ];
+
+        // 6. Preparación de los datos para enviar a la vista Blade
+        $reportData = [
+            'iniap_logo_path' => $iniap_logo_path,
+            'ecuador_shield_path' => $ecuador_shield_path,
+            'technician' => $technician,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'summary' => $summary,
+            'weekActivities' => $weekActivities,
+        ];
+
+        // 7. Carga de la vista, configuración del PDF y generación
+        $pdf = Pdf::loadView('reports.weekly_monitoring_report', $reportData);
+        $pdf->setPaper('a4', 'landscape');
+
+        // 8. Descarga del PDF con un nombre de archivo dinámico
+        $fileName = 'Informe_Monitoreo_' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf';
+        return $pdf->download($fileName);
+    }
+
 }

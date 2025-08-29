@@ -171,7 +171,7 @@
         <img src="{{ $iniap_logo_path }}" alt="INIAP Logo">
     </div>
     <div class="header-title">
-        <h1>{{ $technician_location }}</h1> {{-- Mover la ubicación aquí si es deseado --}}
+        <h1>{{ $technician_location }}</h1>
         <p>PLANIFICACIÓN SEMANAL DE ACTIVIDADES – (Programa: {{ $program_rubro }})</p>
     </div>
     <div class="header-logo right">
