@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Area;
 use App\Models\Ethnic_Group;
+use App\Models\FiasaUser;
 use App\Models\Location;
 use App\Models\Nationality;
 use App\Models\User;
@@ -108,5 +109,138 @@ class ImportController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
+    }
+
+    public function importFiasaFile(Request $request)
+    {
+        set_time_limit(600);
+
+        try {
+            if (!$request->hasFile('import_file_fiasa')) {
+                throw new \Exception('No se proporcionó un archivo para importar.');
+            }
+
+            $file = $request->file('import_file_fiasa');
+            if (!$file->isValid()) {
+                return response()->json(['error' => 'Archivo no válido.'], Response::HTTP_BAD_REQUEST);
+            }
+
+            $uploadDir = 'public/excel/';
+            $uploadFile = $uploadDir . $file->getClientOriginalName();
+            $file->move($uploadDir, $file->getClientOriginalName());
+
+            if (!file_exists($uploadFile)) {
+                throw new \Exception('Error al mover el archivo.');
+            }
+
+            $reader = IOFactory::createReaderForFile($uploadFile);
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($uploadFile);
+
+            // --- Contadores totales para el resumen final ---
+            $totalInsertedCount = 0;
+            $totalSkippedDuplicateCount = 0;
+            $totalSkippedInvalidDataCount = 0;
+            $totalProcessedRows = 0;
+
+            // --- PROCESAR HOJA "FIASA" ---
+            $fiasaSheet = $spreadsheet->getSheetByName('FIASA');
+            if ($fiasaSheet !== null) {
+                $highestRow = $fiasaSheet->getHighestRow();
+                for ($row = 6; $row <= $highestRow; $row++) {
+                    $totalProcessedRows++;
+                    $name = $fiasaSheet->getCell('K' . $row)->getValue();
+                    $dni = $fiasaSheet->getCell('L' . $row)->getValue();
+                    $locationName = $fiasaSheet->getCell('C' . $row)->getValue();
+
+                    $this->processRowData($dni, $name, $locationName, $totalInsertedCount, $totalSkippedDuplicateCount, $totalSkippedInvalidDataCount);
+                }
+            }
+
+            // --- PROCESAR HOJA "OTROS" ---
+            $otrosSheet = $spreadsheet->getSheetByName('OTROS');
+            if ($otrosSheet !== null) {
+                $highestRow = $otrosSheet->getHighestRow();
+                for ($row = 6; $row <= $highestRow; $row++) {
+                    $totalProcessedRows++;
+                    $name = $otrosSheet->getCell('B' . $row)->getValue();
+                    $dni = $otrosSheet->getCell('C' . $row)->getValue();
+                    $locationName = $otrosSheet->getCell('A' . $row)->getValue();
+
+                    $this->processRowData($dni, $name, $locationName, $totalInsertedCount, $totalSkippedDuplicateCount, $totalSkippedInvalidDataCount);
+                }
+            }
+
+            if ($fiasaSheet === null && $otrosSheet === null) {
+                throw new \Exception('El archivo no contiene una hoja llamada "FIASA" ni "OTROS".');
+            }
+
+            return response()->json([
+                'message' => 'Proceso de importación completado.',
+                'filas_procesadas' => $totalProcessedRows,
+                'servicios_creados' => $totalInsertedCount,
+                'servicios_saltados_por_duplicado' => $totalSkippedDuplicateCount,
+                'servicios_saltados_por_datos_invalidos' => $totalSkippedInvalidDataCount
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Procesa una fila de datos, crea el servicio y asigna el rol.
+     */
+    private function processRowData($dni, $name, $locationName, &$insertedCount, &$skippedDuplicateCount, &$skippedInvalidDataCount)
+    {
+        $dni = str_replace('.', '', trim($dni));
+
+        if (empty($dni) || empty($name)) {
+            $skippedInvalidDataCount++;
+            return;
+        }
+
+        if (FiasaUser::where('dni', $dni)->exists()) {
+            $skippedDuplicateCount++;
+            return;
+        }
+
+        $nameParts = explode(' ', trim($name));
+        $numParts = count($nameParts);
+        $email = null;
+
+        if ($numParts >= 2) {
+            $lastName = strtolower($nameParts[0]);
+            $firstName = ($numParts >= 3) ? strtolower($nameParts[2]) : strtolower($nameParts[1]);
+
+            $baseEmail = $firstName . '.' . $lastName . '@iniap.gob.ec';
+            $email = $baseEmail;
+            $counter = 1;
+            while (FiasaUser::where('email', $email)->exists()) {
+                $counter++;
+                $email = $firstName . '.' . $lastName . $counter . '@iniap.gob.ec';
+            }
+        }
+
+        if (is_null($email)) {
+            $skippedInvalidDataCount++;
+            return;
+        }
+
+        $data = [
+            'dni' => $dni,
+            'name' => trim($name),
+            'email' => $email,
+            'password' => Hash::make($dni),
+        ];
+
+        if (!empty($locationName)) {
+            $location = Location::firstOrCreate(['name' => trim($locationName)]);
+            $data['location_id'] = $location->id;
+        }
+
+        $newService = FiasaUser::create($data);
+        $newService->assignRole('user'); // <-- ASIGNACIÓN DEL ROL
+        $insertedCount++;
     }
 }

@@ -14,18 +14,23 @@ class AuthController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
-            'password' => 'required|min:8',
+            'password' => 'required', // Quité la validación de min:8 por si los passwords de fiasa son diferentes
         ]);
 
         $credentials = $request->only('email', 'password');
-        if (!$token = JWTAuth::attempt($credentials)) {
+        $token = null;
+
+        if ($token = Auth::guard('api')->attempt($credentials)) {
+            $user = Auth::guard('api')->user();
+
+        } elseif ($token = Auth::guard('fiasa_api')->attempt($credentials)) {
+            $user = Auth::guard('fiasa_api')->user();
+
+        } else {
             return response()->json([
                 'message' => 'Invalid credentials!',
             ], 401);
         }
-
-        // Obtenemos el usuario autenticado
-        $user = Auth::user();
 
         $roles = $user->getRoleNames();
 
