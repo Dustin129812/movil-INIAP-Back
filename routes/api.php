@@ -24,8 +24,10 @@ use Illuminate\Support\Facades\Route;
 
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
+Route::post('fiasa/login', [AuthController::class, 'fiasaLogin']);
 
 Route::apiResource('incidents', IncidentController::class);
+Route::post('/import-fiasa-users', [ImportController::class, 'importFiasaFile']);
 
 Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(function () {
 

@@ -365,70 +365,106 @@ class ReportController extends Controller
 
     public function generateWeeklyMonitoringReport(Request $request)
     {
+        // 1. Establecer el idioma para las fechas
         Carbon::setLocale('es');
 
-        // 1. Validación de los parámetros de entrada
+        // 2. Validación de los parámetros de entrada
         $request->validate([
             'user_id' => 'required|exists:users,id',
             'start_date' => 'required|date_format:Y-m-d',
             'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
         ]);
 
-        // 2. Rutas a los logos para el encabezado del PDF
+        // 3. Rutas a los logos y obtención de datos básicos
         $iniap_logo_path = public_path('storage/images/iniap_logo.png');
         $ecuador_shield_path = public_path('storage/images/ecuador_shield.jpg');
-
-        // 3. Obtención de datos del usuario y fechas
         $userId = $request->input('user_id');
         $startDate = Carbon::parse($request->input('start_date'));
         $endDate = Carbon::parse($request->input('end_date'));
 
+        // 4. Obtención del técnico
         $technician = User::with('location')->find($userId);
         if (!$technician) {
             return response()->json(['error' => 'Técnico no encontrado.'], 404);
         }
 
-        // 4. Obtención de las actividades CLAVE: Solo se buscan las que tengan estado 'rated'
+        // 5. OBTENCIÓN DE ACTIVIDADES DE MONITOREO
+        // ---- LA DIFERENCIA CLAVE: Se filtra por estado 'rated' ----
         $weekActivities = WeekActivity::where('user_id', $userId)
             ->whereBetween('date', [$startDate, $endDate])
             ->where('status', 'rated') // Filtro esencial para el reporte de monitoreo
+            ->with([
+                'activity.product.rubro',
+                'activity.users',
+                'materials',
+                'performanceIndicators',
+                'logisticSupportUsers'
+            ])
             ->orderBy('date')
-            ->get();
+            ->get(); // Se obtiene una colección simple, no agrupada
 
-        // 5. Cálculo del resumen de cumplimiento
+        // 6. Procesamiento para añadir descripción formateada (igual que en el plan)
+        $weekActivities->each(function ($weekActivity) {
+            $productInitialCode = '';
+            $activityInitialCode = '';
+            $combinedCodePrefix = '';
+
+            if ($weekActivity->activity?->product?->name) {
+                $productInitialCode = strtoupper(substr($weekActivity->activity->product->name, 0, 2));
+            }
+            if ($weekActivity->activity?->description) {
+                $activityInitialCode = strtoupper(substr($weekActivity->activity->description, 0, 2));
+            }
+            if ($productInitialCode && $activityInitialCode) {
+                $combinedCodePrefix = "{$productInitialCode}{$activityInitialCode}: ";
+            } elseif ($productInitialCode) {
+                $combinedCodePrefix = "{$productInitialCode}: ";
+            } elseif ($activityInitialCode) {
+                $combinedCodePrefix = "{$activityInitialCode}: ";
+            }
+            $weekActivity->formatted_description = $combinedCodePrefix . ($weekActivity->description ?? '');
+        });
+
+        // 7. CÁLCULO DEL RESUMEN DE CUMPLIMIENTO (ESENCIAL PARA MONITOREO)
         $totalActivities = $weekActivities->count();
-        $completed = $weekActivities->where('percentage', 100)->count();
-        $partial = $weekActivities->where('percentage', '>', 0)->where('percentage', '<', 100)->count();
-        $notDone = $weekActivities->where('percentage', 0)->count();
-        // El total de actividades en el rango de fechas con estado 'rated'
-        $overallCompliance = ($totalActivities > 0) ? ($weekActivities->sum('percentage') / $totalActivities) : 0;
-
         $summary = [
-            'overall_compliance' => $overallCompliance,
-            'completed' => $completed,
-            'partial' => $partial,
-            'not_done' => $notDone,
-            'not_rated' => 0, // Siempre será 0 por el filtro 'rated', pero se mantiene por consistencia
+            'completed' => $weekActivities->where('percentage', 100)->count(),
+            'partial' => $weekActivities->where('percentage', '>', 0)->where('percentage', '<', 100)->count(),
+            'not_done' => $weekActivities->where('percentage', 0)->count(),
+            'overall_compliance' => ($totalActivities > 0) ? ($weekActivities->sum('percentage') / $totalActivities) : 0,
         ];
 
-        // 6. Preparación de los datos para enviar a la vista Blade
+        // 8. Determinar el rubro principal del informe
+        $mainRubro = 'Varios Rubros';
+        if ($weekActivities->isNotEmpty()) {
+            $rubros = $weekActivities->map(function ($item) {
+                return $item->activity->product->rubro->name ?? null;
+            })->filter()->unique();
+
+            if ($rubros->count() === 1) {
+                $mainRubro = $rubros->first();
+            } elseif ($rubros->isEmpty()) {
+                $mainRubro = 'Sin Rubro Asociado';
+            }
+        }
+
+        // 9. Preparación de todos los datos para la vista
         $reportData = [
             'iniap_logo_path' => $iniap_logo_path,
             'ecuador_shield_path' => $ecuador_shield_path,
             'technician' => $technician,
             'startDate' => $startDate,
             'endDate' => $endDate,
-            'summary' => $summary,
-            'weekActivities' => $weekActivities,
+            'summary' => $summary, // Se envía el resumen de cumplimiento
+            'weekActivities' => $weekActivities, // La colección PLANA y FILTRADA
+            'program_rubro' => $mainRubro,
         ];
 
-        // 7. Carga de la vista, configuración del PDF y generación
+        // 10. Carga de la vista, configuración del PDF y generación
         $pdf = Pdf::loadView('reports.weekly_monitoring_report', $reportData);
         $pdf->setPaper('a4', 'landscape');
 
-        // 8. Descarga del PDF con un nombre de archivo dinámico
         $fileName = 'Informe_Monitoreo_' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf';
         return $pdf->download($fileName);
     }
-
 }

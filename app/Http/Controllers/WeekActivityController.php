@@ -161,9 +161,10 @@ class WeekActivityController extends Controller
             $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
 
             $activities = WeekActivity::with([
-                'activity',
                 'activity.product',
-                'logisticSupportUsers' // Carga la relación de usuarios de soporte logístico
+                'activity.monthlyProgress',
+                'activity.weeklyActivities',
+                'logisticSupportUsers'
             ])
                 ->whereBetween('date', [$lastMonday, $lastSunday])
                 ->where('user_id', $user->id)
@@ -177,25 +178,40 @@ class WeekActivityController extends Controller
                     'code' => 200,
                 ],
                 'data' => $activities->map(function ($weekActivity) {
+                    if (!$weekActivity->activity || !$weekActivity->activity->product) {
+                        return null;
+                    }
+
                     return [
                         'id' => $weekActivity->id,
                         'activity_id' => $weekActivity->activity->id,
                         'description' => $weekActivity->description,
-                        'date' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                        'product_name' => $weekActivity->activity->product ? $weekActivity->activity->product->name : $weekActivity->product_name,
+                        'date' => Carbon::parse($weekActivity->date)->format('Y-m-d'),
+                        'product_name' => $weekActivity->activity->product->name,
                         'activity_name' => $weekActivity->activity->description,
                         'status' => $weekActivity->status,
                         'percentage' => $weekActivity->percentage,
                         'observations' => $weekActivity->observations,
-                        // Mapea los usuarios de soporte logístico para incluirlos en la respuesta
                         'logistic_supports' => $weekActivity->logisticSupportUsers->map(function ($user) {
+                            return ['id' => $user->id, 'name' => $user->name];
+                        })->toArray(),
+
+                        'monthly_plannig' => $weekActivity->activity->monthlyProgress->map(function ($progress) {
                             return [
-                                'id' => $user->id,
-                                'name' => $user->name,
+                                'month' => Carbon::parse($progress->month)->format('Y-m-d'),
+                                'percentage' => $progress->percentage,
+                            ];
+                        })->toArray(),
+
+                        'execution_progress' => $weekActivity->activity->weeklyActivities->map(function ($exec) {
+                            return [
+                                'week_id' => $exec->id,
+                                'date' => Carbon::parse($exec->date)->format('Y-m-d'),
+                                'reported_percentage' => $exec->percentage, // El % que se reportó esa semana
                             ];
                         })->toArray(),
                     ];
-                }),
+                })->filter()->values(),
             ]);
         } catch (\Exception $e) {
             Log::error("Error al obtener actividades: " . $e->getMessage());
