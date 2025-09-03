@@ -6,6 +6,7 @@ use App\Models\Activity;
 use App\Models\Location;
 use App\Models\Material;
 use App\Models\Product;
+use App\Models\Rubro;
 use App\Notifications\CreateActivity;
 use App\Notifications\CreateProduct;
 use App\Notifications\CreateWeekPlanner;
@@ -230,10 +231,10 @@ class PlannerController extends Controller
         $weekActivity = WeekActivity::findOrFail($activityId);
 
         $status = $request->input('status');
-        $validStatuses = ['approved', 'rejected'];
+        $validStatuses = ['approved', 'rejected', 'reassigned'];
 
         if (!in_array($status, $validStatuses)) {
-            return response()->json(['error' => 'Estado inválido. Use "approved" o "rejected".'], 400);
+            return response()->json(['error' => 'El estado proporcionado no es válido.'], 400);
         }
 
         // Actualiza y guarda el estado
@@ -257,58 +258,80 @@ class PlannerController extends Controller
         ]);
     }
 
-    public function getWeeklyPlanningByResponsible()
+    public function getWeeklyPlanningByResponsible(Request $request)
     {
-        $user = Auth()->user();
-        $usersWithPlans = User::whereHas('createdWeekActivities')
-            ->with([
-                'createdWeekActivities' => function ($query) {
-                    $query->with([
-                        'activity' => function ($activityQuery) {
-                            $activityQuery->select('id', 'description', 'product_id')
-                                ->with('product:id,name');
-                        },
-                        'materials'
-                    ]);
+        try {
+            $revisor = $request->user();
+            $revisor->load('groups.members');
+
+            $teamMemberIds = $revisor->groups->flatMap(function ($group) {
+                return $group->members->pluck('id');
+            })->unique();
+
+            if ($teamMemberIds->isEmpty()) {
+                return response()->json(['data' => []]);
+            }
+
+            $relevantStatuses = ['pending', 'approved', 'rejected', 'reassigned'];
+
+            $allPendingActivities = WeekActivity::whereIn('status', $relevantStatuses)
+                ->whereIn('user_id', $teamMemberIds) // <-- ¡ESTA ES LA LÍNEA CLAVE QUE SOLUCIONA TODO!
+                ->with([
+                    'activity.product.rubro',
+                    'activity.product.location',
+                    'user',
+                    'materials',
+                    'activity.indicators',
+                    'logisticSupports'
+                ])
+                ->get();
+
+            $groupedByUser = [];
+            foreach ($allPendingActivities as $weekActivity) {
+                // Se asegura de no procesar datos incompletos
+                if (!$weekActivity->user || !$weekActivity->activity || !$weekActivity->activity->product) {
+                    continue;
                 }
-            ])->where('location_id', $user->location_id)
-            ->get();
+                $groupedByUser[$weekActivity->user_id][] = $weekActivity;
+            }
 
-        // 3. Transformamos los datos para la respuesta JSON.
-        $formattedResult = $usersWithPlans->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'activities' => $user->createdWeekActivities->groupBy('activity_id')->map(function ($weekActivitiesGroup) {
+            $userIds = array_keys($groupedByUser);
+            $users = User::whereIn('id', $userIds)->get()->keyBy('id');
 
-                    // La información de la actividad principal es la misma para todo el grupo.
-                    $firstWeekActivity = $weekActivitiesGroup->first();
-                    $mainActivity = $firstWeekActivity->activity;
+            $formattedData = [];
+            foreach ($groupedByUser as $userId => $activities) {
+                if (!isset($users[$userId])) continue;
 
-                    return [
-                        'product_name' => $mainActivity->product->name ?? null,
-                        'product_id' => $mainActivity->product->id ?? null,
-                        'activity_description' => $mainActivity->description ?? null,
-                        'week_activities' => $weekActivitiesGroup->map(fn($wa) => [
-                            'id' => $wa->id,
-                            'week_description' => $wa->description,
-                            'date' => $wa->date,
-                            'day_of_week' => $wa->date ? (
-                                preg_match('/^\d{4}-\d{2}-\d{2}$/', $wa->date)
-                                ? \Carbon\Carbon::parse($wa->date)->format('l (d/m/Y)')
-                                : $wa->date // Si ya viene formateada, úsala tal cual
-                            ) : null,
-                            'materials' => $wa->materials,
-                            'status' => $wa->status,
-                        ])->values(),
-                    ];
-                })->values(), // Usamos values() para resetear las claves y obtener un array.
-            ];
-        });
+                $user = $users[$userId];
+                $groupedByProduct = collect($activities)->groupBy('activity.product_id');
 
-        return response()->json(['data' => $formattedResult]);
+                $formattedData[] = [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'activities' => $groupedByProduct->map(function ($activitiesForProduct) {
+                        $firstActivity = $activitiesForProduct->first();
+                        return [
+                            'product_id' => $firstActivity->activity->product->id,
+                            'product_name' => $firstActivity->activity->product->name,
+                            'activity_description' => $firstActivity->activity->name,
+                            'week_activities' => $activitiesForProduct->values(),
+                        ];
+                    })->values()->toArray()
+                ];
+            }
+
+            return response()->json(['data' => $formattedData]);
+
+        } catch (Exception $e) {
+            Log::error('Error en getWeeklyPlanningByResponsible: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'msg' => ['summary' => 'Error', 'detail' => 'No se pudieron cargar las planificaciones para revisión.', 'code' => 500]
+            ], 500);
+        }
     }
-
 
     public function getProductsWithActivities(Request $request)
     {
@@ -322,83 +345,82 @@ class PlannerController extends Controller
                 ->with([
                     'location',
                     'rubro',
-                    'user', // Responsable del producto
+                    'user',
                     'activities' => function ($query) {
-                        // Carga la relación 'users' (responsables de la actividad), 'indicators',
-                        // 'monthlyProgress' y 'weeklyActivities' (para el progreso de ejecución)
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
                     },
                 ])->get();
 
-            // Mapear los datos
+            // Mapear los datos y añadir los cálculos de ponderación
             $formattedProducts = $products->map(function ($product) {
+
+                // 1. Ponderación del Producto (ya es un "Peso Absoluto" a nivel de Rubro)
+                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+
+                    // 2. Calcular el "Peso Absoluto" de la Actividad
+                    // Es el peso del producto por el peso relativo de la actividad
+                    $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
+
+                    $totalActivityProgress = 0;
+
+                    $executionProgress = ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activityAbsoluteWeight, &$totalActivityProgress) {
+
+                        // 3. Calcular el "Aporte Global al Proyecto" de esta tarea semanal
+                        // Es el peso absoluto de la actividad por el avance real de la semana
+                        $globalContribution = $activityAbsoluteWeight * ((float) $weekActivity->percentage / 100);
+
+                        // Sumamos este aporte al total de la actividad
+                        $totalActivityProgress += $globalContribution;
+
+                        return [
+                            'week_id' => $weekActivity->id,
+                            'date' => Carbon::parse($weekActivity->date)->format('Y-m-d'),
+                            'reported_percentage' => (float) $weekActivity->percentage, // Avance reportado
+                            'global_contribution' => $globalContribution, // Aporte real al 100% del proyecto
+                            'observations' => $weekActivity->observations,
+                        ];
+                    })->toArray();
+
+                    return [
+                        'id' => $activity->id,
+                        'description' => $activity->description,
+                        'relative_weight' => (float) $activity->ponderacion, // Ponderación relativa a su producto
+                        'absolute_weight' => $activityAbsoluteWeight, // Peso real en el 100% del proyecto
+                        'total_progress' => $totalActivityProgress, // Suma del aporte de todas sus semanas
+                        'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                        'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                        'users' => ($activity->users ?? collect([]))->map(function ($user) {
+                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre'];
+                        })->toArray(),
+                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
+                            return ['id' => $indicator->id, 'name' => $indicator->name];
+                        })->toArray(),
+                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                            return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
+                        })->toArray(),
+                        'execution_progress' => $executionProgress,
+                    ];
+                });
+
+                // Calculamos el progreso total del producto sumando el progreso de sus actividades
+                $totalProductProgress = $mappedActivities->sum('total_progress');
+
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
-                    'budget' => $product->budget,
-                    'ponderacion' => $product->ponderacion,
-                    'user' => $product->user ? [
-                        'id' => $product->user->id,
-                        'name' => $product->user->name ?? 'Sin nombre',
-                    ] : null,
-                    'location' => $product->location ? [
-                        'id' => $product->location->id,
-                        'name' => $product->location->name,
-                    ] : null,
-                    'rubro' => $product->rubro ? [
-                        'id' => $product->rubro->id,
-                        'name' => $product->rubro->name,
-                    ] : null,
-                    'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
-
-                        return [
-                            'id' => $activity->id,
-                            'description' => $activity->description,
-                            'budget' => $activity->budget,
-                            'ponderacion' => $activity->ponderacion, // Asegurarse de que la ponderación de la actividad esté disponible
-                            'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
-                            'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
-                            'user' => ($activity->users ?? collect([]))->map(function ($user) {
-                                return [
-                                    'id' => $user->id,
-                                    'name' => $user->name ?? 'Sin nombre',
-                                ];
-                            })->toArray(),
-
-                            // Se mapea la colección de indicadores, igual que se hace con los usuarios.
-                            'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicators) {
-                                return [
-                                    'id' => $indicators->id,
-                                    'name' => $indicators->name,
-                                ];
-                            })->toArray(),
-
-                            'monthly_progress' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
-                                return [
-                                    'month' => Carbon::parse($progress->month)->format('Y-m-d'),
-                                    'percentage' => $progress->percentage,
-                                ];
-                            })->toArray(),
-                            // Mapea las weeklyActivities para formar el array execution_progress
-                            // Lógica de cálculo basada en la ponderación de la actividad
-                            'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activity) {
-                                $activityPonderacion = (float) $activity->ponderacion;
-                                $weekActivityPercentage = (float) $weekActivity->percentage;
-
-                                // Cálculo: (Ponderación de la Actividad / 100) * Porcentaje de Avance Semanal
-                                // Ejemplo: (25 / 100) * 50 = 12.5
-                                $effectivePercentage = ($activityPonderacion / 100) * $weekActivityPercentage;
-
-                                return [
-                                    'month' => Carbon::parse($weekActivity->date)->format('Y-m-d'), // Usa la fecha de la WeekActivity
-                                    'percentage' => (string) round($effectivePercentage, 2), // Usa el porcentaje calculado, redondeado a 2 decimales
-                                    'observations' => $weekActivity->observations, // Incluye observaciones si es necesario
-                                ];
-                            })->toArray(),
-                        ];
-                    })->toArray(),
+                    'absolute_weight' => $productAbsoluteWeight, // Peso real en el 100% del proyecto
+                    'total_progress' => $totalProductProgress, // Suma del aporte de todas sus actividades
+                    'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
+                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
+                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                    'activities' => $mappedActivities->toArray(),
                 ];
-            })->values()->toArray(); // Usamos values() para re-indexar el array después de filter()
+            });
+
+            // Opcional: Calcular el avance total de todo el rubro
+            $totalRubroProgress = $formattedProducts->sum('total_progress');
 
             return response()->json([
                 'msg' => [
@@ -406,7 +428,10 @@ class PlannerController extends Controller
                     'detail' => 'Productos obtenidos correctamente',
                     'code' => 200,
                 ],
-                'data' => $formattedProducts,
+                'data' => [
+                    'total_rubro_progress' => $totalRubroProgress,
+                    'products' => $formattedProducts->values()->toArray(),
+                ]
             ]);
         } catch (Exception $e) {
             Log::error('Error al obtener los productos en getProductsWithActivities: ' . $e->getMessage());
@@ -627,7 +652,7 @@ class PlannerController extends Controller
         }
     }
 
-    //// Para obtener producto por estación 
+    //// Para obtener producto por estación
     public function getUniqueLocations()
     {
         try {
@@ -662,71 +687,72 @@ class PlannerController extends Controller
                 ->with([
                     'location',
                     'rubro',
-                    'user', // Responsable del producto
+                    'user',
                     'activities' => function ($query) {
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
                     },
                 ])->get();
 
-            // Mapear los datos de la misma forma que en getProductsWithActivities
+            // Mapear los datos y añadir los cálculos de ponderación (LÓGICA COPIADA)
             $formattedProducts = $products->map(function ($product) {
+
+                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+
+                    $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
+                    $totalActivityProgress = 0;
+
+                    $executionProgress = ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activityAbsoluteWeight, &$totalActivityProgress) {
+
+                        $globalContribution = $activityAbsoluteWeight * ((float) $weekActivity->percentage / 100);
+                        $totalActivityProgress += $globalContribution;
+
+                        return [
+                            'week_id' => $weekActivity->id,
+                            'date' => Carbon::parse($weekActivity->date)->format('Y-m-d'),
+                            'reported_percentage' => (float) $weekActivity->percentage,
+                            'global_contribution' => $globalContribution,
+                            'observations' => $weekActivity->observations,
+                        ];
+                    })->toArray();
+
+                    return [
+                        'id' => $activity->id,
+                        'description' => $activity->description,
+                        'relative_weight' => (float) $activity->ponderacion,
+                        'absolute_weight' => $activityAbsoluteWeight,
+                        'total_progress' => $totalActivityProgress,
+                        'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                        'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                        'users' => ($activity->users ?? collect([]))->map(function ($user) {
+                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre'];
+                        })->toArray(),
+                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
+                            return ['id' => $indicator->id, 'name' => $indicator->name];
+                        })->toArray(),
+                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                            return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
+                        })->toArray(),
+                        'execution_progress' => $executionProgress,
+                    ];
+                });
+
+                $totalProductProgress = $mappedActivities->sum('total_progress');
+
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
-                    'budget' => $product->budget,
-                    'ponderacion' => $product->ponderacion,
-                    'user' => $product->user ? [
-                        'id' => $product->user->id,
-                        'name' => $product->user->name ?? 'Sin nombre',
-                    ] : null,
-                    'location' => $product->location ? [
-                        'id' => $product->location->id,
-                        'name' => $product->location->name,
-                    ] : null,
-                    'rubro' => $product->rubro ? [
-                        'id' => $product->rubro->id,
-                        'name' => $product->rubro->name,
-                    ] : null,
-                    'activity' => ($product->activities ?? collect([]))->map(function ($activity) {
-                        return [
-                            'id' => $activity->id,
-                            'description' => $activity->description,
-                            'budget' => $activity->budget,
-                            'ponderacion' => $activity->ponderacion,
-                            'start_date' => $activity->start_date ? \Carbon\Carbon::parse($activity->start_date)->format('Y-m-d') : null,
-                            'end_date'   => $activity->end_date ? \Carbon\Carbon::parse($activity->end_date)->format('Y-m-d') : null,
-                            'user' => ($activity->users ?? collect([]))->map(function ($user) {
-                                return [
-                                    'id' => $user->id,
-                                    'name' => $user->name ?? 'Sin nombre',
-                                ];
-                            })->toArray(),
-                            'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicators) {
-                                return [
-                                    'id' => $indicators->id,
-                                    'name' => $indicators->name,
-                                ];
-                            })->toArray(),
-                            'monthly_progress' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
-                                return [
-                                    'month' => \Carbon\Carbon::parse($progress->month)->format('Y-m-d'),
-                                    'percentage' => $progress->percentage,
-                                ];
-                            })->toArray(),
-                            'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activity) {
-                                $activityPonderacion = (float) $activity->ponderacion;
-                                $weekActivityPercentage = (float) $weekActivity->percentage;
-                                $effectivePercentage = ($activityPonderacion / 100) * $weekActivityPercentage;
-                                return [
-                                    'month' => \Carbon\Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                                    'percentage' => (string) round($effectivePercentage, 2),
-                                    'observations' => $weekActivity->observations,
-                                ];
-                            })->toArray(),
-                        ];
-                    })->toArray(),
+                    'absolute_weight' => $productAbsoluteWeight,
+                    'total_progress' => $totalProductProgress,
+                    'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
+                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
+                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                    'activities' => $mappedActivities->toArray(),
                 ];
-            })->values()->toArray();
+            });
+
+            $totalRubroProgress = $formattedProducts->sum('total_progress');
 
             return response()->json([
                 'msg' => [
@@ -734,7 +760,10 @@ class PlannerController extends Controller
                     'detail' => 'Productos obtenidos por ubicación correctamente',
                     'code' => 200,
                 ],
-                'data' => $formattedProducts,
+                'data' => [
+                    'total_rubro_progress' => $totalRubroProgress,
+                    'products' => $formattedProducts->values()->toArray(),
+                ]
             ]);
         } catch (Exception $e) {
             Log::error('Error al obtener productos por ubicación: ' . $e->getMessage());
@@ -746,5 +775,58 @@ class PlannerController extends Controller
                 ],
             ], 500);
         }
+    }
+
+    public function getPlannableProductsForCurrentUser(Request $request)
+    {
+        $user = $request->user();
+        $user->load('groups');
+        $officialRubro = Rubro::whereRaw('LOWER(name) = ?', ['oficial'])->first();
+        $officialRubroId = $officialRubro ? $officialRubro->id : null;
+        $officialProducts = collect();
+        if ($officialRubroId) {
+            $officialProducts = Product::where('rubro_id', $officialRubroId)
+                // ->where('location_id', $user->location_id) // <-- LÓGICA CLAVE: Filtra por la ubicación del usuario.
+                ->with(['activities.users', 'rubro', 'user', 'location'])
+                ->get();
+        }
+        $specificProducts = collect();
+        if ($user->groups->isNotEmpty()) {
+            $groupPermissions = $user->groups->map(function ($group) {
+                return ['rubro_id' => $group->rubro_id, 'location_id' => $group->location_id];
+            })->unique(function ($item) {
+                return $item['rubro_id'] . '-' . $item['location_id'];
+            });
+            if ($groupPermissions->isNotEmpty()) {
+                $query = Product::query();
+                $query->where(function ($q) use ($groupPermissions) {
+                    foreach ($groupPermissions as $permission) {
+                        $q->orWhere(function ($subQ) use ($permission) {
+                            $subQ->where('rubro_id', $permission['rubro_id'])
+                                ->where('location_id', $permission['location_id']);
+                        });
+                    }
+                });
+                if ($officialRubroId) {
+                    $query->where('rubro_id', '!=', $officialRubroId);
+                }
+                $specificProducts = $query->with(['activities.users', 'rubro', 'user', 'location'])->get();
+            }
+        }
+        else {
+            $query = Product::query();
+            $query->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhereHas('activities.users', function($subQ) use ($user) {
+                        $subQ->where('users.id', $user->id);
+                    });
+            });
+            if ($officialRubroId) {
+                $query->where('rubro_id', '!=', $officialRubroId);
+            }
+            $specificProducts = $query->with(['activities.users', 'rubro', 'user', 'location'])->get();
+        }
+        $allPlannableProducts = $officialProducts->merge($specificProducts)->unique('id');
+        return response()->json(['data' => $allPlannableProducts->values()]);
     }
 }

@@ -17,9 +17,9 @@ class WeekActivity extends Model
         'material_id',
         'activity_id',
         'observations',
-        'estimated_hours',
         'work_location',
-        'user_id'
+        'user_id',
+        'status'
     ];
 
     public function product()

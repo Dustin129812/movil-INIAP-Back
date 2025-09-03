@@ -7,18 +7,30 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class UserResource extends JsonResource
 {
-    public function toArray($request){
-        return[
-            'id' => $this -> id,
-            'dni' => $this -> dni,
-            'name' => $this -> name,
-            'email' => $this -> email,
-            'password' => $this -> password,
-            'birth_date' => $this -> birth_date,
-            'gender' => $this -> gender,
-            'phone' => $this -> phone,
-            'location' => $this-> location,
-            'roles' => $this->getRoleNames(),
+    /**
+     * Transform the resource into an array.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'dni' => $this->dni,
+            'name' => $this->name,
+            'email' => $this->email,
+            'birth_date' => $this->birth_date,
+            'gender' => $this->gender,
+            'phone' => $this->phone,
+            'location' => $this->location,
+            'roles' => $this->whenLoaded('roles', function () {
+                return $this->roles->map(function ($role) {
+                    return [
+                        'id' => $role->id,
+                        'name' => $role->name,
+                    ];
+                });
+            }),
         ];
     }
 }

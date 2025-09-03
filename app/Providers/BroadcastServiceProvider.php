@@ -12,8 +12,11 @@ class BroadcastServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Broadcast::routes();
+        Broadcast::routes(['middleware' => ['jwt.auth']]);
 
-        require base_path('routes/channels.php');
+        Broadcast::channel('conversation.{id}', function ($user, $id) {
+            $conversation = \App\Models\Conversation::findOrFail($id);
+            return $user || $conversation->guest_id === session('guest_id');
+        });
     }
 }

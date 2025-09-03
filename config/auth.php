@@ -43,7 +43,11 @@ return [
         'api' => [
             'driver' => 'jwt',
             'provider' => 'users',
-        ]
+        ],
+        'fiasa_api' => [
+            'driver' => 'jwt', // <-- Muy importante, cambiado de 'session' a 'jwt'
+            'provider' => 'fiasa_users', // <-- Esto apunta al provider de abajo
+        ],
     ],
 
     /*
@@ -68,11 +72,10 @@ return [
             'driver' => 'eloquent',
             'model' => App\Models\User::class,
         ],
-
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
+        'fiasa_users' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\FiasaUser::class,
+        ],
     ],
 
     /*
