@@ -58,8 +58,8 @@ class GeneralController extends Controller
 
     public function getLogistic(): JsonResponse
     {
-        $logistics = LogisticSupport::all(); // Usa all() para obtener todos
-        return response()->json($logistics); // Devuelve la respuesta como JSON
+        $logistics = LogisticSupport::all();
+        return response()->json($logistics);
     }
 
     public function getProducts(Request $request) // Se añade Request para poder leer parámetros

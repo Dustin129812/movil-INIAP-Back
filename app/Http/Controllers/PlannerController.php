@@ -7,9 +7,7 @@ use App\Models\Location;
 use App\Models\Material;
 use App\Models\Product;
 use App\Models\Rubro;
-use App\Notifications\CreateActivity;
 use App\Notifications\CreateProduct;
-use App\Notifications\CreateWeekPlanner;
 use App\Notifications\PlannerAccept;
 use App\Notifications\ProductUpdated;
 use Illuminate\Support\Facades\Auth;
@@ -31,7 +29,6 @@ class PlannerController extends Controller
         try {
             $userLocation = auth()->user()->location;
 
-            // --- Crear el Producto ---
             $product = new Product();
             $product->name = $request->input('name');
             $product->budget = $request->input('budget');
@@ -41,15 +38,12 @@ class PlannerController extends Controller
             $product->location_id = $userLocation->id;
             $product->save();
 
-            // Asignar rol al responsable del producto
             $user = User::find($request->input('user'));
             if ($user) {
                 $user->assignRole('product-manager');
             }
 
-            // --- Procesar Actividades ---
             foreach ($request->input('activities', []) as $activityData) {
-                // Crear la actividad
                 $activity = new Activity();
                 $activity->description = $activityData['description'];
                 $activity->budget = $activityData['budget'];
@@ -59,18 +53,14 @@ class PlannerController extends Controller
                 $activity->product_id = $product->id;
                 $activity->save();
 
-                // Sincronizar los usuarios responsables (acepta un array)
                 if (!empty($activityData['user'])) {
                     $activity->users()->sync($activityData['user']);
                 }
 
-                // Sincronizar los indicadores (acepta un array)
-                // Se asegura de usar la clave 'indicators' (plural) que viene del frontend
                 if (!empty($activityData['indicators'])) {
                     $activity->indicators()->sync($activityData['indicators']);
                 }
 
-                // Asignar rol 'researcher' a cada responsable de la actividad
                 foreach ($activityData['user'] as $userId) {
                     $responsible = User::find($userId);
                     if ($responsible) {
@@ -79,7 +69,6 @@ class PlannerController extends Controller
                     }
                 }
 
-                // Crear la distribución mensual
                 foreach ($activityData['monthly_distribution'] as $monthData) {
                     $activity->monthlyProgress()->create([
                         'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
@@ -106,7 +95,6 @@ class PlannerController extends Controller
                 ],
             ], 201);
         } catch (Exception $e) {
-            // Si algo falla, revertir todos los cambios
             DB::rollBack();
             return response()->json([
                 'msg' => [
@@ -132,7 +120,6 @@ class PlannerController extends Controller
                 'rubro_id',
             ]));
 
-            // Asignar rol al responsable del producto
             if ($request->has('user_id')) {
                 $user = User::find($request->input('user_id'));
                 if ($user) {
@@ -143,10 +130,8 @@ class PlannerController extends Controller
             $receivedActivityIds = [];
 
             foreach ($request->input('activities', []) as $activityData) {
-                // Busca una actividad existente o crea una nueva si el ID es nulo
                 $activity = Activity::findOrNew($activityData['id'] ?? null);
 
-                // Asigna los valores a la actividad
                 $activity->description = $activityData['description'];
                 $activity->budget = $activityData['budget'];
                 $activity->ponderacion = $activityData['ponderacion'];
@@ -155,14 +140,12 @@ class PlannerController extends Controller
                 $activity->product_id = $product->id;
                 $activity->save();
 
-                // CORRECCIÓN 2: El frontend ya envía arrays de IDs, por lo que no es necesario usar pluck().
                 $userIds = $activityData['user'] ?? [];
                 $indicatorIds = $activityData['indicators'] ?? [];
 
                 $activity->users()->sync($userIds);
                 $activity->indicators()->sync($indicatorIds);
 
-                // Asignar rol 'researcher' a cada responsable
                 foreach ($userIds as $userId) {
                     $responsible = User::find($userId);
                     if ($responsible) {
@@ -170,7 +153,6 @@ class PlannerController extends Controller
                     }
                 }
 
-                // Borrar y recrear el progreso mensual para evitar duplicados
                 $activity->monthlyProgress()->delete();
                 if (!empty($activityData['monthly_distribution'])) {
                     foreach ($activityData['monthly_distribution'] as $monthData) {
@@ -184,7 +166,6 @@ class PlannerController extends Controller
                 $receivedActivityIds[] = $activity->id;
             }
 
-            // Eliminar actividades que ya no forman parte del producto
             $product->activities()->whereNotIn('id', $receivedActivityIds)->delete();
 
             DB::commit();
@@ -215,13 +196,6 @@ class PlannerController extends Controller
         }
     }
 
-    public function getMaterial()
-    {
-        $materials = Material::all();
-
-        return response()->json($materials);
-    }
-
     public function approveActivity(Request $request, $activityId)
     {
         if (!auth()->user()->hasRole('product-manager')) {
@@ -237,7 +211,6 @@ class PlannerController extends Controller
             return response()->json(['error' => 'El estado proporcionado no es válido.'], 400);
         }
 
-        // Actualiza y guarda el estado
         $weekActivity->status = $status;
         if (!$weekActivity->save()) {
             Log::error(" Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
@@ -275,7 +248,7 @@ class PlannerController extends Controller
             $relevantStatuses = ['pending', 'approved', 'rejected', 'reassigned'];
 
             $allPendingActivities = WeekActivity::whereIn('status', $relevantStatuses)
-                ->whereIn('user_id', $teamMemberIds) // <-- ¡ESTA ES LA LÍNEA CLAVE QUE SOLUCIONA TODO!
+                ->whereIn('user_id', $teamMemberIds)
                 ->with([
                     'activity.product.rubro',
                     'activity.product.location',

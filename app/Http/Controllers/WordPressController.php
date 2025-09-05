@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Cache; // Opcional: para cachear las imágenes y evitar peticiones repetidas
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class WordPressController extends Controller
 {
@@ -14,58 +15,54 @@ class WordPressController extends Controller
         $postsEndpoint = $wordpressApiBaseUrl . 'posts?per_page=3';
 
         try {
-            // Fetch posts from WordPress API
             $response = Http::withOptions([
+                'verify' => false,
             ])->get($postsEndpoint);
 
             if ($response->successful()) {
                 $posts = $response->json();
 
-                // Process each post to get the featured image URL
-                foreach ($posts as &$post) { // Use & to modify the original array elements
+                foreach ($posts as &$post) {
+                    $post['featured_image_src'] = null;
                     if (isset($post['featured_media']) && $post['featured_media'] > 0) {
                         $mediaId = $post['featured_media'];
                         $mediaEndpoint = $wordpressApiBaseUrl . 'media/' . $mediaId;
 
-                        // Opcional: Cachear la URL de la imagen destacada para evitar peticiones repetidas
-                        $imageUrl = Cache::remember("wordpress_featured_image_{$mediaId}", 60 * 24, function () use ($mediaEndpoint) { // Cache por 24 horas
+                        $imageUrl = Cache::remember("wordpress_featured_image_{$mediaId}", 60 * 24, function () use ($mediaEndpoint, $mediaId) {
                             try {
                                 $mediaResponse = Http::withOptions([
-                                    'verify' => false, // ¡ADVERTENCIA: SOLO PARA DESARROLLO! QUITAR EN PRODUCCIÓN.
+                                    'verify' => false,
                                 ])->get($mediaEndpoint);
 
                                 if ($mediaResponse->successful()) {
                                     $media = $mediaResponse->json();
-                                    // La URL de la imagen principal suele estar en 'source_url'
-                                    // o en 'media_details.sizes.full.source_url' o 'media_details.sizes.large.source_url'
-                                    // Adaptar según la estructura exacta que recibas del endpoint /media/{id}
-                                    if (isset($media['source_url'])) {
-                                        return $media['source_url'];
-                                    } elseif (isset($media['media_details']['sizes']['full']['source_url'])) {
-                                        return $media['media_details']['sizes']['full']['source_url'];
+                                    $url = null;
+                                    if (isset($media['media_details']['sizes']['full']['source_url'])) {
+                                        $url = $media['media_details']['sizes']['full']['source_url'];
                                     } elseif (isset($media['media_details']['sizes']['large']['source_url'])) {
-                                        return $media['media_details']['sizes']['large']['source_url'];
+                                        $url = $media['media_details']['sizes']['large']['source_url'];
+                                    } elseif (isset($media['source_url'])) {
+                                        $url = $media['source_url'];
+                                    }
+
+                                    // Validar que la URL no sea nula y contenga el dominio esperado
+                                    if ($url && str_contains($url, 'tecnologia.iniap.gob.ec')) {
+                                        return $url;
                                     }
                                 }
                             } catch (\Exception $e) {
-                                // Log the error but don't stop the process
-                                \Log::error("Failed to fetch featured media for ID {$mediaId}: " . $e->getMessage());
+                                Log::error("Failed to fetch featured media for ID {$mediaId}: " . $e->getMessage());
                             }
-                            return null; // Return null if image not found or error occurred
+                            return null;
                         });
 
                         $post['featured_image_src'] = $imageUrl;
-                    } else {
-                        $post['featured_image_src'] = null; // No featured image
                     }
                 }
-
                 return response()->json($posts);
-
             } else {
                 return response()->json(['error' => 'No se pudieron obtener las publicaciones de WordPress.', 'details' => $response->body()], $response->status());
             }
-
         } catch (\Exception $e) {
             return response()->json(['error' => 'Error al conectar con la API de WordPress: ' . $e->getMessage()], 500);
         }

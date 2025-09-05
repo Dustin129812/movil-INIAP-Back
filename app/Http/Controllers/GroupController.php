@@ -17,8 +17,7 @@ class GroupController extends Controller
      */
     public function index()
     {
-        // Carga eficiente de relaciones y conteo
-        $groups = Group::with(['rubro', 'location', 'members'])->withCount('members')->latest()->paginate(15);
+        $groups = Group::with(['rubro', 'location', 'members', 'responsible', 'creator'])->withCount('members')->latest()->paginate(15);
 
         return GroupResource::collection($groups);
     }
@@ -37,23 +36,48 @@ class GroupController extends Controller
             'location_id' => 'required|exists:locations,id',
             'members' => 'present|array',
             'members.*' => 'required|exists:users,id',
+            'responsible_id' => 'required|exists:users,id',
         ], [
-            'name.unique' => 'Ya existe un grupo con este nombre para el mismo rubro y ubicación.'
+            'name.unique' => 'Ya existe un grupo con este nombre para el mismo rubro y ubicación.',
+            'responsible_id.required' => 'Debes seleccionar un responsable para el grupo.',
         ]);
+
+        $members = collect($validated['members']);
+        $responsibleId = $validated['responsible_id'];
+
+        if (!$members->contains($responsibleId)) {
+            $members->push($responsibleId);
+        }
 
         $group = Group::create([
             'name' => $validated['name'],
             'rubro_id' => $validated['rubro_id'],
             'location_id' => $validated['location_id'],
             'creator_id' => Auth::id(),
+            'responsible_id' => $responsibleId,
         ]);
 
-        // Sincroniza los miembros iniciales
-        if (!empty($validated['members'])) {
-            $group->members()->sync($validated['members']);
-        }
+        $group->members()->sync($members->unique()->all());
+        return new GroupResource($group->load(['rubro', 'location', 'members', 'creator', 'responsible']));
+    }
 
-        return new GroupResource($group->load(['rubro', 'location', 'members']));
+    public function changeResponsible(Request $request, Group $group)
+    {
+        $validated = $request->validate([
+            'responsible_id' => [
+                'required',
+                'exists:users,id',
+                Rule::exists('group_user', 'user_id')->where('group_id', $group->id),
+            ]
+        ], [
+            'responsible_id.exists' => 'El usuario seleccionado no es un miembro válido de este grupo.'
+        ]);
+
+        $group->update([
+            'responsible_id' => $validated['responsible_id']
+        ]);
+
+        return new GroupResource($group->load('responsible', 'members'));
     }
 
     /**
@@ -62,8 +86,7 @@ class GroupController extends Controller
      */
     public function show(Group $group)
     {
-        // Carga todas las relaciones necesarias para la vista detallada
-        $group->load(['rubro', 'location', 'creator', 'members']);
+        $group->load(['rubro', 'location', 'creator', 'members', 'responsible']);
 
         return new GroupResource($group);
     }
@@ -100,7 +123,6 @@ class GroupController extends Controller
 
         $group->members()->sync($validated['members']);
 
-        // Devolvemos el grupo con la lista de miembros actualizada
         return new GroupResource($group->load('members'));
     }
 
@@ -110,12 +132,8 @@ class GroupController extends Controller
      */
     public function destroy(Group $group)
     {
-        // Opcional: añadir una política de autorización para ver quién puede eliminar
-        // $this->authorize('delete', $group);
-
         $group->delete();
 
-        // Devolvemos una respuesta vacía con código 204 (No Content)
         return response()->noContent();
     }
 }

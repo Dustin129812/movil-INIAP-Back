@@ -14,7 +14,8 @@ class Group extends Model
             'name',
             'rubro_id',
             'location_id',
-            'creator_id'
+            'creator_id',
+            'responsible_id',
         ];
 
     public function rubro() {
@@ -33,5 +34,9 @@ class Group extends Model
     // Los miembros del grupo
     public function members() {
         return $this->belongsToMany(User::class, 'group_user');
+    }
+
+    public function responsible() {
+        return $this->belongsTo(User::class, 'responsible_id');
     }
 }

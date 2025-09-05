@@ -13,7 +13,6 @@ class GroupResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            // Cargar relaciones solo cuando estén disponibles para evitar N+1
             'rubro' => $this->whenLoaded('rubro', function () {
                 return [
                     'id' => $this->rubro->id,
@@ -27,8 +26,9 @@ class GroupResource extends JsonResource
                 ];
             }),
             'creator' => new UserResource($this->whenLoaded('creator')),
-            'members_count' => $this->whenCounted('members'), // Para la vista de lista
-            'members' => UserResource::collection($this->whenLoaded('members')), // Para la vista detallada
+            'responsible' => new UserResource($this->whenLoaded('responsible')),
+            'members_count' => $this->whenCounted('members'),
+            'members' => UserResource::collection($this->whenLoaded('members')),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }
