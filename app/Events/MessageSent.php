@@ -19,11 +19,6 @@ class MessageSent implements ShouldBroadcast
     public function __construct(Message $message)
     {
         $this->message = $message->load('sender');
-        Log::info('Evento MessageSent creado:', [
-            'message_id' => $message->id,
-            'conversation_id' => $message->conversation_id,
-            'channel' => 'conversation.' . $message->conversation_id,
-        ]);
     }
 
     public function broadcastOn()
@@ -38,10 +33,6 @@ class MessageSent implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        Log::info('Transmitiendo evento MessageSent:', [
-            'message_id' => $this->message->id,
-            'conversation_id' => $this->message->conversation_id,
-        ]);
         return [
             'id' => $this->message->id,
             'content' => $this->message->content,

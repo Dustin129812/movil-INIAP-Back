@@ -17,7 +17,6 @@ class ChartController extends Controller
     {
         try {
             $metric = $request->query('metric', 'rubros');
-            Log::info('Métrica recibida: ' . $metric); // Log para verificar la métrica
             $filters = $request->query('filters', []);
             $user = $request->user();
 
@@ -146,29 +145,24 @@ class ChartController extends Controller
                     ]);
 
             } elseif ($metric === 'researcher_products_progress') {
-                Log::info('Entrando en la lógica de researcher_products_progress (Avance General de Productos)');
 
                 $productIds = Activity::whereHas('users', function ($q) use ($user) {
                     $q->where('users.id', $user->id);
                 })->pluck('product_id')->unique();
 
-                Log::info('Product IDs encontrados para el investigador: ' . $productIds->toJson());
 
                 if ($productIds->isEmpty()) {
-                    Log::info('No se encontraron productos asociados al investigador. Devolviendo 0%.');
                     $data = collect([[
                         'label' => 'Sin Productos Asignados',
                         'value' => 0.0,
                     ]]);
 
                 } else {
-                    Log::info('Productos encontrados. Calculando promedio.');
                     $overallAvg = DB::table('activity_monthly_progress')
                         ->join('activities', 'activity_monthly_progress.activity_id', '=', 'activities.id')
                         ->whereIn('activities.product_id', $productIds)
                         ->avg('activity_monthly_progress.percentage');
 
-                    Log::info('Promedio general de productos calculado: ' . ($overallAvg ?? 'NULL'));
 
                     $data = collect([[
                         'label' => 'Avance General de Productos',
@@ -176,21 +170,17 @@ class ChartController extends Controller
                     ]]);
                 }
             } elseif ($metric === 'researcher_activities_progress') {
-                Log::info('Entrando en la lógica de researcher_activities_progress');
                 $activityIds = Activity::whereHas('users', function ($q) use ($user) {
                     $q->where('users.id', $user->id);
                 })->pluck('id');
 
-                Log::info('Activity IDs encontrados para el investigador: ' . $activityIds->toJson());
 
                 if ($activityIds->isEmpty()) {
-                    Log::info('No se encontraron actividades asignadas al investigador. Devolviendo 0%.');
                     $data = collect([[
                         'label' => 'Sin Actividades Asignadas',
                         'value' => 0.0,
                     ]]);
                 } else {
-                    Log::info('Actividades encontradas. Calculando promedio.');
                     $data = DB::table('activities')
                         ->selectRaw('activities.description as label, COALESCE(AVG(activity_monthly_progress.percentage), 0) as value')
                         ->leftJoin('activity_monthly_progress', 'activities.id', '=', 'activity_monthly_progress.activity_id')
@@ -204,7 +194,6 @@ class ChartController extends Controller
                 }
 
             } elseif ($metric === 'researcher_activity_weighted_progress') { // Avance Ponderado de Actividades Global
-                Log::info('Entrando en la lógica de researcher_activity_weighted_progress (Avance Ponderado de Actividades GLOBAL)');
 
                 $weightedResults = null;
                 $weightedResults = DB::table('activity_monthly_progress as amp')
@@ -217,7 +206,6 @@ class ChartController extends Controller
                 $actualValue = ($weightedResults && isset($weightedResults->actual_weighted_avg)) ? (float) $weightedResults->actual_weighted_avg : 0.0;
                 $plannedValue = 100.0;
 
-                Log::info('Avance Ponderado de Actividades Global (Actual): ' . $actualValue . ' | Planificado: ' . $plannedValue);
 
                 $data = collect([[
                     'label' => 'Avance Ponderado de Actividades',
@@ -225,20 +213,17 @@ class ChartController extends Controller
                     'planned_value' => $plannedValue,
                 ]]);
             } elseif ($metric === 'researcher_product_weighted_progress') { // Avance Ponderado de Productos Global
-                Log::info('Entrando en la lógica de researcher_product_weighted_progress (Avance Ponderado de Productos GLOBAL)');
 
                 $productIdsForResearcher = Activity::whereHas('users', function ($q) use ($user) {
                     $q->where('users.id', $user->id);
                 })->pluck('product_id')->unique();
 
-                Log::info('Product IDs para ponderación de productos: ' . $productIdsForResearcher->toJson());
 
                 $actualValue = 0.0;
                 $plannedValue = 100.0;
                 $weightedResults = null;
 
                 if ($productIdsForResearcher->isEmpty()) {
-                     Log::info('No se encontraron productos para ponderación. Devolviendo 0%.');
                 } else {
                     $weightedResults = DB::table('activity_monthly_progress as amp')
                         ->join('activities as a', 'amp.activity_id', '=', 'a.id')
@@ -248,7 +233,6 @@ class ChartController extends Controller
                         ->first();
 
                     $actualValue = ($weightedResults && isset($weightedResults->actual_weighted_avg)) ? (float) $weightedResults->actual_weighted_avg : 0.0;
-                    Log::info('Avance Ponderado de Productos Global (Actual): ' . $actualValue . ' | Planificado: ' . $plannedValue);
                 }
 
                 $data = collect([[
@@ -257,14 +241,12 @@ class ChartController extends Controller
                     'planned_value' => $plannedValue,
                 ]]);
             } elseif ($metric === 'researcher_monthly_activity_weighted_progress') { // NUEVA MÉTRICA: Avance Ponderado Mensual de Actividades
-                Log::info('Entrando en la lógica de researcher_monthly_activity_weighted_progress (Avance Ponderado Mensual de Actividades)');
 
                 $activityIds = Activity::whereHas('users', function ($q) use ($user) {
                     $q->where('users.id', $user->id);
                 })->pluck('id');
 
                 if ($activityIds->isEmpty()) {
-                    Log::info('No se encontraron actividades para el avance mensual ponderado. Devolviendo 0%.');
                     $data = []; // Retorna un array vacío para que el frontend lo maneje
                 } else {
                     $results = DB::table('activity_monthly_progress as amp')
@@ -284,11 +266,9 @@ class ChartController extends Controller
                         'planned_value' => 100.0, // Planificado es 100% para cada mes
                     ])->toArray();
 
-                    Log::info('Avance Ponderado Mensual de Actividades calculado: ' . json_encode($data));
                 }
             }
             elseif ($metric === 'product_user_count') {
-                Log::info('Entrando en la lógica de product_user_count con nombres de usuarios');
 
                 $productUsersRaw = DB::table('products as p')
                     ->join('activities as a', 'a.product_id', '=', 'p.id')
@@ -298,7 +278,6 @@ class ChartController extends Controller
                     ->get();
 
                 if (!$productUsersRaw || $productUsersRaw->isEmpty()) {
-                    Log::info('No se encontraron usuarios para productos');
                     $data = collect();
                 } else {
                     $data = $productUsersRaw->groupBy('product_id')->map(function ($items, $productId) {
@@ -319,7 +298,6 @@ class ChartController extends Controller
                 })->pluck('product_id')->unique();
 
                 if ($productIdsForResearcher->isEmpty()) {
-                    Log::info('No se encontraron productos para el avance mensual ponderado. Devolviendo 0%.');
                     $data = []; // Retorna un array vacío para que el frontend lo maneje
                 } else {
                     $results = DB::table('activity_monthly_progress as amp')
@@ -340,7 +318,6 @@ class ChartController extends Controller
                         'planned_value' => 100.0, // Planificado es 100% para cada mes
                     ])->toArray();
 
-                    Log::info('Avance Ponderado Mensual de Productos calculado: ' . json_encode($data));
                 }
             }
             elseif ($metric === 'rubro_progress') {
@@ -385,14 +362,12 @@ class ChartController extends Controller
             'nombres' => $item->nombres,
         ]);
 } elseif ($metric === 'product_execution_progress') {
-    Log::info('Entrando en la lógica de product_execution_progress (Presupuesto Ejecutado por Producto)');
 
     $productIdsForResearcher = Activity::whereHas('users', function ($q) use ($user) {
         $q->where('users.id', $user->id);
     })->pluck('product_id')->unique();
 
     if ($productIdsForResearcher->isEmpty()) {
-        Log::info('No se encontraron productos. Devolviendo arreglo vacío.');
         $data = [];
     } else {
         $results = DB::table('products as p')
@@ -425,7 +400,6 @@ class ChartController extends Controller
             'presupuesto_ejecutado' => (float) $item->presupuesto_ejecutado,
         ])->toArray();
 
-        Log::info('Presupuesto ejecutado por producto calculado: ' . json_encode($data));
     }
 }
 

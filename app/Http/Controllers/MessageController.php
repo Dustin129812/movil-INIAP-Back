@@ -17,11 +17,6 @@ class MessageController extends Controller
 
     public function store(Request $request, $conversationId)
     {
-        Log::info('Iniciando MessageController::store', [
-            'conversation_id' => $conversationId,
-            'user_id' => $request->user()?->id,
-            'headers' => $request->headers->all(),
-        ]);
 
         $request->validate(['content' => 'required|string']);
 
@@ -33,18 +28,7 @@ class MessageController extends Controller
             'sender_id' => $user?->id,
         ]);
 
-        Log::info('Mensaje creado, disparando evento MessageSent:', [
-            'message_id' => $message->id,
-            'conversation_id' => $conversationId,
-            'sender_id' => $user?->id,
-        ]);
-
         broadcast(new MessageSent($message));
-
-        Log::info('Evento MessageSent enviado al canal:', [
-            'channel' => 'conversation.' . $conversationId,
-            'message_id' => $message->id,
-        ]);
 
         return response()->json($message->load('sender:id,name'));
     }
