@@ -214,34 +214,64 @@ class ReportController extends Controller
 
     public function getUserWeeklyPlansbyLocation(Request $request)
     {
+        // 1. Validación de los parámetros
         $request->validate([
-            'id' => 'nullable',
+            'id' => 'nullable|exists:users,id',
+            'start_date' => 'nullable|date_format:Y-m-d', // AÑADIDO
+            'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date', // AÑADIDO
+            'status' => 'nullable|string', // AÑADIDO
         ]);
+
         $user = Auth::user();
         if (!$user) {
             return response()->json(['message' => 'No autenticado.'], 401);
         }
 
-        // Obtener IDs de usuarios con la misma location_id
-        $locationUserIds = User::where('location_id', $user->location_id)->pluck('id');
-
-        if ($locationUserIds->isEmpty()) {
-            return response()->json([]); // No hay usuarios con la misma ubicación
+        // Usaremos el ID del request si se provee, sino, los usuarios de la misma ubicación
+        $userIdsToQuery = [];
+        if ($request->filled('id')) {
+            $userIdsToQuery = [$request->input('id')];
+        } else {
+            $userIdsToQuery = User::where('location_id', $user->location_id)->pluck('id')->toArray();
         }
 
-        $weeklyPlans = WeekActivity::whereIn('user_id', $locationUserIds)->when($request->filled('id'), function ($query) use ($request) {
-            $query->where('user_id', $request->id);
-        })->where('status', 'approved', 'rejected', 'reassigned', 'rated') // puedes quitar esto si quieres traer todos
-        ->with([
-            'activity.product.rubro',
-            'activity.users',
-            'materials',
-            'performanceIndicators',
-            'logisticSupportUsers',
-            'user'
-        ])
-            ->orderBy('date', 'desc')
-            ->get();
+        if (empty($userIdsToQuery)) {
+            return response()->json([]);
+        }
+
+        // 2. Construcción de la consulta base
+        $query = WeekActivity::whereIn('user_id', $userIdsToQuery)
+            ->with([
+                'activity.product.rubro',
+                'activity.users',
+                'materials',
+                'performanceIndicators',
+                'logisticSupportUsers',
+                'user'
+            ]);
+
+        // 3. APLICACIÓN DE LOS FILTROS ADICIONALES (LÓGICA AÑADIDA)
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+            $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
+            $query->whereBetween('date', [$startDate, $endDate]);
+        }
+
+        if ($request->filled('status')) {
+            if ($request->input('status') !== 'all') {
+                $statuses = explode(',', $request->input('status'));
+                $query->whereIn('status', $statuses);
+            } else {
+                // Si es 'all', traemos los estados relevantes por defecto
+                $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending', 'rejected']);
+            }
+        } else {
+            // Comportamiento por defecto si no se especifica estado
+            $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending', 'rejected']);
+        }
+
+        // 4. Obtención y formateo de resultados
+        $weeklyPlans = $query->orderBy('date', 'desc')->get();
 
         $formattedPlans = $weeklyPlans->map(function ($plan) {
             $productInitialCode = '';
