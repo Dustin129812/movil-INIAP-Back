@@ -33,13 +33,18 @@
         .text-center { text-align: center; }
         .font-bold { font-weight: bold; }
         .capitalize { text-transform: capitalize; }
-        .details-p { margin: 0 0 3px 0; padding: 0; font-size: 8px; }
-        .details-p strong { color: #000; }
-    </style>
+        .material-detail {
+            margin: 0;
+            padding: 1px 0;
+            white-space: normal;
+        }
+        .material-detail strong {
+            color: #000;
+        }    </style>
 </head>
 <body>
 
-{{-- Encabezado --}}
+{{-- Encabezado (sin cambios) --}}
 <table class="header-container">
     <tr>
         <td class="header-logo" style="text-align: left;"><img src="{{ $iniap_logo_path }}" alt="Logo INIAP"></td>
@@ -51,7 +56,7 @@
     </tr>
 </table>
 
-{{-- Información General --}}
+{{-- Información General (sin cambios) --}}
 <table class="info-table">
     <tr>
         <td class="label">TÉCNICO:</td><td>{{ $technician->name }}</td>
@@ -63,28 +68,29 @@
     </tr>
 </table>
 
-{{-- Resumen de Cumplimiento --}}
+{{-- Resumen de Cumplimiento (sin cambios) --}}
 <div class="summary-container">
     <div class="summary-title">Resumen General de Cumplimiento</div>
     <table class="summary-table">
         <tr>
             <td><strong>{{ number_format($summary['overall_compliance'], 2) }}%</strong>Cumplimiento General</td>
-            <td><strong>{{ $summary['completed'] }}</strong>Completadas (100%)</td>
-            <td><strong>{{ $summary['partial'] }}</strong>Parciales (&lt;100%)</td>
+            <td><strong>{{ $summary['partial'] }}</strong>Completadas (&lt;100%)</td>
             <td><strong>{{ $summary['not_done'] }}</strong>No Realizadas (0%)</td>
         </tr>
     </table>
 </div>
 
-{{-- Tabla Principal de Actividades --}}
+{{-- Tabla Principal de Actividades (MODIFICADA) --}}
 <table>
     <thead>
     <tr>
         <th style="width:7%;">Fecha</th>
-        <th style="width:58%;">Actividad / Detalles</th>
-        <th style="width:5%;">% Cump.</th>
-        <th style="width:7%;">Estado</th>
-        <th style="width:23%;">Observaciones del Cumplimiento</th>
+        <th style="width:28%;">Actividad</th>
+        <th style="width:15%;">Verificación</th>
+        <th style="width:15%;">Materiales</th>
+        <th style="width:15%;">Apoyo Logístico</th>
+        <th style="width:5%;">Estado</th>
+        <th style="width:10%;">Observaciones</th>
     </tr>
     </thead>
     <tbody>
@@ -92,36 +98,41 @@
         @php
             $statusClass = '';
             $statusText = '';
-            if ($activity->percentage == 100) {
+            if ($activity->percentage > 0) {
                 $statusClass = 'status-completed'; $statusText = 'Completada';
-            } elseif ($activity->percentage > 0) {
-                $statusClass = 'status-partial'; $statusText = 'Parcial';
             } else {
                 $statusClass = 'status-not-done'; $statusText = 'No Realizada';
             }
         @endphp
         <tr>
             <td class="text-center capitalize">{{ \Carbon\Carbon::parse($activity->date)->translatedFormat('l d/m') }}</td>
-            <td>
-                <p class="details-p font-bold">{{ $activity->formatted_description }}</p>
-                <p class="details-p"><strong>Responsables:</strong> {{ $activity->activity->users->pluck('name')->implode(', ') ?: '--' }}</p>
-                @if($activity->performanceIndicators->isNotEmpty())
-                    <p class="details-p"><strong>Verificación:</strong> {{ $activity->performanceIndicators->pluck('name')->implode(', ') }}</p>
-                @endif
-                @if($activity->materials->isNotEmpty())
-                    <p class="details-p"><strong>Materiales:</strong> {{ $activity->materials->pluck('name')->implode(', ') }}</p>
-                @endif
-                @if($activity->logisticSupportUsers->isNotEmpty())
-                    <p class="details-p"><strong>Apoyo Logístico:</strong> {{ $activity->logisticSupportUsers->pluck('name')->implode(', ') }}</p>
+
+            <td class="font-bold">{{ $activity->formatted_description }}</td>
+
+            <td>{{ $activity->performanceIndicators->pluck('name')->implode(', ') ?: '--' }}</td>
+
+            <td> @if($activity->materials->isNotEmpty())
+                    @foreach($activity->materials as $material)
+                        <p class="material-detail">
+                            {{ $material->name }}
+                            ({{ $material->pivot->quantity ?? 'N/A' }}
+                            -
+                            {{ $material->pivot->description ?? 'N/A' }})
+                        </p>
+                    @endforeach
+                @else
+                    --
                 @endif
             </td>
-            <td class="text-center font-bold">{{ $activity->percentage }}%</td>
+
+            <td>{{ $activity->logisticSupportUsers->pluck('name')->implode(', ') ?: '--' }}</td>
+
             <td class="text-center"><div class="status {{ $statusClass }}">{{ $statusText }}</div></td>
             <td>{{ $activity->observations ?? '--' }}</td>
         </tr>
     @empty
         <tr>
-            <td colspan="5" class="text-center" style="padding: 15px;">
+            <td colspan="8" class="text-center" style="padding: 15px;">
                 No se encontraron actividades calificadas (reportadas) para este rango de fechas.
             </td>
         </tr>

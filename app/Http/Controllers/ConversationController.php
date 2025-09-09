@@ -2,42 +2,60 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ConversationCreated;
 use App\Models\Conversation;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 
 class ConversationController extends Controller
 {
     public function create(Request $request)
     {
         $user = $request->user();
-        $guestId = $request->header('X-Guest-Id');
-        $response = [];
 
-        // LÓGICA MEJORADA: El usuario autenticado SIEMPRE tiene prioridad.
-        if ($user) {
-            // Si hay un usuario logueado, buscamos o creamos su conversación.
-            $conversation = Conversation::firstOrCreate(['user_id' => $user->id]);
-        } else {
-            // Si NO hay usuario, entonces es un invitado.
-            $guestId = $guestId ?? (string) Str::uuid();
-            $conversation = Conversation::firstOrCreate(['guest_id' => $guestId]);
-
-            // Solo devolvemos el guest_id si es una nueva conversación de invitado.
-            $response['guest_id'] = $conversation->guest_id;
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $response['conversation'] = $conversation;
-        return response()->json($response);
+        $conversation = Conversation::firstOrCreate(['user_id' => $user->id]);
+
+        if ($conversation->wasRecentlyCreated) {
+            broadcast(new ConversationCreated($conversation->load('user:id,name')))->toOthers();
+        }
+
+        return response()->json(['conversation' => $conversation]);
     }
 
     public function index()
     {
-        // Eager load para eficiencia: carga el usuario y el último mensaje.
-        $conversations = Conversation::with(['user:id,name', 'messages' => function ($query) {
-            $query->latest()->limit(1);
-        }])->latest()->get();
+        $admin = Auth::user();
+
+        $conversations = Conversation::with(['user:id,name'])
+            ->withLastMessage()
+            ->orderByLastMessage()
+            ->get();
+
+        $conversations->each(function ($conversation) use ($admin) {
+            $pivot = $admin->readConversations()->where('conversation_id', $conversation->id)->first();
+            $lastRead = $pivot ? $pivot->pivot->last_read_at : null;
+
+            if ($lastRead) {
+                $conversation->unread_count = $conversation->messages()->where('created_at', '>', $lastRead)->count();
+            } else {
+                $conversation->unread_count = $conversation->messages()->count();
+            }
+        });
 
         return response()->json($conversations);
+    }
+
+    public function markAsRead(Request $request, Conversation $conversation)
+    {
+        $admin = Auth::user();
+        $admin->readConversations()->syncWithoutDetaching([
+            $conversation->id => ['last_read_at' => now()]
+        ]);
+
+        return response()->json(['status' => 'success']);
     }
 }

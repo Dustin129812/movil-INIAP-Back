@@ -30,6 +30,8 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::put('/feature-flags/{featureFlag}', [FeatureFlagController::class, 'update']);
 
     Route::get('/conversations', [ConversationController::class, 'index']);
+
+    Route::apiResource('patch-notes', PatchNoteController::class);
 });
 
 Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
@@ -62,6 +64,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::put('/products/{id}', [PlannerController::class, 'updateProductAndActivity']);
 
     Route::resource('materials', MaterialController::class);
+    Route::apiResource('rubros', RubroController::class);
+    Route::apiResource('indicators', IndicatorController::class);
 
     Route::get('user-associated-counts', [PlannerController::class, 'getUserAssociatedCounts']);
 
@@ -82,14 +86,12 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress']);
     Route::get('/previous-week-activities', [WeekActivityController::class, 'getPreviousWeekActivitiesForReview']);
 
-    Route::post('addRubro', [GeneralController::class, 'addRubro']);
-    Route::post('addIndicator', [GeneralController::class, 'addIndicator']);
     Route::post('addLogistic', [GeneralController::class, 'addLogisticSupport']);
+
     Route::get('getLocations', [GeneralController::class, 'getLocations']);
     Route::get('getNationality', [GeneralController::class, 'getNationality']);
     Route::get('getEthnics', [GeneralController::class, 'getEthnics']);
     Route::get('getPositions', [GeneralController::class, 'getPositions']);
-    Route::get('getRubros', [GeneralController::class, 'getRubros']);
     Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
     Route::get('getLogistic', [GeneralController::class, 'getLogistic']);
     Route::get('adminMaterials',[ChartController::class,'adminMaterials']);
@@ -109,6 +111,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::post('/conversations', [ConversationController::class, 'create']);
     Route::get('/conversations/{id}/messages', [MessageController::class, 'list']);
     Route::post('/conversations/{id}/messages', [MessageController::class, 'store']);
+    Route::post('conversations/{conversation}/read', [ConversationController::class, 'markAsRead']);
 
     //--GESTION DE GRUPOS--
     Route::put('/groups/{group}/members', [GroupController::class, 'syncMembers'])->name('groups.syncMembers');
@@ -121,4 +124,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/dashboard/product-manager', [DashboardController::class, 'getProductManagerDashboardData']);
 
     Route::get('team-pulse-report', [ReportController::class, 'generateTeamPulseReport']);
+
+    Route::get('/patch-notes/latest', [PatchNoteController::class, 'getLatest']);
 });

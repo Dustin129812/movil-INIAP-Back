@@ -102,4 +102,9 @@ class User extends Authenticatable  implements JWTSubject
         return $this->hasMany(WeeklyPulse::class);
     }
 
+    public function readConversations()
+    {
+        return $this->belongsToMany(Conversation::class)->withPivot('last_read_at')->withTimestamps();
+    }
+
 }
