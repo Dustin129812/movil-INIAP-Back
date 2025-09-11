@@ -179,35 +179,6 @@ class MiscelaneoSeeder extends Seeder
             ]);
         }
 
-        $investigation_areas = [
-            ['name' => 'Manejo y conservación de los recursos naturales'],
-            ['name' => 'Incremento de la productividad'],
-            ['name' => 'Incorporación de valor agregado a la producción agropecuaria'],
-            ['name' => 'Economía Agrícola'],
-            ['name' => 'Transferencia de Tecnología'],
-            ['name' => 'Producción y Servicios'],
-        ];
-
-        foreach ($investigation_areas as $investigation_area) {
-            Investigation_Area::create($investigation_area);
-        }
-
-        $investigation_lines = [
-            ['name' => 'Conservación y uso de recursos genéticos'],
-            ['name' => 'Manejo integrado de cultivo y ganadería'],
-            ['name' => 'Agroecología'],
-            ['name' => 'Mejoramiento genético'],
-            ['name' => 'Transformación y Agregación de valor de productos agropecuarios'],
-            ['name' => 'Conservación de suelos y aguas'],
-            ['name' => 'Transformación y Agregación de valor de subproductos agropecuarios  de suelos y aguas'],
-            ['name' => 'Agrobiotecnología'],
-            ['name' => 'Sensores remotos'],
-        ];
-
-        foreach ($investigation_lines as $investigation_line) {
-            Investigation_Line::create($investigation_line);
-        }
-
         $measures = [
             ['name' => 'Accesiones'],
             ['name' => 'Personas'],
@@ -282,6 +253,6 @@ class MiscelaneoSeeder extends Seeder
             Material::create($material);
         }
 
-    
+
     }
 }

@@ -11,11 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('investigation_lines', function (Blueprint $table) {
+        Schema::create('expense_types', function (Blueprint $table) {
             $table->id();
+            $table->string('group');
+            $table->string('name')->unique();
+            $table->text('description')->nullable();
+            $table->string('code')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
-            $table->softDeletes();
-            $table->string('name');
         });
     }
 
@@ -24,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('investigation_lines');
+        Schema::dropIfExists('expense_types');
     }
 };

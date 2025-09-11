@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
+use App\Http\Controllers\Admin\GlobalAlertController;
 use App\Http\Controllers\Admin\RoleController;
 
 use Illuminate\Http\Request;
@@ -125,4 +126,11 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('team-pulse-report', [ReportController::class, 'generateTeamPulseReport']);
 
     Route::get('/patch-notes/latest', [PatchNoteController::class, 'getLatest']);
+
+    Route::get('/station-needs/create', [StationNeedController::class, 'create']);
+
+    Route::apiResource('station-needs', StationNeedController::class);
+
+    Route::get('/expense-types', [ExpenseTypeController::class, 'index']);
+    Route::get('/expense-types/search', [ExpenseTypeController::class, 'search']);
 });

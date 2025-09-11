@@ -25,11 +25,17 @@ class Location extends Model
         return $this->belongsTo(Province::class);
     }
 
-    public function cantons(){
+    public function canton(){
         return $this->belongsTo(Canton::class);
     }
 
     public function product(){
         return $this->hasMany(Product::class);
     }
+
+    public function province()
+    {
+        return $this->belongsTo(Province::class);
+    }
+
 }
