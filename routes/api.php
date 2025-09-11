@@ -133,4 +133,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('/expense-types', [ExpenseTypeController::class, 'index']);
     Route::get('/expense-types/search', [ExpenseTypeController::class, 'search']);
+
+    Route::get('/monthly-report/activities', [PlannerController::class, 'getActivitiesForMonthlyReport']);
+    Route::post('/store-monthly-execution', [PlannerController::class, 'storeMonthlyExecution']);
+
 });

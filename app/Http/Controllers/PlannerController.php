@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Activity;
+use App\Models\ActivityExecutionProgress;
 use App\Models\Location;
 use App\Models\Material;
 use App\Models\Product;
@@ -320,48 +321,38 @@ class PlannerController extends Controller
                     'rubro',
                     'user',
                     'activities' => function ($query) {
-                        $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
+                        $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
                     },
                 ])->get();
 
             // Mapear los datos y añadir los cálculos de ponderación
             $formattedProducts = $products->map(function ($product) {
 
-                // 1. Ponderación del Producto (ya es un "Peso Absoluto" a nivel de Rubro)
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
 
                 $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
 
-                    // 2. Calcular el "Peso Absoluto" de la Actividad
-                    // Es el peso del producto por el peso relativo de la actividad
                     $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
 
-                    $totalActivityProgress = 0;
+                    $activity->loadMissing('monthlyExecutionProgress');
 
-                    $executionProgress = ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activityAbsoluteWeight, &$totalActivityProgress) {
+                    $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
 
-                        // 3. Calcular el "Aporte Global al Proyecto" de esta tarea semanal
-                        // Es el peso absoluto de la actividad por el avance real de la semana
-                        $globalContribution = $activityAbsoluteWeight * ((float) $weekActivity->percentage / 100);
+                    $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
 
-                        // Sumamos este aporte al total de la actividad
-                        $totalActivityProgress += $globalContribution;
-
+                    $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
                         return [
-                            'week_id' => $weekActivity->id,
-                            'date' => Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                            'reported_percentage' => (float) $weekActivity->percentage, // Avance reportado
-                            'global_contribution' => $globalContribution, // Aporte real al 100% del proyecto
-                            'observations' => $weekActivity->observations,
+                            'month' => Carbon::parse($execProgress->month)->format('Y-m-d'),
+                            'reported_percentage' => (float) $execProgress->percentage,
                         ];
                     })->toArray();
 
                     return [
                         'id' => $activity->id,
                         'description' => $activity->description,
-                        'relative_weight' => (float) $activity->ponderacion, // Ponderación relativa a su producto
-                        'absolute_weight' => $activityAbsoluteWeight, // Peso real en el 100% del proyecto
-                        'total_progress' => $totalActivityProgress, // Suma del aporte de todas sus semanas
+                        'absolute_weight' => $activityAbsoluteWeight,
+                        'total_progress' => $totalActivityProgress, // Este es el valor clave actualizado.
+                        'total_completion_percentage' => $totalExecutedPercentage,// Suma del aporte de todas sus semanas
                         'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
                         'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
                         'users' => ($activity->users ?? collect([]))->map(function ($user) {
@@ -759,7 +750,6 @@ class PlannerController extends Controller
         $officialProducts = collect();
         if ($officialRubroId) {
             $officialProducts = Product::where('rubro_id', $officialRubroId)
-                // ->where('location_id', $user->location_id) // <-- LÓGICA CLAVE: Filtra por la ubicación del usuario.
                 ->with(['activities.users', 'rubro', 'user', 'location'])
                 ->get();
         }
@@ -801,5 +791,104 @@ class PlannerController extends Controller
         }
         $allPlannableProducts = $officialProducts->merge($specificProducts)->unique('id');
         return response()->json(['data' => $allPlannableProducts->values()]);
+    }
+
+    public function storeMonthlyExecution(Request $request)
+    {
+        $request->validate([
+            'reports' => ['required', 'array'],
+            'reports.*.activity_id' => ['required', 'exists:activities,id'],
+            'reports.*.month' => ['required', 'date_format:Y-m-d'],
+            'reports.*.percentage' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $user = $request->user();
+
+            foreach ($request->reports as $report) {
+                ActivityExecutionProgress::updateOrCreate(
+                    [
+                        'activity_id' => $report['activity_id'],
+                        'month' => $report['month'],
+                    ],
+                    [
+                        'percentage' => $report['percentage'],
+                        // Podríamos añadir un campo user_id a la tabla si queremos saber quién reportó.
+                    ]
+                );
+            }
+
+            DB::commit();
+            return response()->json([
+                'msg' => ['summary' => 'Éxito', 'detail' => 'Reporte de avance mensual guardado correctamente.', 'code' => 201]
+            ], 201);
+
+
+        } catch (Exception $e) {
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al enviar la ejecución mensual: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
+    public function getActivitiesForMonthlyReport(Request $request)
+    {
+        $request->validate([
+            'month' => 'nullable|date_format:Y-m',
+        ]);
+
+        try {
+            $user = $request->user();
+
+            $targetMonth = $request->has('month')
+                ? Carbon::parse($request->input('month'))->startOfMonth()
+                : Carbon::now()->subMonth()->startOfMonth();
+
+            // --- INICIO DE LA NUEVA LÓGICA ---
+
+            // 1. Obtener los IDs de todas las actividades que YA tienen un reporte este mes.
+            // Consultamos la tabla de ejecución para ver qué actividades ya fueron reportadas por CUALQUIER usuario.
+            $reportedActivityIds = \App\Models\ActivityExecutionProgress::where('month', $targetMonth)
+                ->pluck('activity_id') // Obtenemos solo la columna activity_id
+                ->unique(); // Nos aseguramos de que los IDs sean únicos
+
+            // --- FIN DE LA NUEVA LÓGICA ---
+
+            // 2. Busca todas las actividades del usuario, PERO excluye las que ya fueron reportadas.
+            $activities = Activity::whereHas('users', function ($query) use ($user) {
+                $query->where('users.id', $user->id);
+            })
+                ->whereNotIn('id', $reportedActivityIds) // <-- ¡LA CLAVE ESTÁ AQUÍ!
+                ->with(['monthlyProgress' => function ($query) use ($targetMonth) {
+                    $query->where('month', $targetMonth);
+                }])
+                ->get();
+
+            $formattedData = $activities->map(function ($activity) use ($targetMonth) {
+                $plannedProgress = $activity->monthlyProgress->first();
+                return [
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'month_to_report' => $targetMonth->format('Y-m-d'),
+                    'planned_percentage' => $plannedProgress ? $plannedProgress->percentage : 0,
+                ];
+            });
+
+            return response()->json(['data' => $formattedData]);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener la ejecución mensual: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
     }
 }

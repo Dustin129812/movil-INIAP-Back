@@ -230,7 +230,6 @@ class WeekActivityController extends Controller
         $request->validate([
             'progress' => ['required', 'array'],
             'progress.*.week_activity_id' => ['required', 'exists:weekly_activities,id'],
-            'progress.*.percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'progress.*.observations' => ['nullable', 'string'],
         ]);
 
