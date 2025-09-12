@@ -34,8 +34,11 @@ class ReportController extends Controller
             return response()->json(['error' => 'Técnico no encontrado.'], 404);
         }
 
+        $ratedStatuses = ['completed', 'partial', 'rated', 'not completed'];
+
         $weekActivities = WeekActivity::where('user_id', $userId)
             ->whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', $ratedStatuses)
             ->with([
                 'activity.product.rubro',
                 'activity.users',
@@ -49,24 +52,20 @@ class ReportController extends Controller
                 return Carbon::parse($item->date)->format('Y-m-d');
             });
 
-        // --- LÓGICA SIMPLIFICADA PARA GENERAR INICIALES/CÓDIGOS (MODIFICADO para unirse) ---
         $weekActivities->each(function ($dayActivities) {
             $dayActivities->each(function ($weekActivity) {
                 $productInitialCode = ''; // Renombrado para claridad
                 $activityInitialCode = ''; // Renombrado para claridad
                 $combinedCodePrefix = ''; // Nuevo para el código combinado
 
-                // Obtener las 2 primeras letras del nombre del producto
                 if ($weekActivity->activity && $weekActivity->activity->product && !empty($weekActivity->activity->product->name)) {
                     $productInitialCode = strtoupper(substr($weekActivity->activity->product->name, 0, 2));
                 }
 
-                // Obtener las 2 primeras letras de la descripción de la actividad
                 if ($weekActivity->activity && !empty($weekActivity->activity->description)) {
                     $activityInitialCode = strtoupper(substr($weekActivity->activity->description, 0, 2));
                 }
 
-                // Combinar los códigos si existen
                 if (!empty($productInitialCode) && !empty($activityInitialCode)) {
                     $combinedCodePrefix = $productInitialCode . $activityInitialCode . ': ';
                 } elseif (!empty($productInitialCode)) { // Si solo hay código de producto
@@ -74,13 +73,17 @@ class ReportController extends Controller
                 } elseif (!empty($activityInitialCode)) { // Si solo hay código de actividad
                     $combinedCodePrefix = $activityInitialCode . ': ';
                 }
-
-
-                // Añadir la descripción formateada al objeto WeekActivity para usarla en Blade
                 $weekActivity->formatted_description = $combinedCodePrefix . ($weekActivity->description ?? '');
             });
         });
-        // --- FIN DE LA LÓGICA DE INICIALES/CÓDIGOS ---
+
+        $totalActivities = $weekActivities->count();
+        $summary = [
+            'completed' => $weekActivities->where('status', 'completed')->count(),
+            'partial' => $weekActivities->where('status', 'partial')->count(),
+            'not_done' => $weekActivities->whereIn('status', ['rated', 'not completed'])->count(),
+            'overall_compliance' => ($totalActivities > 0) ? ($weekActivities->sum('percentage') / ($totalActivities * 100)) * 100 : 0,
+        ];
 
         $mainRubro = 'Varios Rubros';
         if ($weekActivities->isNotEmpty()) {
@@ -144,15 +147,21 @@ class ReportController extends Controller
             $query->whereBetween('date', [$startDate, $endDate]);
         }
 
-        if ($request->filled('status')) {
-            if ($request->input('status') === 'all') {
-                $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending']);
-            } else {
-                $statuses = explode(',', $request->input('status'));
-                $query->whereIn('status', $statuses);
-            }
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $statuses = explode(',', $request->input('status'));
+            $query->whereIn('status', $statuses);
         } else {
-            $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending']);
+            $allVisibleStatuses = [
+                'approved',
+                'rated',
+                'reassigned',
+                'in progress',
+                'pending',
+                'completed',
+                'partial',
+                'not completed'
+            ];
+            $query->whereIn('status', $allVisibleStatuses);
         }
 
         $weeklyPlans = $query->orderBy('date', 'desc')->get();
@@ -250,7 +259,6 @@ class ReportController extends Controller
                 'user'
             ]);
 
-        // 3. APLICACIÓN DE LOS FILTROS ADICIONALES (LÓGICA AÑADIDA)
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
             $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
@@ -258,19 +266,24 @@ class ReportController extends Controller
         }
 
         if ($request->filled('status')) {
-            if ($request->input('status') !== 'all') {
+            if ($request->filled('status') && $request->input('status') !== 'all') {
                 $statuses = explode(',', $request->input('status'));
                 $query->whereIn('status', $statuses);
             } else {
-                // Si es 'all', traemos los estados relevantes por defecto
-                $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending', 'rejected']);
+                $allVisibleStatuses = [
+                    'approved',
+                    'rated',
+                    'reassigned',
+                    'in progress',
+                    'pending',
+                    'completed',
+                    'partial',
+                    'not completed'
+                ];
+                $query->whereIn('status', $allVisibleStatuses);
             }
-        } else {
-            // Comportamiento por defecto si no se especifica estado
-            $query->whereIn('status', ['approved', 'rated', 'reassigned', 'in progress', 'pending', 'rejected']);
         }
 
-        // 4. Obtención y formateo de resultados
         $weeklyPlans = $query->orderBy('date', 'desc')->get();
 
         $formattedPlans = $weeklyPlans->map(function ($plan) {
@@ -412,17 +425,16 @@ class ReportController extends Controller
         $startDate = Carbon::parse($request->input('start_date'));
         $endDate = Carbon::parse($request->input('end_date'));
 
-        // 4. Obtención del técnico
         $technician = User::with('location')->find($userId);
         if (!$technician) {
             return response()->json(['error' => 'Técnico no encontrado.'], 404);
         }
 
-        // 5. OBTENCIÓN DE ACTIVIDADES DE MONITOREO
-        // ---- LA DIFERENCIA CLAVE: Se filtra por estado 'rated' ----
+        $ratedStatuses = ['completed', 'partial', 'rated', 'not completed'];
+
         $weekActivities = WeekActivity::where('user_id', $userId)
             ->whereBetween('date', [$startDate, $endDate])
-            ->where('status', 'rated') // Filtro esencial para el reporte de monitoreo
+            ->whereIn('status', $ratedStatuses)
             ->with([
                 'activity.product.rubro',
                 'activity.users',
@@ -431,9 +443,8 @@ class ReportController extends Controller
                 'logisticSupportUsers'
             ])
             ->orderBy('date')
-            ->get(); // Se obtiene una colección simple, no agrupada
+            ->get();
 
-        // 6. Procesamiento para añadir descripción formateada (igual que en el plan)
         $weekActivities->each(function ($weekActivity) {
             $productInitialCode = '';
             $activityInitialCode = '';
@@ -455,7 +466,6 @@ class ReportController extends Controller
             $weekActivity->formatted_description = $combinedCodePrefix . ($weekActivity->description ?? '');
         });
 
-        // 7. CÁLCULO DEL RESUMEN DE CUMPLIMIENTO (ESENCIAL PARA MONITOREO)
         $totalActivities = $weekActivities->count();
         $summary = [
             'completed' => $weekActivities->where('percentage', 100)->count(),
@@ -464,7 +474,6 @@ class ReportController extends Controller
             'overall_compliance' => ($totalActivities > 0) ? ($weekActivities->sum('percentage') / $totalActivities) : 0,
         ];
 
-        // 8. Determinar el rubro principal del informe
         $mainRubro = 'Varios Rubros';
         if ($weekActivities->isNotEmpty()) {
             $rubros = $weekActivities->map(function ($item) {

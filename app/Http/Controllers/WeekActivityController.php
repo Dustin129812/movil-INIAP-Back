@@ -160,6 +160,8 @@ class WeekActivityController extends Controller
             $lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
             $lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
 
+            $ratedStatuses = ['not completed', 'completed', 'partial', 'rated'];
+
             $activities = WeekActivity::with([
                 'activity.product',
                 'activity.monthlyProgress',
@@ -168,7 +170,7 @@ class WeekActivityController extends Controller
             ])
                 ->whereBetween('date', [$lastMonday, $lastSunday])
                 ->where('user_id', $user->id)
-                ->where('status', '!=', 'rated')
+                ->whereNotIn('status', $ratedStatuses)
                 ->get();
 
             return response()->json([
@@ -230,6 +232,7 @@ class WeekActivityController extends Controller
         $request->validate([
             'progress' => ['required', 'array'],
             'progress.*.week_activity_id' => ['required', 'exists:weekly_activities,id'],
+            'progress.*.status' => ['required', 'string', 'in:yes,no,partial'],
             'progress.*.observations' => ['nullable', 'string'],
         ]);
 
@@ -240,37 +243,50 @@ class WeekActivityController extends Controller
 
             foreach ($request->progress as $progressItem) {
                 $weekActivity = WeekActivity::with(['activity.product.user'])
-                ->findOrFail($progressItem['week_activity_id']);
+                    ->findOrFail($progressItem['week_activity_id']);
 
-                $updatedPercentage = $progressItem['percentage'];
+                $updatedStatus = $progressItem['status'];
                 $observations = $progressItem['observations'] ?? null;
 
+                $dbStatus = '';
+                $numericPercentage = 0;
+
+                switch ($updatedStatus) {
+                    case 'yes':
+                        $dbStatus = 'completed';
+                        $numericPercentage = 100;
+                        break;
+                    case 'no':
+                        $dbStatus = 'not completed';
+                        $numericPercentage = 0;
+                        break;
+                    case 'partial':
+                        $dbStatus = 'partial';
+                        $numericPercentage = 50;
+                        break;
+                }
+
                 $weekActivity->update([
-                    'percentage' => $updatedPercentage,
                     'observations' => $observations,
-                    'status' => 'rated',
-
+                    'status' => $dbStatus,
+                    'percentage' => $numericPercentage
                 ]);
-
-                if ($updatedPercentage >= 0 && $updatedPercentage < 100) {
-                    $responsable = null;
-
-                    if ($weekActivity->activity && $weekActivity->activity->product && $weekActivity->activity->product->user) {
-                        $responsable = $weekActivity->activity->product->user;
-                    }
+                if ($numericPercentage >= 0 && $numericPercentage < 100) {
+                    $responsable = $weekActivity->activity?->product?->user;
 
                     if ($responsable && $responsable->id !== $investigador->id) {
                         $responsable->notify(
                             new RateWeeklyActivityNo(
                                 $weekActivity->activity,
                                 $investigador,
-                                $updatedPercentage,
-                                $observations,
+                                $numericPercentage,
+                                $observations
                             )
                         );
                     }
                 }
             }
+
 
             DB::commit();
 

@@ -50,7 +50,7 @@
         <td class="header-logo" style="text-align: left;"><img src="{{ $iniap_logo_path }}" alt="Logo INIAP"></td>
         <td class="header-title">
             <h1>INFORME DE MONITOREO SEMANAL DE ACTIVIDADES</h1>
-            <p>(Programa: {{ $program_rubro }})</p>
+            <p>(Rubro/Departamento: {{ $program_rubro }})</p>
         </td>
         <td class="header-logo" style="text-align: right;"><img src="{{ $ecuador_shield_path }}" alt="Escudo Ecuador"></td>
     </tr>
@@ -98,10 +98,22 @@
         @php
             $statusClass = '';
             $statusText = '';
-            if ($activity->percentage > 0) {
-                $statusClass = 'status-completed'; $statusText = 'Completada';
-            } else {
-                $statusClass = 'status-not-done'; $statusText = 'No Realizada';
+            switch ($activity->status) {
+                case 'completed':
+                    $statusClass = 'status-completed';
+                    $statusText = 'Completada';
+                    break;
+                case 'partial':
+                    $statusClass = 'status-partial';
+                    $statusText = 'Parcial';
+                    break;
+                case 'rated':
+                case 'not completed':
+                    $statusClass = 'status-not-done';
+                    $statusText = 'No Realizada';
+                    break;
+                default:
+                    $statusText = $activity->status;
             }
         @endphp
         <tr>
