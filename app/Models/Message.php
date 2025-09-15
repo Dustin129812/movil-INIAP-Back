@@ -14,6 +14,8 @@ class Message extends Model
             'content',
             'sender_id',
             'guest_id',
+            'message_type',
+            'file_path',
         ];
 
     public function conversation(): BelongsTo

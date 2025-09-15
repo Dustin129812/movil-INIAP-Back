@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Events\MessageSent;
 use App\Models\Conversation;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 
 class MessageController extends Controller
 {
@@ -17,19 +16,41 @@ class MessageController extends Controller
 
     public function store(Request $request, $conversationId)
     {
+        $request->validate([
+            'content' => 'nullable|string|max:4096',
+            'image' => 'nullable|image|max:5120',
+        ]);
 
-        $request->validate(['content' => 'required|string']);
+        if (!$request->hasFile('image') && !$request->filled('content')) {
+            return response()->json([
+                'message' => 'El mensaje debe contener texto o una imagen.',
+                'errors' => ['content' => ['El mensaje debe contener texto o una imagen.']]
+            ], 422);
+        }
 
         $conversation = Conversation::findOrFail($conversationId);
         $user = $request->user();
 
+        $filePath = null;
+        $messageType = 'text';
+
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $filePath = $file->store('chat_images', 'public');
+            $messageType = 'image';
+        }
+
         $message = $conversation->messages()->create([
-            'content' => $request->input('content'),
             'sender_id' => $user?->id,
+            'content' => $request->input('content'),
+            'message_type' => $messageType,
+            'file_path' => $filePath,
         ]);
 
-        broadcast(new MessageSent($message));
+        $message->load('sender:id,name');
 
-        return response()->json($message->load('sender:id,name'));
+        broadcast(new MessageSent($message))->toOthers();
+
+        return response()->json($message);
     }
 }

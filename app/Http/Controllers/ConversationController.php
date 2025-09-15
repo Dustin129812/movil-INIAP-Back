@@ -23,7 +23,7 @@ class ConversationController extends Controller
             broadcast(new ConversationCreated($conversation->load('user:id,name')))->toOthers();
         }
 
-        return response()->json(['conversation' => $conversation]);
+        return response()->json($conversation);
     }
 
     public function index()
