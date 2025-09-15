@@ -39,7 +39,6 @@ class AdminChatController extends Controller
      */
     public function listAdmins()
     {
-        // Busca todos los usuarios que tengan el rol 'administrador'
         $admins = User::role('administrador')->get(['id', 'name']);
 
         return response()->json($admins);
@@ -67,8 +66,6 @@ class AdminChatController extends Controller
             'sender_id' => $adminUser->id,
         ]);
 
-        // --- CORRECCIÓN AQUÍ ---
-        // Simplemente emitimos el evento. Ahora todos lo recibirán, incluido el admin que lo envió.
         broadcast(new MessageSent($message));
 
         return response()->json($message, 201);

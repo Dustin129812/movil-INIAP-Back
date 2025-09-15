@@ -137,4 +137,5 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/monthly-report/activities', [PlannerController::class, 'getActivitiesForMonthlyReport']);
     Route::post('/store-monthly-execution', [PlannerController::class, 'storeMonthlyExecution']);
 
+    Route::apiResource('reusable-activities', ReusableActivityController::class);
 });
