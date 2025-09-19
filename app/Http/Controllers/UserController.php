@@ -118,7 +118,7 @@ class UserController extends Controller
             'dni' => $user->dni,
             'name' => $user->name,
             'email' => $user->email,
-            'location' => $user->location->name ?? null, // <- retornamos el nombre de la ubicación
+            'location' => $user->location->name ?? null,
         ]);
     }
 }

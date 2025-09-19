@@ -1,0 +1,572 @@
+
+### Reglas de Negocio y Sinónimos Clave ###
+
+- **Sinónimos:**
+  - El término 'proyectos' o 'iniciativas' se refiere a la tabla `products`.
+  - 'Colaboradores', 'empleados' o 'personal' se refiere a la tabla `users`.
+  - 'Departamentos', 'sedes' u 'oficinas' se refiere a la tabla `locations`.
+  - 'Tareas' o 'entregables' se refiere a la tabla `activities`.
+  - 'Rubros' también puede ser llamado 'categorías' o 'áreas de negocio'.
+
+- **Definiciones de Valores:**
+  - En la tabla `users`, la columna `gender` usa 'M' para 'masculino' y 'F' para 'femenino'.
+  - En la tabla `incidents`, el estado por defecto es 'Abierta'.
+
+- **Lógica de Búsqueda:**
+  - Para cualquier búsqueda de texto libre (nombres de personas, productos, locaciones), usa siempre el operador `ILIKE` con el comodín `%` para encontrar coincidencias parciales y no distinguir mayúsculas/minúsculas. Ejemplo: `WHERE name ILIKE '%valor%'`.
+
+- **Relaciones Importantes:**
+  - Un `product` (proyecto) está compuesto por muchas `activities` (tareas).
+  - Un `user` puede estar asignado a muchas `activities`.
+  - Cada `product` pertenece a un `rubro` y a una `location`.
+### Contexto Detallado de la Base de Datos ###
+
+--- Tabla: `"fiasaUser"` ---
+- `id` (tipo: bigint)
+- `name` (tipo: string)
+- `dni` (tipo: string)
+- `email` (tipo: string)
+- `password` (tipo: string)
+- `location_id` (tipo: bigint) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `location_id` se conecta con `locations(id)`.
+
+--- Tabla: `activities` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `description` (tipo: string)
+- `budget` (tipo: decimal)
+- `ponderacion` (tipo: decimal)
+- `start_date` (tipo: date) (opcional)
+- `end_date` (tipo: date) (opcional)
+- `product_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `product_id` se conecta con `products(id)`.
+
+--- Tabla: `activity_execution_progress` ---
+- `id` (tipo: bigint)
+- `activity_id` (tipo: bigint)
+- `month` (tipo: date)
+- `percentage` (tipo: decimal)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `activity_id` se conecta con `activities(id)`.
+
+--- Tabla: `activity_indicator` ---
+- `id` (tipo: bigint)
+- `activity_id` (tipo: bigint)
+- `indicator_id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `activity_id` se conecta con `activities(id)`.
+    - `indicator_id` se conecta con `performance_indicators(id)`.
+
+--- Tabla: `activity_monthly_progress` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `month` (tipo: date)
+- `percentage` (tipo: decimal)
+- `activity_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `activity_id` se conecta con `activities(id)`.
+
+--- Tabla: `activity_user` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `activity_id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `activity_id` se conecta con `activities(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `areas` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `cantons` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `conversation_user` ---
+- `id` (tipo: bigint)
+- `conversation_id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+- `last_read_at` (tipo: datetime) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `conversation_id` se conecta con `conversations(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `conversations` ---
+- `id` (tipo: bigint)
+- `user_id` (tipo: bigint) (opcional)
+- `guest_id` (tipo: string) (opcional)
+- `admin_id` (tipo: bigint) (opcional)
+- `status` (tipo: string)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `ethnic_groups` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `expense_types` ---
+- `id` (tipo: bigint)
+- `group` (tipo: string)
+- `name` (tipo: string)
+- `description` (tipo: text) (opcional)
+- `code` (tipo: string) (opcional)
+- `is_active` (tipo: boolean)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `feature_flags` ---
+- `id` (tipo: bigint)
+- `name` (tipo: string)
+- `is_active` (tipo: boolean)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `fiasa_users` ---
+- `id` (tipo: bigint)
+- `name` (tipo: string)
+- `dni` (tipo: string)
+- `email` (tipo: string)
+- `password` (tipo: string)
+- `location_id` (tipo: bigint) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `location_id` se conecta con `locations(id)`.
+
+--- Tabla: `global_alerts` ---
+- `id` (tipo: bigint)
+- `is_active` (tipo: boolean)
+- `title` (tipo: string) (opcional)
+- `message` (tipo: text) (opcional)
+- `type` (tipo: string)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `group_user` ---
+- `id` (tipo: bigint)
+- `group_id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `group_id` se conecta con `groups(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `groups` ---
+- `id` (tipo: bigint)
+- `name` (tipo: string)
+- `rubro_id` (tipo: bigint)
+- `location_id` (tipo: bigint)
+- `creator_id` (tipo: bigint) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `responsible_id` (tipo: bigint) (opcional)
+  Relaciones (Claves Foráneas):
+    - `creator_id` se conecta con `users(id)`.
+    - `location_id` se conecta con `locations(id)`.
+    - `responsible_id` se conecta con `users(id)`.
+    - `rubro_id` se conecta con `rubros(id)`.
+
+--- Tabla: `incidents` ---
+- `id` (tipo: bigint)
+- `title` (tipo: string)
+- `description` (tipo: text)
+- `priority` (tipo: string)
+- `status` (tipo: string)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `investigation_areas` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `investigation_lines` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `locations` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+- `adress` (tipo: string)
+- `province_id` (tipo: bigint)
+- `canton_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `canton_id` se conecta con `cantons(id)`.
+    - `province_id` se conecta con `provinces(id)`.
+
+--- Tabla: `logistic_support` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `material_week_activity` ---
+- `id` (tipo: bigint)
+- `week_activity_id` (tipo: bigint)
+- `material_id` (tipo: bigint)
+- `quantity` (tipo: integer) (opcional)
+- `description` (tipo: string) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `material_id` se conecta con `materials(id)`.
+    - `week_activity_id` se conecta con `weekly_activities(id)`.
+
+--- Tabla: `materials` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `measures` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `messages` ---
+- `id` (tipo: bigint)
+- `conversation_id` (tipo: bigint)
+- `content` (tipo: text) (opcional)
+- `sender_id` (tipo: bigint) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `message_type` (tipo: string)
+- `file_path` (tipo: string) (opcional)
+  Relaciones (Claves Foráneas):
+    - `conversation_id` se conecta con `conversations(id)`.
+    - `sender_id` se conecta con `users(id)`.
+
+--- Tabla: `model_has_permissions` ---
+- `permission_id` (tipo: bigint)
+- `model_type` (tipo: string)
+- `model_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `permission_id` se conecta con `permissions(id)`.
+
+--- Tabla: `model_has_roles` ---
+- `role_id` (tipo: bigint)
+- `model_type` (tipo: string)
+- `model_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `role_id` se conecta con `roles(id)`.
+
+--- Tabla: `nationalities` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `notifications` ---
+- `id` (tipo: guid)
+- `type` (tipo: string)
+- `notifiable_type` (tipo: string)
+- `notifiable_id` (tipo: bigint)
+- `data` (tipo: text)
+- `read_at` (tipo: datetime) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+
+--- Tabla: `objetives` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `password_reset_tokens` ---
+- `email` (tipo: string)
+- `token` (tipo: string)
+- `created_at` (tipo: datetime) (opcional)
+
+--- Tabla: `patch_notes` ---
+- `id` (tipo: bigint)
+- `version` (tipo: string)
+- `title` (tipo: string)
+- `content` (tipo: text)
+- `release_date` (tipo: date)
+- `is_published` (tipo: boolean)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `performance_indicators` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `permissions` ---
+- `id` (tipo: bigint)
+- `name` (tipo: string)
+- `guard_name` (tipo: string)
+- `deleted_at` (tipo: datetime) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `personal_access_tokens` ---
+- `id` (tipo: bigint)
+- `tokenable_type` (tipo: string)
+- `tokenable_id` (tipo: bigint)
+- `name` (tipo: string)
+- `token` (tipo: string)
+- `abilities` (tipo: text) (opcional)
+- `last_used_at` (tipo: datetime) (opcional)
+- `expires_at` (tipo: datetime) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `positions` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `products` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: text)
+- `budget` (tipo: decimal)
+- `ponderacion` (tipo: decimal)
+- `user_id` (tipo: bigint)
+- `rubro_id` (tipo: bigint)
+- `location_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `location_id` se conecta con `locations(id)`.
+    - `rubro_id` se conecta con `rubros(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `provinces` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `reusable_activities` ---
+- `id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+- `activity_id` (tipo: bigint)
+- `name` (tipo: string)
+- `description` (tipo: text)
+- `work_location` (tipo: string) (opcional)
+- `observations` (tipo: text) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `activity_id` se conecta con `activities(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `reusable_activity_logistic_support` ---
+- `id` (tipo: bigint)
+- `reusable_activity_id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `reusable_activity_id` se conecta con `reusable_activities(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `reusable_activity_material` ---
+- `id` (tipo: bigint)
+- `reusable_activity_id` (tipo: bigint)
+- `material_id` (tipo: bigint)
+- `quantity` (tipo: integer) (opcional)
+- `description` (tipo: string) (opcional)
+  Relaciones (Claves Foráneas):
+    - `material_id` se conecta con `materials(id)`.
+    - `reusable_activity_id` se conecta con `reusable_activities(id)`.
+
+--- Tabla: `reusable_activity_performance_indicator` ---
+- `id` (tipo: bigint)
+- `reusable_activity_id` (tipo: bigint)
+- `performance_indicator_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `performance_indicator_id` se conecta con `performance_indicators(id)`.
+    - `reusable_activity_id` se conecta con `reusable_activities(id)`.
+
+--- Tabla: `role_has_permissions` ---
+- `permission_id` (tipo: bigint)
+- `role_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `permission_id` se conecta con `permissions(id)`.
+    - `role_id` se conecta con `roles(id)`.
+
+--- Tabla: `roles` ---
+- `id` (tipo: bigint)
+- `name` (tipo: string)
+- `guard_name` (tipo: string)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+
+--- Tabla: `rubros` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `name` (tipo: string)
+
+--- Tabla: `station_needs` ---
+- `id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+- `location_id` (tipo: bigint)
+- `fill_date` (tipo: date)
+- `description` (tipo: text)
+- `estimated_amount` (tipo: decimal)
+- `priority` (tipo: string)
+- `expected_impact` (tipo: text)
+- `impact_type` (tipo: string)
+- `problem_to_solve` (tipo: text)
+- `investment_risk` (tipo: text)
+- `has_supporting_documents` (tipo: boolean)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `requires_technical_studies` (tipo: boolean)
+- `has_technical_studies` (tipo: boolean) (opcional)
+- `administrative_time_months` (tipo: integer) (opcional)
+- `execution_time_months` (tipo: integer) (opcional)
+- `expense_type_id` (tipo: bigint) (opcional)
+  Relaciones (Claves Foráneas):
+    - `expense_type_id` se conecta con `expense_types(id)`.
+    - `location_id` se conecta con `locations(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `users` ---
+- `id` (tipo: bigint)
+- `email_verified_at` (tipo: datetime) (opcional)
+- `remember_token` (tipo: string) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `dni` (tipo: string)
+- `name` (tipo: string)
+- `email` (tipo: string)
+- `password` (tipo: string)
+- `birth_date` (tipo: date)
+- `gender` (tipo: string)
+- `phone` (tipo: string)
+- `location_id` (tipo: bigint)
+- `nationality_id` (tipo: bigint)
+- `ethnic_id` (tipo: bigint)
+- `position_id` (tipo: bigint)
+- `api_token` (tipo: string) (opcional)
+  Relaciones (Claves Foráneas):
+    - `ethnic_id` se conecta con `ethnic_groups(id)`.
+    - `location_id` se conecta con `locations(id)`.
+    - `nationality_id` se conecta con `nationalities(id)`.
+    - `position_id` se conecta con `positions(id)`.
+
+--- Tabla: `week_activity_logistic_support_user` ---
+- `weekly_activity_id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `user_id` se conecta con `users(id)`.
+    - `weekly_activity_id` se conecta con `weekly_activities(id)`.
+
+--- Tabla: `weekly_activities` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `description` (tipo: text)
+- `date` (tipo: date)
+- `percentage` (tipo: integer)
+- `work_location` (tipo: string)
+- `status` (tipo: string)
+- `observations` (tipo: text) (opcional)
+- `activity_id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `activity_id` se conecta con `activities(id)`.
+    - `user_id` se conecta con `users(id)`.
+
+--- Tabla: `weekly_indicators` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `weekly_activities_id` (tipo: bigint)
+- `performance_indicators_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `performance_indicators_id` se conecta con `performance_indicators(id)`.
+    - `weekly_activities_id` se conecta con `weekly_activities(id)`.
+
+--- Tabla: `weekly_logistic` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `weekly_activities_id` (tipo: bigint)
+- `logistic_support_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `logistic_support_id` se conecta con `logistic_support(id)`.
+    - `weekly_activities_id` se conecta con `weekly_activities(id)`.
+
+--- Tabla: `weekly_planners` ---
+- `id` (tipo: bigint)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+- `deleted_at` (tipo: datetime) (opcional)
+- `product_id` (tipo: bigint)
+- `week_activity_id` (tipo: bigint)
+  Relaciones (Claves Foráneas):
+    - `product_id` se conecta con `products(id)`.
+    - `week_activity_id` se conecta con `weekly_activities(id)`.
+
+--- Tabla: `weekly_pulses` ---
+- `id` (tipo: bigint)
+- `user_id` (tipo: bigint)
+- `week_start_date` (tipo: date)
+- `status` (tipo: string)
+- `comment` (tipo: text) (opcional)
+- `created_at` (tipo: datetime) (opcional)
+- `updated_at` (tipo: datetime) (opcional)
+  Relaciones (Claves Foráneas):
+    - `user_id` se conecta con `users(id)`.

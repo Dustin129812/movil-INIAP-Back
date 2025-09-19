@@ -19,5 +19,6 @@ class DatabaseSeeder extends Seeder
         $this->call(logisticSeeder::class);
         $this->call(FeatureFlagSeeder::class);
         $this->call(ExpenseTypeSeeder::class);
+        $this->call(DocumentTypeSeeder::class);
     }
 }

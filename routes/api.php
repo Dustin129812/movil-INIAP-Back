@@ -138,4 +138,23 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::post('/store-monthly-execution', [PlannerController::class, 'storeMonthlyExecution']);
 
     Route::apiResource('reusable-activities', ReusableActivityController::class);
+
+    Route::get('/document-types', [DocumentTypeController::class, 'index']);
+
+    Route::prefix('documents')->group(function () {
+        Route::get('/inbox', [DocumentController::class, 'inbox']);
+        Route::get('/sent', [DocumentController::class, 'sent']);
+        Route::get('/drafts', [DocumentController::class, 'drafts']);
+        Route::get('/{document}', [DocumentController::class, 'show'])->name('documents.show');
+
+        Route::post('/', [DocumentController::class, 'store'])->name('documents.store'); // POST /api/documents
+        Route::post('/{document}/attachments', [DocumentController::class, 'attach'])->name('documents.attach');
+        Route::post('/{document}/send', [DocumentController::class, 'send'])->name('documents.send');
+        Route::post('/{document}/read', [DocumentController::class, 'markAsRead'])->name('documents.read');
+        Route::post('/{document}/inform', [DocumentController::class, 'inform'])->name('documents.inform');
+        Route::post('/{document}/reassign', [DocumentController::class, 'reassign'])->name('documents.reassign');
+    });
+
 });
+
+Route::post('/ask-database', [AiQueryController::class, 'handleQuery']);
