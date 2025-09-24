@@ -26,7 +26,8 @@ class Document extends Model
         'typification',
         'reference_number',
         'document_type_id',
-        'on_behalf_of_user_id'
+        'on_behalf_of_user_id',
+        'interaction_mode',
     ];
 
     protected $casts = [
@@ -51,6 +52,11 @@ class Document extends Model
     public function documentType()
     {
         return $this->belongsTo(DocumentType::class);
+    }
+
+    public function comments()
+    {
+        return $this->hasMany(Comment::class);
     }
 }
 

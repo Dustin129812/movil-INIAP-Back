@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\UserCollection;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Validator;
-use App\Models\User;
-
+use Spatie\Permission\Models\Permission;
 class RoleController extends Controller
 {
     public function index()
@@ -60,5 +58,22 @@ class RoleController extends Controller
         $role->delete();
 
         return response()->json(['message' => 'Rol eliminado con éxito.']);
+    }
+
+    public function permissions(Role $role)
+    {
+        return $role->permissions;
+    }
+
+    public function assignPermissions(Request $request, Role $role)
+    {
+        $request->validate([
+            'permissions' => 'required|array'
+        ]);
+
+        $permissions = Permission::whereIn('id', $request->permissions)->get();
+        $role->syncPermissions($permissions);
+
+        return response()->json(['message' => 'Permisos actualizados con éxito.']);
     }
 }

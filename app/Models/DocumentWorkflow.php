@@ -30,7 +30,8 @@ class DocumentWorkflow extends Model
         'step',
         'sender_id',
         'recipient_id',
-        'reassigned_to_id'
+        'reassigned_to_id',
+        'state'
         ];
 
     /**

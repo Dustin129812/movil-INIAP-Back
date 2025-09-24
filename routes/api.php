@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\Admin\GlobalAlertController;
+use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 
 use Illuminate\Http\Request;
@@ -25,7 +26,11 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::post('/import-users', [ImportController::class, 'importUserFile']);
 
     // Gestión de Roles (CRUD)
-    Route::apiResource('roles', RoleController::class)->except(['show']);
+    Route::apiResource('roles', RoleController::class);
+    Route::get('roles/{role}/permissions', [RoleController::class, 'permissions']);
+    Route::post('roles/{role}/permissions', [RoleController::class, 'assignPermissions']);
+
+    Route::apiResource('permissions', PermissionController::class);
 
     // Gestión de Funcionalidades (Feature Flags)
     Route::put('/feature-flags/{featureFlag}', [FeatureFlagController::class, 'update']);
@@ -79,8 +84,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getProductsByLocation',[GeneralController::class,'getProductsByLocation']);
     Route::get('getRubrosByLocation',[GeneralController::class,'getRubrosByLocation']);
 
-    Route::get('chart-data', [ChartController::class, 'getChartData']);
-
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
     Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
@@ -95,7 +98,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getPositions', [GeneralController::class, 'getPositions']);
     Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
     Route::get('getLogistic', [GeneralController::class, 'getLogistic']);
-    Route::get('adminMaterials',[ChartController::class,'adminMaterials']);
 
     Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
     Route::get('user-weekly-plans', [ReportController::class, 'getUserWeeklyPlans']);
@@ -142,19 +144,40 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/document-types', [DocumentTypeController::class, 'index']);
 
     Route::prefix('documents')->group(function () {
+        Route::get('/search', [DocumentController::class, 'search'])->name('documents.search');
         Route::get('/inbox', [DocumentController::class, 'inbox']);
         Route::get('/sent', [DocumentController::class, 'sent']);
         Route::get('/drafts', [DocumentController::class, 'drafts']);
+        Route::get('/archived', [DocumentController::class, 'archived'])->name('documents.archived');
         Route::get('/{document}', [DocumentController::class, 'show'])->name('documents.show');
 
-        Route::post('/', [DocumentController::class, 'store'])->name('documents.store'); // POST /api/documents
+        Route::post('/', [DocumentController::class, 'store'])->name('documents.store');
         Route::post('/{document}/attachments', [DocumentController::class, 'attach'])->name('documents.attach');
         Route::post('/{document}/send', [DocumentController::class, 'send'])->name('documents.send');
         Route::post('/{document}/read', [DocumentController::class, 'markAsRead'])->name('documents.read');
         Route::post('/{document}/inform', [DocumentController::class, 'inform'])->name('documents.inform');
         Route::post('/{document}/reassign', [DocumentController::class, 'reassign'])->name('documents.reassign');
+        Route::post('/{document}/finalize', [DocumentController::class, 'finalize'])->name('documents.finalize');
+
+        Route::put('/{document}', [DocumentController::class, 'update'])->name('documents.update');
     });
 
+    Route::prefix('workflows/{workflow}')->group(function () {
+        Route::post('/archive', [DocumentWorkflowController::class, 'archive'])->name('workflows.archive');
+        Route::post('/trash', [DocumentWorkflowController::class, 'trash'])->name('workflows.trash');
+        Route::post('/restore', [DocumentWorkflowController::class, 'restore'])->name('workflows.restore');
+    });
+
+    Route::get('/documents/{document}/comments', [CommentController::class, 'index'])->name('comments.index');
+    Route::post('/documents/{document}/comments', [CommentController::class, 'store'])->name('comments.store');
+
+    Route::get('/dashboard/portfolio-progress', [DashboardController::class, 'getPortfolioProgress']);
+    Route::get('/dashboard/team-performance', [DashboardController::class, 'getTeamPerformance']);
+    Route::get('/dashboard/review-queue', [DashboardController::class, 'getReviewQueue']);
+    Route::get('/dashboard/team-pulse', [DashboardController::class, 'getTeamPulseData']);
+
+    Route::get('/reports/user-deep-dive/{user}', [ReportController::class, 'generateUserDeepDivePdf']);
+    Route::get('/reports/user-deep-dive/{user}/data', [ReportController::class, 'getUserDeepDiveData']);
 });
 
 Route::post('/ask-database', [AiQueryController::class, 'handleQuery']);

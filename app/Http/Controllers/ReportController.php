@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
 use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeeklyPulse;
@@ -9,6 +10,7 @@ use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
@@ -408,17 +410,14 @@ class ReportController extends Controller
 
     public function generateWeeklyMonitoringReport(Request $request)
     {
-        // 1. Establecer el idioma para las fechas
         Carbon::setLocale('es');
 
-        // 2. Validación de los parámetros de entrada
         $request->validate([
             'user_id' => 'required|exists:users,id',
             'start_date' => 'required|date_format:Y-m-d',
             'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
         ]);
 
-        // 3. Rutas a los logos y obtención de datos básicos
         $iniap_logo_path = public_path('storage/images/iniap_logo.png');
         $ecuador_shield_path = public_path('storage/images/ecuador_shield.jpg');
         $userId = $request->input('user_id');
@@ -487,23 +486,156 @@ class ReportController extends Controller
             }
         }
 
-        // 9. Preparación de todos los datos para la vista
         $reportData = [
             'iniap_logo_path' => $iniap_logo_path,
             'ecuador_shield_path' => $ecuador_shield_path,
             'technician' => $technician,
             'startDate' => $startDate,
             'endDate' => $endDate,
-            'summary' => $summary, // Se envía el resumen de cumplimiento
-            'weekActivities' => $weekActivities, // La colección PLANA y FILTRADA
+            'summary' => $summary,
+            'weekActivities' => $weekActivities,
             'program_rubro' => $mainRubro,
         ];
 
-        // 10. Carga de la vista, configuración del PDF y generación
         $pdf = Pdf::loadView('reports.weekly_monitoring_report', $reportData);
         $pdf->setPaper('a4', 'landscape');
 
         $fileName = 'Informe_Monitoreo_' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf';
         return $pdf->download($fileName);
+    }
+
+    public function generateUserDeepDivePdf(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date_format:Y-m-d',
+            'end_date' => 'required|date_format:Y-m-d',
+        ]);
+        $startDate = $validated['start_date'];
+        $endDate = $validated['end_date'];
+
+        $performanceStats = $this->getPerformanceStatsForUser($user, $startDate, $endDate);
+        $productBreakdown = $this->getProductBreakdownForUser($user, $startDate, $endDate);
+        $weeklyLoadChart = $this->getWeeklyLoadForUser($user, $startDate, $endDate);
+        $pulseHistory = $this->getPulseHistoryForUser($user, $startDate, $endDate);
+        $collaborationStats = $this->getCollaborationStatsForUser($user, $startDate, $endDate);
+
+        $data = [
+            'reportDate' => Carbon::now()->locale('es')->isoFormat('LL'),
+            'user' => $user,
+            'startDate' => Carbon::parse($startDate)->locale('es')->isoFormat('LL'),
+            'endDate' => Carbon::parse($endDate)->locale('es')->isoFormat('LL'),
+            'performanceStats' => $performanceStats,
+            'productBreakdown' => $productBreakdown,
+            'weeklyLoadChart' => $weeklyLoadChart,
+            'pulseHistory' => $pulseHistory,
+            'collaborationStats' => $collaborationStats,
+        ];
+        $pdf = Pdf::loadView('reports.user_deep_dive_report', $data);
+        return $pdf->download('informe-detallado-' . $user->name . '.pdf');
+    }
+
+
+    // ===================================================================
+    // === MÉTODOS PRIVADOS AUXILIARES PARA RECOPILAR LOS DATOS ===
+    // ===================================================================
+
+    private function getPerformanceStatsForUser(User $user, $startDate, $endDate)
+    {
+        return WeekActivity::where('user_id', $user->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->select(
+                DB::raw("COUNT(*) as total_activities"),
+                DB::raw("COUNT(CASE WHEN percentage = 100 THEN 1 END) as completed"),
+                DB::raw("COUNT(CASE WHEN percentage > 0 AND percentage < 100 THEN 1 END) as partial"),
+                DB::raw("COUNT(CASE WHEN percentage = 0 THEN 1 END) as not_completed"),
+                DB::raw("AVG(percentage) as average_compliance")
+            )->first()->toArray();
+    }
+
+    private function getProductBreakdownForUser(User $user, $startDate, $endDate)
+    {
+        return Product::whereHas('activities.users', fn($q) => $q->where('users.id', $user->id))
+            ->with(['activities' => function ($query) use ($user, $startDate, $endDate) {
+                $query->whereHas('users', fn($q) => $q->where('users.id', $user->id))
+                    ->with(['weeklyActivities' => fn($q) => $q->where('user_id', $user->id)->whereBetween('date', [$startDate, $endDate])]);
+            }])->get();
+    }
+
+    private function getWeeklyLoadForUser(User $user, $startDate, $endDate)
+    {
+        $weeks = WeekActivity::where('user_id', $user->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->select(
+                DB::raw("DATE_TRUNC('week', date) AS week_start"),
+                DB::raw("COUNT(CASE WHEN percentage = 100 THEN 1 END) as completed"),
+                DB::raw("COUNT(CASE WHEN percentage > 0 AND percentage < 100 THEN 1 END) as partial"),
+                DB::raw("COUNT(CASE WHEN percentage = 0 THEN 1 END) as not_completed")
+            )
+            ->groupBy('week_start')
+            ->orderBy('week_start')
+            ->get();
+
+        return $weeks->map(fn($week) => [
+            'week' => 'Sem. ' . Carbon::parse($week->week_start)->format('W'),
+            'completed' => (int) $week->completed,
+            'partial' => (int) $week->partial,
+            'not_completed' => (int) $week->not_completed,
+        ]);
+    }
+
+    private function getPulseHistoryForUser(User $user, $startDate, $endDate)
+    {
+        return WeeklyPulse::where('user_id', $user->id)
+            ->whereBetween('week_start_date', [Carbon::parse($startDate)->startOfWeek(), Carbon::parse($endDate)->endOfWeek()])
+            ->orderBy('week_start_date', 'desc')
+            ->select('week_start_date', 'status', 'comment')
+            ->get();
+    }
+
+    private function getCollaborationStatsForUser(User $user, $startDate, $endDate)
+    {
+        $activities = WeekActivity::where('user_id', $user->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->with('logisticSupportUsers')->get();
+
+        $supportGiven = DB::table('week_activity_logistic_support_user')
+            ->join('weekly_activities', 'weekly_activities.id', '=', 'week_activity_logistic_support_user.weekly_activity_id')
+            ->join('users', 'users.id', '=', 'weekly_activities.user_id')
+            ->where('week_activity_logistic_support_user.user_id', $user->id)
+            ->whereBetween('weekly_activities.date', [$startDate, $endDate])
+            ->select('users.name')
+            ->get()->countBy('name');
+
+        return [
+            'support_requested' => $activities->flatMap->logisticSupportUsers->countBy('name'),
+            'support_given' => $supportGiven
+        ];
+    }
+
+    public function getUserDeepDiveData(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date_format:Y-m-d',
+            'end_date' => 'required|date_format:Y-m-d',
+        ]);
+        $startDate = $validated['start_date'];
+        $endDate = $validated['end_date'];
+
+        $allActivities = WeekActivity::where('user_id', $user->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', ['completed', 'partial', 'not completed', 'rated'])
+            ->orderBy('date', 'desc')
+            ->get();
+
+        $data = [
+            'performanceStats' => $this->getPerformanceStatsForUser($user, $startDate, $endDate),
+            'productBreakdown' => $this->getProductBreakdownForUser($user, $startDate, $endDate),
+            'weeklyLoadChart' => $this->getWeeklyLoadForUser($user, $startDate, $endDate),
+            'pulseHistory' => $this->getPulseHistoryForUser($user, $startDate, $endDate), // Lo modificaremos abajo
+            'collaborationStats' => $this->getCollaborationStatsForUser($user, $startDate, $endDate),
+            'allActivities' => $allActivities,
+        ];
+
+        return response()->json(['data' => $data]);
     }
 }

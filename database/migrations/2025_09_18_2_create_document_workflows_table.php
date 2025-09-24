@@ -22,6 +22,7 @@ return new class extends Migration
 
             $table->string('action_type')->default('for_information');
             $table->string('status')->default('pending');
+            $table->string('state')->default('active');
             $table->text('comments')->nullable();
             $table->integer('step')->default(1);
 

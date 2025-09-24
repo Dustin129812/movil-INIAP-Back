@@ -20,18 +20,26 @@ class DocumentController extends Controller
         $user = $request->user();
         $userId = $user->id;
 
-        $documents = Document::where('status', 'enviado')
+        $documents = Document::whereIn('status', ['enviado', 'finalizado'])
             ->where(function ($query) use ($userId) {
+
                 $query->whereHas('workflows', function ($subQuery) use ($userId) {
-                    $subQuery->where('recipient_id', $userId);
+                    $subQuery->where('recipient_id', $userId)
+                        ->where('state', 'active');
                 })
                     ->orWhereHas('workflows', function ($subQuery) use ($userId) {
-                        $subQuery->where('reassigned_to_id', $userId);
+                        $subQuery->where('reassigned_to_id', $userId)
+                            ->where('status', 'reassigned');
                     });
+
             })
             ->with([
                 'creator',
                 'documentType',
+                'workflows' => function ($query) use ($userId) {
+                    $query->where('recipient_id', $userId)
+                        ->orWhere('reassigned_to_id', $userId);
+                },
                 'workflows.recipient',
                 'workflows.sender',
                 'workflows.reassignedToUser',
@@ -48,7 +56,7 @@ class DocumentController extends Controller
     public function sent(Request $request)
     {
         $documents = $request->user()->documents()
-            ->where('status', 'enviado')
+            ->whereIn('status', ['enviado', 'finalizado'])
             ->with([
                 'creator',
                 'documentType',
@@ -108,6 +116,7 @@ class DocumentController extends Controller
             'reference_number' => 'nullable|string|max:100',
             'parent_id' => 'nullable|integer|exists:documents,id',
             'on_behalf_of_user_id' => 'nullable|integer|exists:users,id',
+            'interaction_mode' => 'required|in:responsive,collaborative',
         ]);
 
         if ($validator->fails()) {
@@ -124,6 +133,7 @@ class DocumentController extends Controller
             'parent_id' => $request->input('parent_id'),
             'on_behalf_of_user_id' => $request->input('on_behalf_of_user_id'),
             'status' => 'borrador',
+            'interaction_mode' => $request->input('interaction_mode'),
         ]);
 
         return response()->json($document, 201);
@@ -207,7 +217,7 @@ class DocumentController extends Controller
                     ]);
                 }
             }
-            $document->update(['status' => 'enviado']);
+            $document->update(['status' => 'enviado', 'finalizado']);
 
             if ($isDelegate && $originalWorkflow) {
                 $originalWorkflow->update(['status' => 'answered']);
@@ -303,5 +313,139 @@ class DocumentController extends Controller
         ]);
 
         return response()->json(['message' => 'Documento reasignado con éxito.']);
+    }
+
+    public function search(Request $request)
+    {
+        $user = $request->user();
+        $userId = $user->id;
+        $searchTerm = $request->query('q');
+
+        $senderId = $request->query('sender_id');
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+        $status = $request->query('status');
+
+        $documents = Document::query()
+            ->whereIn('status',
+                ['enviado', 'finalizado', 'borrador', 'pendiente', 'contestado', 'leido'])
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId) // Yo soy el creador
+                ->orWhereHas('workflows', function ($subQuery) use ($userId) {
+                    $subQuery->where('recipient_id', $userId)
+                        ->orWhere('reassigned_to_id', $userId);
+                });
+            })
+            ->when($searchTerm, function ($query, $searchTerm) {
+                $query->where(function ($q) use ($searchTerm) {
+                    $q->where('subject', 'LIKE', "%{$searchTerm}%")
+                        ->orWhere('content', 'LIKE', "%{$searchTerm}%")
+                        ->orWhereHas('creator', function ($subQ) use ($searchTerm) {
+                            $subQ->where('name', 'LIKE', "%{$searchTerm}%");
+                        });
+                });
+            })
+            ->when($senderId, function ($query, $senderId) {
+                $query->where('user_id', $senderId);
+            })
+            ->when($dateFrom, function ($query, $dateFrom) {
+                $query->where('created_at', '>=', $dateFrom);
+            })
+            ->when($dateTo, function ($query, $dateTo) {
+                $query->where('created_at', '<=', $dateTo);
+            })
+            ->when($status, function ($query, $status) {
+                $query->whereHas('workflows', function ($q) use ($status) {
+                    $q->where('status', $status);
+                });
+            })
+            ->with([
+                'creator',
+                'documentType',
+                'workflows.recipient',
+                'workflows.sender',
+                'workflows.reassignedToUser'
+            ])
+            ->latest()
+            ->get();
+        return response()->json($documents);
+    }
+
+    // app/Http/Controllers/DocumentController.php
+
+    public function archived(Request $request)
+    {
+        $user = $request->user();
+        $userId = $user->id;
+
+        $documents = Document::where('status', 'enviado')
+            // La consulta ahora filtra correctamente DENTRO del workflow
+            ->whereHas('workflows', function ($query) use ($userId) {
+                $query
+                    // Condición 1: El workflow me pertenece
+                    ->where(function ($subQuery) use ($userId) {
+                        $subQuery->where('recipient_id', $userId)
+                            ->orWhere('reassigned_to_id', $userId);
+                    })
+                    // Condición 2: Y MI estado con ese documento es 'archived'
+                    ->where('state', 'archived');
+            })
+            ->with([
+                'creator',
+                'documentType',
+                'workflows' => function ($query) use ($userId) {
+                    // Cargamos solo nuestro workflow para la vista
+                    $query->where('recipient_id', $userId)
+                        ->orWhere('reassigned_to_id', $userId);
+                },
+                'workflows.recipient',
+                'workflows.sender',
+            ])
+            ->latest()
+            ->get();
+
+        return response()->json($documents);
+    }
+
+    /**
+     * Actualiza un documento colaborativo existente.
+     */
+    public function update(Request $request, Document $document)
+    {
+        if ($request->user()->id !== $document->user_id) {
+            return response()->json(['message' => 'Acción no autorizada.'], 403);
+        }
+        if ($document->interaction_mode !== 'collaborative') {
+            return response()->json(['message' => 'Este tipo de documento no permite la edición.'], 403);
+        }
+        if ($document->status === 'finalizado') {
+            return response()->json(['message' => 'Este documento ya está finalizado y no puede ser modificado.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'subject' => 'sometimes|required|string|max:255',
+            'content' => 'sometimes|nullable|string',
+        ]);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
+
+        $document->update($request->only('subject', 'content'));
+
+        return response()->json($document);
+    }
+
+    /**
+     * Finaliza un documento, bloqueándolo para futuras ediciones.
+     */
+    public function finalize(Request $request, Document $document)
+    {
+        if ($request->user()->id !== $document->user_id || $document->interaction_mode !== 'collaborative' || $document->status === 'finalizado') {
+            return response()->json(['message' => 'Acción no autorizada.'], 403);
+        }
+
+        $document->update(['status' => 'finalizado']);
+
+        return response()->json(['message' => 'Documento finalizado con éxito.']);
     }
 }

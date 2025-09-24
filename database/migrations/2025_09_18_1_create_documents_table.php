@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('subject');
             $table->json('content')->nullable();
             $table->string('status')->default('borrador');
+            $table->string('interaction_mode')->default('responsive');
             $table->string('category')->nullable();
             $table->string('typification')->nullable();
             $table->string('reference_number')->nullable();

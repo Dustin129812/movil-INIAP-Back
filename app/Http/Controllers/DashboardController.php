@@ -1,9 +1,10 @@
 <?php
-// Archivo: app/Http/Controllers/DashboardController.php
 
 namespace App\Http\Controllers;
 
+use App\Models\WeeklyPulse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Models\Product;
@@ -39,7 +40,6 @@ class DashboardController extends Controller
 
         // Calcular el progreso de cada proyecto
         $projectsWithProgress = $myProjects->map(function ($product) {
-            // Lógica simple de progreso: porcentaje de actividades con al menos un reporte
             $totalActivities = $product->activities->count();
             if ($totalActivities === 0) {
                 $progress = 0;
@@ -121,6 +121,176 @@ class DashboardController extends Controller
             'reviewQueue' => $pendingReviews,
             'teamPulse' => $teamPulse,
             'programStats' => $stats,
+        ]);
+    }
+
+    public function getPortfolioProgress(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            $products = Product::where('location_id', $user->location_id)
+                ->with([
+                    'rubro',
+                    'user', // Responsable del producto
+                    'activities' => function ($query) {
+                        $query->with(['users', 'monthlyExecutionProgress']); // Cargamos las relaciones necesarias
+                    },
+                ])->get();
+
+            $formattedProducts = $products->map(function ($product) {
+                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+                    $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
+                    $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
+                    $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
+
+                    return [
+                        'total_progress' => $totalActivityProgress,
+                    ];
+                });
+
+                $totalProductProgress = $mappedActivities->sum('total_progress');
+
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'absolute_weight' => $productAbsoluteWeight,
+                    'total_progress' => $totalProductProgress,
+                    'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'N/A'] : null,
+                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                ];
+            });
+
+            $totalRubroProgress = $formattedProducts->sum('total_progress');
+
+            return response()->json([
+                'msg' => ['summary' => 'Éxito', 'detail' => 'Reporte de portafolio obtenido correctamente.', 'code' => 200],
+                'data' => [
+                    'total_rubro_progress' => $totalRubroProgress,
+                    'products' => $formattedProducts->values()->toArray(),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'msg' => ['summary' => 'Error', 'detail' => 'No se pudo generar el reporte de portafolio.', 'code' => 500]
+            ], 500);
+        }
+    }
+
+    public function getTeamPerformance(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date_format:Y-m-d',
+            'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+        ]);
+
+        $manager = Auth::user();
+        $startDate = $request->start_date;
+        $endDate = $request->end_date;
+
+        $teamMemberIds = $manager->groups()->with('members')->get()
+            ->flatMap(fn($group) => $group->members->pluck('id'))
+            ->unique();
+
+        if ($teamMemberIds->isEmpty()) {
+            return response()->json(['data' => []]);
+        }
+
+        $performanceData = WeekActivity::whereIn('user_id', $teamMemberIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', ['completed', 'partial', 'not completed', 'rated']) // Estados que cuentan como finalizados
+            ->join('users', 'weekly_activities.user_id', '=', 'users.id')
+            ->select(
+                'user_id',
+                'users.name as user_name',
+                DB::raw("COUNT(CASE WHEN weekly_activities.percentage = 100 THEN 1 END) as completed_count"),
+                DB::raw("COUNT(CASE WHEN weekly_activities.percentage > 0 AND weekly_activities.percentage < 100 THEN 1 END) as partial_count"),
+                DB::raw("COUNT(CASE WHEN weekly_activities.percentage = 0 THEN 1 END) as not_completed_count"),
+                DB::raw("AVG(weekly_activities.percentage) as average_compliance")
+            )
+            ->groupBy('user_id', 'users.name')
+            ->get();
+
+        return response()->json(['data' => $performanceData]);
+    }
+
+    /**
+     * Devuelve los datos para el widget de "Planificaciones por Revisar".
+     */
+    public function getReviewQueue(Request $request)
+    {
+        $manager = Auth::user();
+        $manager->load('groups.members');
+        $teamMemberIds = $manager->groups->flatMap(fn($group) => $group->members->pluck('id'))->unique();
+
+        $pendingActivities = WeekActivity::whereIn('user_id', $teamMemberIds)
+            ->where('status', 'pending')
+            ->with('user:id,name')
+            ->latest()->take(5)->get();
+
+        $reviewQueue = $pendingActivities->map(fn($activity) => [
+            'id' => $activity->id,
+            'userName' => $activity->user->name,
+            'submissionDate' => Carbon::parse($activity->created_at)->diffForHumans(),
+        ]);
+
+        return response()->json(['data' => $reviewQueue]);
+    }
+
+    /**
+     * Devuelve los datos para el widget de "Pulso del Equipo".
+     */
+    public function getTeamPulseData(Request $request)
+    {
+        $manager = Auth::user();
+        $manager->load('groups.members');
+        $startDate = Carbon::now()->subWeek()->startOfWeek();
+        $teamMemberIds = $manager->groups->flatMap(fn($group) => $group->members->pluck('id'))->unique();
+        $teamMembers = User::whereIn('id', $teamMemberIds)->get();
+
+        if ($teamMembers->isEmpty()) {
+            return response()->json(['data' => ['teamPulseData' => [], 'summary' => null]]);
+        }
+
+        $pulses = WeeklyPulse::whereIn('user_id', $teamMemberIds)
+            ->where('week_start_date', $startDate->toDateString())
+            ->get()->keyBy('user_id');
+
+        $teamPulseData = $teamMembers->map(function ($member) use ($pulses) {
+            $pulse = $pulses->get($member->id);
+            return [
+                'name' => $member->name,
+                'status' => $pulse->status ?? 'gray',
+                'comment' => $pulse->comment ?? 'No reportado',
+            ];
+        });
+
+        $counts = $teamPulseData->countBy('status');
+        $total = $teamMembers->count();
+        $summary = [
+            'total' => $total,
+            'counts' => [
+                'green' => $counts->get('green', 0),
+                'yellow' => $counts->get('yellow', 0),
+                'red' => $counts->get('red', 0),
+                'gray' => $counts->get('gray', 0),
+            ],
+            'percentages' => [
+                'green' => $total > 0 ? round(($counts->get('green', 0) / $total) * 100) : 0,
+                'yellow' => $total > 0 ? round(($counts->get('yellow', 0) / $total) * 100) : 0,
+                'red' => $total > 0 ? round(($counts->get('red', 0) / $total) * 100) : 0,
+                'gray' => $total > 0 ? round(($counts->get('gray', 0) / $total) * 100) : 0,
+            ]
+        ];
+
+        return response()->json([
+            'data' => [
+                'teamPulseData' => $teamPulseData,
+                'summary' => $summary,
+            ]
         ]);
     }
 }
