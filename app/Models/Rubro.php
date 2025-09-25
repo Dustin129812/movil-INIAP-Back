@@ -17,4 +17,12 @@ class Rubro extends Model
     public function product(){
         return $this->hasMany(Product::class);
     }
+
+    public function products(){
+        return $this->hasMany(Product::class);
+    }
+
+    public function groups(){
+        return $this->hasMany(Group::class);
+    }
 }

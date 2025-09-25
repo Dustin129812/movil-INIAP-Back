@@ -15,10 +15,12 @@ return new class extends Migration
             $table->id();
             $table->timestamps();
             $table->softDeletes();
-            
+
             $table->string('name');
+            $table->decimal('latitude', 10, 7)->nullable();
+            $table->decimal('longitude', 10, 7)->nullable();
             $table->string('adress');
-            
+
             $table->foreignId('province_id')->constrained('provinces');
             $table->foreignId('canton_id')->constrained('cantons');
         });

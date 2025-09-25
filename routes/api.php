@@ -59,7 +59,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getUsers', [UserController::class, 'getUsers']);
     Route::get('profile', [UserController::class, 'getProfile']);
     Route::put('profile/update-password', [UserController::class, 'updatePassword']);
-    Route::get('getUsersbyLocation',[UserController::class, 'getUsersbyLocation']);
+    Route::get('getUsersbyLocation', [UserController::class, 'getUsersbyLocation']);
 
     Route::post('addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
     Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
@@ -79,10 +79,10 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
     Route::get('getUniqueLocations', [PlannerController::class, 'getUniqueLocations']);
     Route::get('products-by-location/{locationId}', [PlannerController::class, 'getProductsByLocationId']);
-    Route::get('activities', [GeneralController::class, 'getActivitiesByProduct'] );
+    Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
-    Route::get('getProductsByLocation',[GeneralController::class,'getProductsByLocation']);
-    Route::get('getRubrosByLocation',[GeneralController::class,'getRubrosByLocation']);
+    Route::get('getProductsByLocation', [GeneralController::class, 'getProductsByLocation']);
+    Route::get('getRubrosByLocation', [GeneralController::class, 'getRubrosByLocation']);
 
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
@@ -101,8 +101,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
     Route::get('user-weekly-plans', [ReportController::class, 'getUserWeeklyPlans']);
-    Route::get('getUserWeeklyPlansbyLocation',[ReportController::class, 'getUserWeeklyPlansbyLocation']);
-    Route::get('generateWeeklyMonitoringReport',[ReportController::class, 'generateWeeklyMonitoringReport']);
+    Route::get('getUserWeeklyPlansbyLocation', [ReportController::class, 'getUserWeeklyPlansbyLocation']);
+    Route::get('generateWeeklyMonitoringReport', [ReportController::class, 'generateWeeklyMonitoringReport']);
 
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 
@@ -178,6 +178,28 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('/reports/user-deep-dive/{user}', [ReportController::class, 'generateUserDeepDivePdf']);
     Route::get('/reports/user-deep-dive/{user}/data', [ReportController::class, 'getUserDeepDiveData']);
+
+    Route::get('/reports/my-performance', [DashboardController::class, 'getMyPerformance']);
+    Route::get('/reports/my-pulse-history', [DashboardController::class, 'getMyPulseHistory']);
+
+    Route::get('/dashboard/estacion/kpis', [EstacionDashboardController::class, 'getKpis']);
+    Route::get('/dashboard/estacion/group-performance', [EstacionDashboardController::class, 'getGroupPerformance']);
+    Route::get('/dashboard/estacion/team-pulse', [EstacionDashboardController::class, 'getTeamPulse']);
+    Route::get('/dashboard/estacion/rubro-deep-dive/{rubro}', [EstacionDashboardController::class, 'getRubroDeepDive']);
+    Route::get('/dashboard/estacion/rubro-performance', [EstacionDashboardController::class, 'getRubroPerformance']);
+    Route::get('/reports/rubro-deep-dive/{rubro}', [ReportController::class, 'generateRubroDeepDivePdf']);
+
+    Route::middleware(['auth:api', 'permission:view-national-dashboard'])->group(function () {
+
+        Route::get('/dashboard/national/kpis', [NationalDashboardController::class, 'getNationalKpis']);
+        Route::get('/dashboard/national/station-performance', [NationalDashboardController::class, 'getStationPerformance']);
+        Route::get('/dashboard/national/pulse-summary', [NationalDashboardController::class, 'getNationalPulseSummary']);
+        Route::get('/dashboard/national/rubro-performance', [NationalDashboardController::class, 'getNationalRubroPerformance']);
+        Route::get('/reports/national/executive-summary', [ReportController::class, 'generateNationalExecutiveSummary']);
+        Route::get('/reports/national/station-comparison', [ReportController::class, 'generateStationComparisonReport']);
+
+    });
+
 });
 
 Route::post('/ask-database', [AiQueryController::class, 'handleQuery']);

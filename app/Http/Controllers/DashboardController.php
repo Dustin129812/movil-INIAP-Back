@@ -13,6 +13,8 @@ use App\Models\User;
 
 class DashboardController extends Controller
 {
+
+
     /**
      * Obtiene los datos para el dashboard del rol 'researcher'.
      */
@@ -112,7 +114,7 @@ class DashboardController extends Controller
         $stats = [
             'activeProjects' => Product::whereIn('user_id', $teamMemberIds)->count(),
             'pendingActivities' => $pendingReviews->count(),
-            'overdueActivities' => 0, // Lógica a implementar si es necesaria
+            'overdueActivities' => 0,
             'teamMembers' => $teamMemberIds->count(),
         ];
 
@@ -132,9 +134,9 @@ class DashboardController extends Controller
             $products = Product::where('location_id', $user->location_id)
                 ->with([
                     'rubro',
-                    'user', // Responsable del producto
+                    'user',
                     'activities' => function ($query) {
-                        $query->with(['users', 'monthlyExecutionProgress']); // Cargamos las relaciones necesarias
+                        $query->with(['users', 'monthlyExecutionProgress']);
                     },
                 ])->get();
 
@@ -292,5 +294,52 @@ class DashboardController extends Controller
                 'summary' => $summary,
             ]
         ]);
+    }
+
+    /**
+     * Obtiene las estadísticas de rendimiento para el usuario autenticado.
+     */
+    public function getMyPerformance(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date_format:Y-m-d',
+            'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+        ]);
+
+        $user = Auth::user();
+
+        $performanceData = WeekActivity::where('user_id', $user->id)
+            ->whereBetween('date', [$request->start_date, $request->end_date])
+            ->whereIn('status', ['completed', 'partial', 'not completed', 'rated'])
+            ->select(
+                DB::raw("COUNT(CASE WHEN percentage = 100 THEN 1 END) as completed_count"),
+                DB::raw("COUNT(CASE WHEN percentage > 0 AND percentage < 100 THEN 1 END) as partial_count"),
+                DB::raw("COUNT(CASE WHEN percentage = 0 THEN 1 END) as not_completed_count"),
+                DB::raw("AVG(percentage) as average_compliance")
+            )
+            ->first();
+
+        return response()->json(['data' => $performanceData]);
+    }
+
+    /**
+     * Obtiene el historial de pulso para el usuario autenticado.
+     */
+    public function getMyPulseHistory(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date_format:Y-m-d',
+            'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+        ]);
+
+        $user = Auth::user();
+
+        $pulseHistory = WeeklyPulse::where('user_id', $user->id)
+            ->whereBetween('week_start_date', [$request->start_date, $request->end_date])
+            ->orderBy('week_start_date', 'desc')
+            ->select('week_start_date', 'status', 'comment')
+            ->get();
+
+        return response()->json(['data' => $pulseHistory]);
     }
 }

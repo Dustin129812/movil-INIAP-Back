@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Traits\CalculatesProgress;
+use App\Models\Location;
 use App\Models\Product;
+use App\Models\Rubro;
 use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeeklyPulse;
@@ -11,9 +14,12 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ReportController extends Controller
 {
+
+    use CalculatesProgress;
     public function generateWeeklyPlanReport(Request $request)
     {
         Carbon::setLocale('es');
@@ -513,8 +519,21 @@ class ReportController extends Controller
         $startDate = $validated['start_date'];
         $endDate = $validated['end_date'];
 
+        // --- OBTENEMOS LA NUEVA DATA ---
+        // Obtenemos el registro de todas las actividades semanales finalizadas
+        $allActivities = WeekActivity::where('user_id', $user->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', ['completed', 'partial', 'not completed', 'rated'])
+            ->orderBy('date', 'desc')
+            ->get();
+
+        // Agrupamos las actividades por fecha para facilitar su uso en la vista Blade
+        $groupedActivities = $allActivities->groupBy(function ($activity) {
+            return Carbon::parse($activity->date)->locale('es')->isoFormat('dddd, D [de] MMMM [de] YYYY');
+        });
+
+        // Los otros datos se obtienen igual
         $performanceStats = $this->getPerformanceStatsForUser($user, $startDate, $endDate);
-        $productBreakdown = $this->getProductBreakdownForUser($user, $startDate, $endDate);
         $weeklyLoadChart = $this->getWeeklyLoadForUser($user, $startDate, $endDate);
         $pulseHistory = $this->getPulseHistoryForUser($user, $startDate, $endDate);
         $collaborationStats = $this->getCollaborationStatsForUser($user, $startDate, $endDate);
@@ -525,11 +544,12 @@ class ReportController extends Controller
             'startDate' => Carbon::parse($startDate)->locale('es')->isoFormat('LL'),
             'endDate' => Carbon::parse($endDate)->locale('es')->isoFormat('LL'),
             'performanceStats' => $performanceStats,
-            'productBreakdown' => $productBreakdown,
             'weeklyLoadChart' => $weeklyLoadChart,
             'pulseHistory' => $pulseHistory,
             'collaborationStats' => $collaborationStats,
+            'groupedActivities' => $groupedActivities, // <-- Pasamos la nueva data a la vista
         ];
+
         $pdf = Pdf::loadView('reports.user_deep_dive_report', $data);
         return $pdf->download('informe-detallado-' . $user->name . '.pdf');
     }
@@ -543,6 +563,7 @@ class ReportController extends Controller
     {
         return WeekActivity::where('user_id', $user->id)
             ->whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', ['completed', 'partial', 'not completed', 'rated'])
             ->select(
                 DB::raw("COUNT(*) as total_activities"),
                 DB::raw("COUNT(CASE WHEN percentage = 100 THEN 1 END) as completed"),
@@ -637,5 +658,157 @@ class ReportController extends Controller
         ];
 
         return response()->json(['data' => $data]);
+    }
+
+    public function generateRubroDeepDivePdf(Request $request, Rubro $rubro)
+    {
+        $rubro->load([
+            'groups' => function ($query) {
+                $query->where('location_id', Auth::user()->location_id);
+            },
+            'products' => function ($query) {
+                $query->where('location_id', Auth::user()->location_id)
+                    ->with(['activities.weeklyActivities' => function ($q) {
+                        $q->with('user:id,name')->orderBy('date', 'desc');
+                    }]);
+            }
+        ]);
+
+        $totalBudget = $rubro->products->sum('budget');
+
+        $reportData = [
+            'rubro' => [
+                'name' => $rubro->name,
+                'total_budget' => $totalBudget,
+                'groups' => $rubro->groups->toArray(),
+                'products' => $rubro->products->toArray(),
+            ]
+        ];
+
+        $pdf = Pdf::loadView('reports.rubro_deep_dive_report', $reportData);
+        return $pdf->download('informe_detallado_' . Str::slug($rubro->name) . '.pdf');
+    }
+
+    public function generateNationalExecutiveSummary(Request $request)
+    {
+        // --- FASE 1: OBTENCIÓN DE DATOS GLOBALES ---
+        $locations = Location::all();
+        $allProducts = Product::with(['activities.monthlyExecutionProgress'])->get();
+
+        // --- MODIFICACIÓN CLAVE: Filtramos solo usuarios con el rol 'researcher' ---
+        $allUsers = User::whereHas('roles', function ($query) {
+            $query->where('name', 'researcher');
+        })->get();
+
+        $officialRubroId = Rubro::where('name', 'OFICIAL')->value('id');
+
+        // Agrupamos para eficiencia
+        $productsByLocation = $allProducts->groupBy('location_id');
+        $usersByLocation = $allUsers->groupBy('location_id');
+
+        // --- FASE 2: ANÁLISIS DETALLADO POR ESTACIÓN ---
+        $detailedStationData = $locations->map(function ($location) use ($productsByLocation, $usersByLocation, $officialRubroId) {
+
+            $stationId = $location->id;
+            $locationProducts = $productsByLocation->get($stationId) ?? collect();
+            // Ahora $locationUsers solo contiene investigadores
+            $locationUsers = $usersByLocation->get($stationId) ?? collect();
+
+            // (El resto de los cálculos no necesitan cambios, ya que ahora operan sobre los datos filtrados)
+            $poaProducts = $locationProducts->where('rubro_id', '!=', $officialRubroId);
+            $progress = $this->calculateTotalProgress($poaProducts);
+            $totalBudget = $locationProducts->sum('budget');
+            $recentDate = Carbon::now()->subDays(30);
+
+            $activeProjectsCount = Product::where('location_id', $stationId)
+                ->whereHas('activities.weeklyActivities', function ($query) use ($recentDate) {
+                    $query->where('date', '>=', $recentDate);
+                })
+                ->count();
+
+            $fourWeeksAgo = Carbon::now()->subWeeks(4)->startOfWeek();
+            $recentProgress = WeekActivity::whereIn('user_id', $locationUsers->pluck('id'))
+                ->where('date', '>=', $fourWeeksAgo)
+                ->avg('percentage');
+
+            return [
+                'name' => $location->name,
+                'poa_progress' => round($progress * 100, 2),
+                'total_budget' => $totalBudget,
+                'project_count' => $locationProducts->count(),
+                'active_projects_count' => $activeProjectsCount,
+                'researcher_count' => $locationUsers->count(),
+                'monthly_progress_estimate' => round($recentProgress, 2) ?: 0,
+                'researchers' => $locationUsers->pluck('name')->toArray(),
+            ];
+        });
+
+        // --- FASE 3: CONSOLIDACIÓN DE KPIs NACIONALES ---
+        // (Los KPIs ahora reflejarán el conteo correcto de investigadores)
+        $kpis = [
+            'poa_progress' => round($detailedStationData->avg('poa_progress'), 2),
+            'total_budget' => $detailedStationData->sum('total_budget'),
+            'total_projects' => $detailedStationData->sum('project_count'),
+            'total_researchers' => $detailedStationData->sum('researcher_count'),
+            'active_stations' => $locations->count(),
+        ];
+
+        $dataForView = [
+            'kpis' => $kpis,
+            'stationData' => $detailedStationData->sortByDesc('poa_progress')->values(),
+        ];
+
+        $pdf = Pdf::loadView('reports.national_executive_summary', $dataForView);
+        $pdf->setPaper('a4', 'portrait');
+        return $pdf->download('informe_situacion_nacional.pdf');
+    }
+
+    public function generateStationComparisonReport(Request $request)
+    {
+        // Usamos la lógica de NationalDashboardController para obtener los datos base
+        $dashboardController = new NationalDashboardController();
+        $performanceResponse = $dashboardController->getStationPerformance($request);
+        $performanceData = collect($performanceResponse->getData()->data);
+
+        // --- ENRIQUECEMOS LOS DATOS CON MÉTRICAS ADICIONALES ---
+        $lastWeekStartDate = Carbon::now()->subWeek()->startOfWeek();
+
+        $enrichedData = $performanceData->map(function ($stationData) use ($lastWeekStartDate) {
+            $stationId = $stationData->location_id;
+
+            // Calcular Presupuesto Total
+            $stationData->total_budget = Product::where('location_id', $stationId)->sum('budget');
+
+            // Calcular Pulso Promedio
+            $memberIds = User::where('location_id', $stationId)->pluck('id');
+            $pulses = WeeklyPulse::whereIn('user_id', $memberIds)
+                ->where('week_start_date', $lastWeekStartDate->toDateString())
+                ->get();
+
+            if ($pulses->isEmpty() || $memberIds->isEmpty()) {
+                $stationData->average_pulse_score = 0;
+            } else {
+                $pulseScoreMap = ['green' => 3, 'yellow' => 2, 'red' => 1];
+                $totalScore = $pulses->reduce(fn($sum, $pulse) => $sum + ($pulseScoreMap[$pulse->status] ?? 0), 0);
+                // Consideramos a los que no reportaron (gray) como 0 en el promedio
+                $stationData->average_pulse_score = $totalScore / $memberIds->count();
+            }
+
+            return (array) $stationData;
+        });
+
+        // Ordenar por progreso para los rankings
+        $sortedData = $enrichedData->sortByDesc('poa_progress')->values();
+
+        // Identificar puntos clave para el resumen ejecutivo
+        $dataForView = [
+            'performanceData' => $sortedData,
+            'topPerformer' => $sortedData->first(),
+            'lowPerformer' => $sortedData->last(),
+            'pulseAlert' => $sortedData->where('average_pulse_score', '>', 0)->sortBy('average_pulse_score')->first(),
+        ];
+
+        $pdf = Pdf::loadView('reports.station_comparison_report', $dataForView);
+        return $pdf->download('reporte_comparativo_estaciones.pdf');
     }
 }
