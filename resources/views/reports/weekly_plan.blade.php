@@ -102,22 +102,26 @@
     </tr>
     </thead>
     <tbody>
-    @forelse ($weekActivities->sortBy('date')->flatten() as $activity)
-        <tr>
-            <td class="text-center capitalize">
-                {{ \Carbon\Carbon::parse($activity->date)->translatedFormat('l d/m') }}
-            </td>
+    {{-- Usamos un @foreach anidado para respetar la agrupación por fecha --}}
+    @forelse ($weekActivities as $date => $activitiesOnThisDay)
+        @foreach ($activitiesOnThisDay as $activity)
+            <tr>
+                {{-- Mostramos la fecha solo en la primera fila de cada día --}}
+                @if ($loop->first)
+                    <td class="text-center capitalize" rowspan="{{ count($activitiesOnThisDay) }}">
+                        {{ \Carbon\Carbon::parse($date)->translatedFormat('l d/m') }}
+                    </td>
+                @endif
 
-            <td>{{ $activity->activity->product->name ?? '--' }}</td>
-
-            <td>{{ $activity->activity->product->rubro->name ?? '--' }}</td>
-
-            <td>{{ $activity->activity->description ?? '--' }}</td>
-            <td>{{ $activity->description ?? '--' }}</td>
-            <td>{{ $activity->logisticSupportUsers->pluck('name')->implode(', ') ?: '--' }}</td>
-            <td>{{ $activity->performanceIndicators->pluck('name')->implode(', ') ?: '--' }}</td>
-            <td>{{ $activity->observations ?? '--' }}</td>
-        </tr>
+                <td>{{ $activity->activity->product->name ?? '--' }}</td>
+                <td>{{ $activity->activity->product->rubro->name ?? '--' }}</td>
+                <td>{{ $activity->activity->description ?? '--' }}</td>
+                <td>{{ $activity->description ?? '--' }}</td>
+                <td>{{ $activity->logisticSupportUsers->pluck('name')->implode(', ') ?: '--' }}</td>
+                <td>{{ $activity->performanceIndicators->pluck('name')->implode(', ') ?: '--' }}</td>
+                <td>{{ $activity->observations ?? '--' }}</td>
+            </tr>
+        @endforeach
     @empty
         <tr>
             <td colspan="8" class="text-center" style="padding: 15px;">

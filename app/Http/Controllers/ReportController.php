@@ -42,7 +42,7 @@ class ReportController extends Controller
             return response()->json(['error' => 'Técnico no encontrado.'], 404);
         }
 
-        $ratedStatuses = ['approved'];
+        $ratedStatuses = ['approved', 'completed', 'partial', 'not completed', 'rated'];
 
         $weekActivities = WeekActivity::where('user_id', $userId)
             ->whereBetween('date', [$startDate, $endDate])
@@ -519,7 +519,6 @@ class ReportController extends Controller
         $startDate = $validated['start_date'];
         $endDate = $validated['end_date'];
 
-        // --- OBTENEMOS LA NUEVA DATA ---
         // Obtenemos el registro de todas las actividades semanales finalizadas
         $allActivities = WeekActivity::where('user_id', $user->id)
             ->whereBetween('date', [$startDate, $endDate])
