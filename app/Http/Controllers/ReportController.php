@@ -6,6 +6,7 @@ use App\Http\Controllers\Traits\CalculatesProgress;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\Rubro;
+use App\Models\Survey;
 use App\Models\User;
 use App\Models\WeekActivity;
 use App\Models\WeeklyPulse;
@@ -15,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\SimpleExcel\SimpleExcelWriter;
 
 class ReportController extends Controller
 {
@@ -809,5 +811,94 @@ class ReportController extends Controller
 
         $pdf = Pdf::loadView('reports.station_comparison_report', $dataForView);
         return $pdf->download('reporte_comparativo_estaciones.pdf');
+    }
+
+    public function exportPdf(Request $request, Survey $survey)
+    {
+        $surveyController = new SurveyController();
+        $resultsResponse = $surveyController->results($request, $survey);
+        $data = json_decode($resultsResponse->getContent(), true);
+
+        $pdf = Pdf::loadView('reports.survey_summary', ['data' => $data]);
+        $pdf->setPaper('a4', 'landscape');
+        $fileName = 'resumen-' . \Str::slug($survey->title) . '.pdf';
+        return $pdf->download($fileName);
+    }
+
+    /**
+     * Genera y descarga un archivo Excel con todas las respuestas individuales.
+     * ¡ACTUALIZADO CON spatie/simple-excel!
+     */
+    public function exportExcel(Request $request, Survey $survey)
+    {
+        $fileName = 'respuestas-detalladas-' . \Str::slug($survey->title) . '.xlsx';
+
+        // Obtenemos los datos, pero ahora unimos la tabla de usuarios para obtener su nombre o email
+        // y la de preguntas para obtener el tipo de pregunta.
+        $results = DB::table('responses')
+            ->join('answers', 'responses.id', '=', 'answers.response_id')
+            ->join('questions', 'answers.question_id', '=', 'questions.id')
+            ->leftJoin('users', 'responses.user_id', '=', 'users.id') // Usamos leftJoin por si hay respuestas anónimas
+            ->where('responses.survey_id', $survey->id)
+            ->select(
+                'responses.id as response_id',
+                'responses.created_at as date',
+                'users.name as user_name', // Obtenemos el nombre del usuario
+                'users.email as user_email', // Y/o el email
+                'questions.text as question_text',
+                'questions.type as question_type', // Obtenemos el tipo para procesar la respuesta
+                'answers.value as answer_value'
+            )
+            ->orderBy('responses.id')
+            ->cursor();
+
+        // --- MAPA PARA ANONIMIZAR USUARIOS ---
+        // Creamos un ID anónimo para cada participante
+        $userMap = [];
+        $participantCounter = 1;
+
+        return response()->streamDownload(function () use ($results, &$userMap, &$participantCounter) {
+            $writer = SimpleExcelWriter::streamDownload('php://output', 'xlsx');
+
+            $writer->addHeader([
+                'ID Participante (Anónimo)', // Columna de ID de usuario eliminada
+                'Fecha',
+                'Nombre Participante', // Opcional: Si la política lo permite
+                'Email Participante',  // Opcional: Si la política lo permite
+                'Pregunta',
+                'Respuesta',
+            ]);
+
+            foreach ($results as $row) {
+                // Lógica de anonimización
+                if (!isset($userMap[$row->user_email])) {
+                    $userMap[$row->user_email] = 'Participante ' . $participantCounter++;
+                }
+                $participantId = $userMap[$row->user_email];
+
+                // --- LÓGICA DE FORMATEO DE RESPUESTAS ---
+                $formattedValue = $row->answer_value;
+                switch ($row->question_type) {
+                    case 'checkbox':
+                        // Convertimos el JSON ["Opción A", "Opción B"] a "Opción A, Opción B"
+                        $formattedValue = implode(', ', json_decode($row->answer_value) ?? []);
+                        break;
+                    case 'boolean':
+                        // Convertimos 1/0 a Sí/No
+                        $formattedValue = $row->answer_value == 1 ? 'Sí' : 'No';
+                        break;
+                }
+
+                $writer->addRow([
+                    $participantId,
+                    $row->date,
+                    $row->user_name,
+                    $row->user_email,
+                    $row->question_text,
+                    $formattedValue,
+                ]);
+            }
+
+        }, $fileName);
     }
 }

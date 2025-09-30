@@ -11,19 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('locations', function (Blueprint $table) {
-            $table->decimal('latitude', 10, 7)->nullable()->after('name');
-            $table->decimal('longitude', 10, 7)->nullable()->after('latitude');
+        Schema::create('options', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('question_id')->constrained()->onDelete('cascade');
+            $table->string('text');
+            $table->integer('order')->default(0);
+            $table->timestamps();
         });
     }
+
 
     /**
      * Reverse the migrations.
      */
     public function down(): void
     {
-        Schema::table('locations', function (Blueprint $table) {
-            //
-        });
+        Schema::dropIfExists('options');
     }
 };

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
-use App\Http\Controllers\Admin\GlobalAlertController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 
@@ -38,6 +37,14 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::get('/conversations', [ConversationController::class, 'index']);
 
     Route::apiResource('patch-notes', PatchNoteController::class);
+
+    // Gestión de encuestas (admin)
+    Route::apiResource('surveys', SurveyController::class)->except(['index', 'show']);
+    Route::get('/surveys/{survey}/results', [SurveyController::class, 'results']);
+
+    Route::get('/surveys/{survey}/export/pdf', [ReportController::class, 'exportPdf']);
+    Route::get('/surveys/{survey}/export/excel', [ReportController::class, 'exportExcel']);
+    Route::get('{survey}/individual-responses', [SurveyController::class, 'individualResponses']);
 });
 
 Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
@@ -199,6 +206,10 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
         Route::get('/reports/national/station-comparison', [ReportController::class, 'generateStationComparisonReport']);
 
     });
+
+    Route::get('surveys', [SurveyController::class, 'index']);
+    Route::get('surveys/{survey}', [SurveyController::class, 'show']);
+    Route::post('surveys/{surveyId}/responses', [ResponseController::class, 'store']);
 
 });
 

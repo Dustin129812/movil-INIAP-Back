@@ -16,6 +16,7 @@
         "predis/predis": "^3.0",
         "pusher/pusher-php-server": "^7.2",
         "spatie/laravel-permission": "^6.17",
+        "spatie/simple-excel": "^3.8",
         "tuncaybahadir/quar": "^1.5",
         "tymon/jwt-auth": "^2.2"
     },
