@@ -26,11 +26,11 @@ class SurveyController extends Controller
                 ->where('is_active', true)
                 ->where(function ($query) {
                     $query->whereNull('start_date')
-                    ->orWhere('start_date', '<=', now());
+                        ->orWhere('start_date', '<=', now());
                 })
                 ->where(function ($query) {
                     $query->whereNull('end_date')
-                    ->orWhere('end_date', '>=', now());
+                        ->orWhere('end_date', '>=', now());
                 })
                 ->whereNotIn('id', $respondedSurveyIds)
                 ->with('questions.options')
@@ -92,7 +92,6 @@ class SurveyController extends Controller
         return response()->json($survey->load('questions.options'), 201);
     }
 
-
     // Actualizar encuesta (admin)
     public function update(Request $request, Survey $survey)
     {
@@ -110,7 +109,7 @@ class SurveyController extends Controller
         return response()->json(null, 204);
     }
 
-    public function results(Request $request, Survey $survey) // <-- Añadimos Request
+    public function results(Request $request, Survey $survey)
     {
         // Validamos que las fechas, si vienen, tengan el formato correcto.
         $validated = $request->validate([
@@ -139,7 +138,7 @@ class SurveyController extends Controller
         if (!empty($validated['question_id']) && !empty($validated['response_value'])) {
             $responsesQuery->whereHas('answers', function ($q) use ($validated) {
                 $q->where('question_id', $validated['question_id'])
-                    ->where('value', $validated['response_value']); // O whereJsonContains para arrays
+                    ->where('value', $validated['response_value']);
             });
         }
 
@@ -157,23 +156,41 @@ class SurveyController extends Controller
             // Obtenemos solo las respuestas que pasaron el filtro de fecha.
             $answers = DB::table('answers')
                 ->where('question_id', $question->id)
-                ->whereIn('response_id', $filteredResponseIds) // <-- La magia del filtro ocurre aquí
+                ->whereIn('response_id', $filteredResponseIds)
                 ->pluck('value');
 
             $data = null;
             $totalAnswersOnQuestion = $answers->count();
 
+            // Cargar las opciones de la pregunta para mapear IDs a textos
+            $options = $question->options->pluck('text', 'id')->toArray();
+
             switch ($question->type) {
                 case 'radio':
-                case 'boolean':
                 case 'scale':
-                    $data = $answers->countBy();
+                    // Mapear IDs a textos de opciones, o mantener el valor si no es un ID
+                    $data = $answers->countBy()->mapWithKeys(function ($count, $value) use ($options) {
+                        return [isset($options[$value]) ? $options[$value] : $value => $count];
+                    })->toArray();
+                    break;
+                case 'boolean':
+                    // Convertir 1/0 a Sí/No
+                    $data = $answers->countBy()->mapWithKeys(function ($count, $value) {
+                        return [$value == 1 ? 'Sí' : 'No' => $count];
+                    })->toArray();
                     break;
                 case 'checkbox':
+                    // Procesar respuestas JSON y mapear IDs a textos
                     $data = $answers
-                        ->flatMap(fn ($json) => json_decode($json) ?: [])
+                        ->flatMap(function ($json) use ($options) {
+                            $values = json_decode($json) ?: [];
+                            return array_map(function ($value) use ($options) {
+                                return isset($options[$value]) ? $options[$value] : $value;
+                            }, $values);
+                        })
                         ->filter()
-                        ->countBy();
+                        ->countBy()
+                        ->toArray();
                     break;
                 case 'text':
                 case 'textarea':

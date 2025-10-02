@@ -44,7 +44,7 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
 
     Route::get('/surveys/{survey}/export/pdf', [ReportController::class, 'exportPdf']);
     Route::get('/surveys/{survey}/export/excel', [ReportController::class, 'exportExcel']);
-    Route::get('{survey}/individual-responses', [SurveyController::class, 'individualResponses']);
+    Route::get('/surveys/{survey}/individual-responses', [SurveyController::class, 'individualResponses']);
 });
 
 Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
