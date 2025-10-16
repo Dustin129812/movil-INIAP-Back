@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Activity;
 use App\Models\Material;
+use App\Models\NoveltyActivity;
 use App\Models\Performance_Indicator;
 use App\Models\User;
 use App\Models\WeekActivity;
@@ -312,6 +313,91 @@ class WeekActivityController extends Controller
                     'code' => 500,
                 ],
             ], 500);
+        }
+    }
+
+    public function storeNovelty(Request $request)
+    {
+        // Iniciar una transacción para asegurar la integridad de los datos
+        DB::beginTransaction();
+
+        try {
+            // Validación de datos (puedes ajustarla según tus necesidades)
+            $validatedData = $request->validate([
+                'activityId' => 'required|exists:activities,id',
+                'description' => 'required|string',
+                'observations' => 'nullable|string',
+                'materials' => 'nullable|array',
+                'materials.*' => 'exists:materials,id',
+                'indicators' => 'nullable|array',
+                'indicators.*' => 'exists:performance_indicators,id',
+                'logisticSupports' => 'nullable|array',
+                'logisticSupports.*' => 'exists:users,id',
+            ]);
+
+            // Crear la actividad de novedad
+            $novelty = NoveltyActivity::create([
+                'user_id' => Auth::id(),
+                'activity_id' => $validatedData['activityId'],
+                'description' => $validatedData['description'],
+                'observations' => $validatedData['observations'] ?? null,
+                'execution_date' => Carbon::now(), // Guardamos la fecha y hora actual
+            ]);
+
+            // Sincronizar relaciones (materiales, indicadores, apoyo logístico)
+            if (!empty($validatedData['materials'])) {
+                $novelty->materials()->sync($validatedData['materials']);
+            }
+            if (!empty($validatedData['indicators'])) {
+                $novelty->indicators()->sync($validatedData['indicators']);
+            }
+            if (!empty($validatedData['logisticSupports'])) {
+                $novelty->logisticSupport()->sync($validatedData['logisticSupports']);
+            }
+
+            // Si todo fue bien, confirmamos la transacción
+            DB::commit();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Éxito',
+                    'detail' => 'Novedad registrada correctamente.',
+                    'code' => 201,
+                ],
+                'data' => $novelty->load(['materials', 'indicators', 'logisticSupport']), // Devolvemos el dato creado
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error al registrar la novedad: " . $e->getMessage());
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'No se pudo registrar la novedad. ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+
+    public function getNoveltiesForWeek(Request $request)
+    {
+        try {
+            $startOfWeek = Carbon::now()->startOfWeek();
+            $endOfWeek = Carbon::now()->endOfWeek();
+
+            $novelties = NoveltyActivity::where('user_id', Auth::id())
+                ->whereBetween('execution_date', [$startOfWeek, $endOfWeek])
+                ->with(['activity.product', 'materials', 'indicators', 'logisticSupport']) // Cargar relaciones
+                ->orderBy('execution_date', 'desc')
+                ->get();
+
+            return response()->json($novelties);
+
+        } catch (\Exception $e) {
+            Log::error("Error al obtener novedades de la semana: " . $e->getMessage());
+            return response()->json(['error' => 'Error al obtener las novedades.'], 500);
         }
     }
 }

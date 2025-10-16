@@ -24,6 +24,8 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
     Route::post('/import-users', [ImportController::class, 'importUserFile']);
 
+    Route::post('/users', [UserController::class, 'store']);
+
     // Gestión de Roles (CRUD)
     Route::apiResource('roles', RoleController::class);
     Route::get('roles/{role}/permissions', [RoleController::class, 'permissions']);
@@ -96,6 +98,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
     Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress']);
     Route::get('/previous-week-activities', [WeekActivityController::class, 'getPreviousWeekActivitiesForReview']);
+    Route::post('/novelties', [WeekActivityController::class, 'storeNovelty']);
+    Route::get('/novelties', [WeekActivityController::class, 'getNoveltiesForWeek']);
 
     Route::post('addLogistic', [GeneralController::class, 'addLogisticSupport']);
 
@@ -210,6 +214,10 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('surveys', [SurveyController::class, 'index']);
     Route::get('surveys/{survey}', [SurveyController::class, 'show']);
     Route::post('surveys/{surveyId}/responses', [ResponseController::class, 'store']);
+
+    Route::get('/nationalities', [NationalityController::class, 'index']);
+    Route::get('/ethnic_groups', [EthnicGroupController::class, 'index']);
+    Route::get('/areas', [AreaController::class, 'index']);
 
 });
 
