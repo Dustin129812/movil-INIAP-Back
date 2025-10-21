@@ -30,4 +30,9 @@ class AdminUserController extends Controller
 
         return new UserCollection($users);
     }
+
+    public function getUserRoles(User $user)
+    {
+        return response()->json($user->load('roles')->roles);
+    }
 }

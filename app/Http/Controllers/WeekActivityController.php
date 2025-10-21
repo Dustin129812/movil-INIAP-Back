@@ -400,4 +400,152 @@ class WeekActivityController extends Controller
             return response()->json(['error' => 'Error al obtener las novedades.'], 500);
         }
     }
+
+    public function registerPastWeek(Request $request)
+    {
+        $request->validate([
+            'selected_date' => 'required|date_format:Y-m-d',
+            'weeklyPlans' => 'required|array'
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $weeklyPlansData = $request->input('weeklyPlans');
+
+            if (!is_array($weeklyPlansData)) {
+                throw new \Exception("Formato de datos de planificación semanal inválido.");
+            }
+
+            $selectedDate = $request->input('selected_date');
+
+            $mondayOfSelectedWeek = Carbon::parse($selectedDate)->startOfWeek(Carbon::MONDAY);
+
+            $entries = [];
+            $product = null; // Para la notificación
+
+            foreach ($weeklyPlansData as $data) {
+                $activityId = $data['activityId'];
+                $description = $data['description'];
+                $dayName = $data['day'];
+                $materialsData = $data['materials'] ?? [];
+                $selectedIndicators = $data['indicators'] ?? []; // Array de IDs de indicadores
+                $observations = $data['observations'] ?? null;
+                $selectedLogisticSupportUserIds = $data['logisticSupports'] ?? [];
+
+                $activity = Activity::find($activityId);
+                if (!$activity) {
+                    throw new \Exception("Actividad con ID $activityId no encontrada.");
+                }
+
+                // Guardamos el producto para la notificación (asumimos que todas son del mismo producto)
+                if (!$product) {
+                    $product = $activity->product;
+                }
+
+                $userId = Auth::id();
+                if (!$userId) {
+                    throw new \Exception("No se pudo determinar el usuario autenticado.");
+                }
+
+                $dayOffsets = [
+                    'lunes' => 0,
+                    'martes' => 1,
+                    'miercoles' => 2,
+                    'jueves' => 3,
+                    'viernes' => 4,
+                    'sábado' => 5,
+                    'domingo' => 6,
+                ];
+
+                $activityDate = $mondayOfSelectedWeek->copy()->addDays($dayOffsets[$dayName] ?? 0);
+
+                $weekActivity = new WeekActivity();
+                $weekActivity->description = $description;
+                $weekActivity->date = $activityDate;
+                $weekActivity->status = 'pending'; // Inicia como pendiente, aunque sea pasada
+                $weekActivity->work_location = $activity->work_location ?? 'Oficina';
+                $weekActivity->observations = $observations;
+                $weekActivity->percentage = 0;
+                $weekActivity->activity_id = $activity->id;
+                $weekActivity->user_id = $userId;
+                $weekActivity->save();
+
+                $entries[] = $weekActivity;
+
+                if (!empty($materialsData)) {
+                    $syncData = [];
+                    foreach ($materialsData as $materialInput) {
+                        $materialFromDb = Material::where('name', $materialInput['name'])->first();
+                        if ($materialFromDb) {
+                            $syncData[$materialFromDb->id] = [
+                                'quantity' => $materialInput['quantity'] ?? null,
+                                'description' => $materialInput['description'] ?? null,
+                                'created_at' => now(),
+                                'updated_at' => now()
+                            ];
+                        }
+                    }
+                    if (!empty($syncData)) {
+                        $weekActivity->materials()->sync($syncData);
+                    }
+                } else {
+                    $weekActivity->materials()->detach();
+                }
+
+                if (!empty($selectedIndicators)) {
+                    $syncIndicators = [];
+                    foreach ($selectedIndicators as $indicatorId) {
+                        $performanceIndicator = Performance_Indicator::find($indicatorId);
+                        if (!$performanceIndicator) {
+                            throw new \Exception("Indicador de rendimiento con ID {$indicatorId} no encontrado.");
+                        }
+                        $syncIndicators[$indicatorId] = [
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ];
+                    }
+                    $weekActivity->performanceIndicators()->sync($syncIndicators);
+                } else {
+                    $weekActivity->performanceIndicators()->detach();
+                }
+
+                $validUserIds = array_filter($selectedLogisticSupportUserIds);
+                if (!empty($validUserIds)) {
+                    $weekActivity->logisticSupportUsers()->sync($validUserIds);
+                } else {
+                    $weekActivity->logisticSupportUsers()->detach();
+                }
+
+                $planner = new WeekPlanner();
+                $planner->product()->associate($activity->product);
+                $planner->weekActivity()->associate($weekActivity);
+                $planner->save();
+            }
+
+            DB::commit();
+
+            if ($product) {
+                $productManager = User::find($product->user_id);
+                $updater = Auth::user();
+
+                if ($productManager && $updater) {
+                    $productManager->notify(
+                        new OursWeekPlanner($entries, $updater)
+                    );
+                }
+            }
+
+            return response()->json([
+                'message' => 'Planificación de semana pasada guardada correctamente.'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            if ($e instanceof \Illuminate\Validation\ValidationException) {
+                return response()->json(['error' => $e->errors()], 422);
+            }
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }

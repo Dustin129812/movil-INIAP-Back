@@ -22,6 +22,7 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     // Gestión de Usuarios y Roles
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
+    Route::get('/users/{user}/roles', [AdminUserController::class, 'getUserRoles']);
     Route::post('/import-users', [ImportController::class, 'importUserFile']);
 
     Route::post('/users', [UserController::class, 'store']);
@@ -53,6 +54,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+
+    Route::post('/register-past-week', [WeekActivityController::class, 'registerPastWeek']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/read/{notificationId}', [NotificationController::class, 'markAsRead']);
