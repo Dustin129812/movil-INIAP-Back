@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\ExpenseType;
+use App\Modules\Planificacion\Models\ExpenseType;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 

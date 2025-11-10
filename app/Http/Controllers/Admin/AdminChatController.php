@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
-use App\Models\Conversation;
 use App\Models\User;
+use App\Modules\Planificacion\Models\Conversation;
 use Illuminate\Http\Request;
-// ¡Asegúrate de importar JWTAuth!
 use Tymon\JWTAuth\Facades\JWTAuth;
+
+// ¡Asegúrate de importar JWTAuth!
 
 class AdminChatController extends Controller
 {

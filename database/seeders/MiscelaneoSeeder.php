@@ -2,21 +2,17 @@
 
 namespace Database\Seeders;
 
-use App\Models\Canton;
-use App\Models\Ethnic_Group;
 use App\Models\Experimental_Station;
-use App\Models\Investigation_Area;
-use App\Models\Investigation_Line;
-use App\Models\Location;
-use App\Models\LogisticSupport;
-use App\Models\Material;
-use App\Models\Measure;
 use App\Models\Multidisciplinary_Group;
-use App\Models\Nationality;
-use App\Models\Performance_Indicator;
-use App\Models\Province;
-use App\Models\Rubro;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Modules\Planificacion\Models\Canton;
+use App\Modules\Planificacion\Models\Ethnic_Group;
+use App\Modules\Planificacion\Models\Location;
+use App\Modules\Planificacion\Models\Material;
+use App\Modules\Planificacion\Models\Measure;
+use App\Modules\Planificacion\Models\Nationality;
+use App\Modules\Planificacion\Models\Performance_Indicator;
+use App\Modules\Planificacion\Models\Province;
+use App\Modules\Planificacion\Models\Rubro;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 

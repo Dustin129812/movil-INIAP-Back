@@ -1,15 +1,17 @@
 <?php
 
-namespace App\Http\Controllers;
-
-use App\Http\Controllers\Admin\AdminUserController;
-use App\Http\Controllers\Admin\FeatureFlagController;
-use App\Http\Controllers\Admin\PermissionController;
-use App\Http\Controllers\Admin\RoleController;
+namespace App\Modules\Planificacion\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+// --- CONTROLADORES DEL NÚCLEO (Core) ---
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\FeatureFlagController;
+use App\Http\Controllers\Admin\PermissionController;
+use App\Http\Controllers\Admin\RoleController;
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
 Route::post('fiasa/login', [AuthController::class, 'fiasaLogin']);
@@ -203,7 +205,10 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/dashboard/estacion/rubro-performance', [EstacionDashboardController::class, 'getRubroPerformance']);
     Route::get('/reports/rubro-deep-dive/{rubro}', [ReportController::class, 'generateRubroDeepDivePdf']);
 
-    Route::middleware(['auth:api', 'permission:view-national-dashboard'])->group(function () {
+    Route::post('/novelties/batch', [NoveltyController::class, 'storeBatch']);
+    Route::get('/novelties', [NoveltyController::class, 'getForCurrentWeek']);
+
+    Route::middleware(['auth:api', 'permission:view-direccion-dashboard'])->group(function () {
 
         Route::get('/dashboard/national/kpis', [NationalDashboardController::class, 'getNationalKpis']);
         Route::get('/dashboard/national/station-performance', [NationalDashboardController::class, 'getStationPerformance']);
