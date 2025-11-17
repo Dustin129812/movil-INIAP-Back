@@ -1,0 +1,303 @@
+<?php
+
+namespace Modules\TalentoHumano\Services;
+
+use Carbon\Carbon;
+use Modules\TalentoHumano\Entities\ThOvertimeReport;
+use Modules\TalentoHumano\Entities\ThHoliday;
+use Illuminate\Database\Eloquent\Collection;
+
+class OvertimeCalculationService
+{
+    /**
+     * @var \Illuminate\Support\Collection
+     */
+    protected $holidays;
+
+    // --- LÍMITES (SOLO PARA HORAS SUPLEMENTARIAS) ---
+    private const WORKDAY_START = '08:00:00';
+    private const WORKDAY_END = '16:30:00';
+    private const LEGAL_NIGHT_END = '06:00:00';
+    private const MAX_MINUTES_PER_DAY = 240; // 4 horas (solo S)
+    private const MAX_MINUTES_PER_WEEK = 720; // 12 horas (solo S)
+
+    public function __construct()
+    {
+        $this->holidays = ThHoliday::all()->keyBy(function ($holiday) {
+            return Carbon::parse($holiday->date)->toDateString();
+        });
+    }
+
+    /**
+     * Calcula todos los minutos y los totales en USD para un reporte.
+     * (Esta función no cambia)
+     */
+    public function calculate(ThOvertimeReport $report)
+    {
+        $report->loadMissing('entries');
+
+        foreach ($report->entries as $entry) {
+            list($supplemental, $extraordinary) = $this->calculateRawEntryMinutes($entry);
+
+            $entry->update([
+                'supplemental_minutes' => $supplemental,
+                'extraordinary_minutes' => $extraordinary,
+            ]);
+        }
+
+        $report->load('entries');
+
+        // 2. Aplicar límites (Lógica Híbrida)
+        list($totalSupplementalNet, $totalExtraordinaryNet) = $this->calculateNetReportMinutes($report->entries);
+
+        $hourValue = $report->hour_value;
+
+        $totalSupplementalUSD = ($hourValue * 1.5) * ($totalSupplementalNet / 60);
+        $totalExtraordinaryUSD = ($hourValue * 2.0) * ($totalExtraordinaryNet / 60);
+        $subTotalUSD = $totalSupplementalUSD + $totalExtraordinaryUSD;
+
+        $decimoTercero = $subTotalUSD * (1 / 12);
+        $fondosReserva = $subTotalUSD * (1 / 12);
+        $totalUSD_Pay = $subTotalUSD;
+
+        $report->update([
+            'total_supplemental_minutes' => $totalSupplementalNet,
+            'total_extraordinary_minutes' => $totalExtraordinaryNet,
+            'total_supplemental_usd' => $totalSupplementalUSD,
+            'total_extraordinary_usd' => $totalExtraordinaryUSD,
+            'decimo_tercero_usd' => $decimoTercero,
+            'fondos_reserva_usd' => $fondosReserva,
+            'total_usd_pay' => $totalUSD_Pay,
+        ]);
+    }
+
+    /**
+     * Calcula los minutos brutos (sin límites) para una sola entrada.
+     * (Esta función NO CAMBIA, ya es correcta)
+     */
+    private function calculateRawEntryMinutes($entry): array
+    {
+        $entryDate = Carbon::parse($entry->date);
+        $startTime = $entryDate->copy()->setTimeFromTimeString($entry->start_time);
+        $endTime = $entryDate->copy()->setTimeFromTimeString($entry->end_time);
+
+        $supplemental = 0;
+        $extraordinary = 0;
+
+        // REGLA 1: Fines de semana y Feriados
+        if ($this->isWeekend($entryDate) || $this->isHoliday($entryDate)) {
+            $extraordinary = $endTime->diffInMinutes($startTime);
+        }
+        // REGLA 2: Días Laborales (L-V)
+        else {
+            // E = 00:00:00 hasta 06:00:00
+            $extraStart = $entryDate->copy()->startOfDay();
+            $extraEnd = $entryDate->copy()->setTimeFromTimeString(self::LEGAL_NIGHT_END);
+            $extraordinary += $this->calculateOverlap($startTime, $endTime, $extraStart, $extraEnd);
+
+            // S (Bloque 1) = 06:00:00 hasta 08:00:00
+            $supp1_Start = $extraEnd;
+            $supp1_End = $entryDate->copy()->setTimeFromTimeString(self::WORKDAY_START);
+            $supplemental += $this->calculateOverlap($startTime, $endTime, $supp1_Start, $supp1_End);
+
+            // S (Bloque 2) = 16:30:00 hasta 23:59:59
+            $supp2_Start = $entryDate->copy()->setTimeFromTimeString(self::WORKDAY_END);
+            $supp2_End = $entryDate->copy()->endOfDay();
+            $supplemental += $this->calculateOverlap($startTime, $endTime, $supp2_Start, $supp2_End);
+        }
+
+        return [$supplemental, $extraordinary];
+    }
+
+    /**
+     * --- LÓGICA DE USUARIO (Límites solo en S) ---
+     * 1. Paga 100% de Horas Extraordinarias (E) sin límite.
+     * 2. Aplica límites 4h/día y 12h/semana SOLO a las Suplementarias (S).
+     */
+    private function calculateNetReportMinutes(Collection $entries): array
+    {
+        // REGLA 1: Pagar 100% de Extraordinarias (E)
+        // Sumamos todos los minutos E brutos.
+        $totalExtraordinaryNet = $entries->sum('extraordinary_minutes');
+
+        // REGLA 2: Aplicar límites SOLO a Suplementarias (S)
+        $totalSupplementalNet = 0;
+        $weeklyMinutesPaid_S = 0; // Contador semanal (SOLO para S)
+        $currentWeekOfYear = null;
+
+        // Agrupar por fecha
+        $dailyTotals = $entries->groupBy('date')->map(function ($dayEntries) {
+            return (object)[
+                // Solo nos interesan los minutos S para esta lógica
+                'supp_minutes' => $dayEntries->sum('supplemental_minutes'),
+            ];
+        })->sortBy(function ($totals, $date) {
+            return $date; // Ordenar por fecha
+        });
+
+        foreach ($dailyTotals as $date => $totals) {
+            $carbonDate = Carbon::parse($date);
+            $rawDailySupp = $totals->supp_minutes;
+
+            // Si no hay minutos S, saltar (esto ignora fines de semana)
+            if ($rawDailySupp == 0) continue;
+
+            // Lógica de reinicio semanal (robusta)
+            $weekOfYear = $carbonDate->weekOfYear;
+            if ($weekOfYear != $currentWeekOfYear) {
+                $weeklyMinutesPaid_S = 0;
+                $currentWeekOfYear = $weekOfYear;
+            }
+
+            // 1. Aplicar Límite Diario (4 horas = 240 min)
+            $dayCap_Supp = min($rawDailySupp, self::MAX_MINUTES_PER_DAY);
+
+            // 2. Aplicar Límite Semanal (12 horas = 720 min)
+            $availableWeeklyMinutes = self::MAX_MINUTES_PER_WEEK - $weeklyMinutesPaid_S;
+
+            if ($availableWeeklyMinutes <= 0) continue; // No queda tiempo en la semana
+
+            $finalDaySupp = min($dayCap_Supp, $availableWeeklyMinutes);
+
+            // 3. Sumar a los totales NETOS
+            $totalSupplementalNet += $finalDaySupp;
+
+            // 4. Actualizar el contador semanal (SOLO para S)
+            $weeklyMinutesPaid_S += $finalDaySupp;
+        }
+
+        return [$totalSupplementalNet, $totalExtraordinaryNet];
+    }
+
+
+    /**
+     * Calcula los minutos de superposición (sin cambios)
+     */
+    private function calculateOverlap(Carbon $eventStart, Carbon $eventEnd, Carbon $rangeStart, Carbon $rangeEnd): int
+    {
+        $maxStart = $eventStart->max($rangeStart);
+        $minEnd = $eventEnd->min($rangeEnd);
+
+        if ($maxStart->lt($minEnd)) {
+            return $minEnd->diffInMinutes($maxStart);
+        }
+        return 0;
+    }
+
+    // --- SIN CAMBIOS ---
+    private function isWeekend(Carbon $date): bool
+    {
+        return $date->isSaturday() || $date->isSunday();
+    }
+
+    // --- SIN CAMBIOS ---
+    private function isHoliday(Carbon $date): bool
+    {
+        return $this->holidays->has($date->toDateString());
+    }
+
+    /**
+     * --- MODO DE DEPURACIÓN ---
+     * (Esta función la puedes dejar o quitar, no afecta el cálculo principal)
+     */
+    public function debugReportLogic(Collection $entries): array
+    {
+        $debugLog = []; // Aquí guardaremos el log
+
+        // Simulación de la lógica de "Límites solo en S"
+
+        $debugLog[] = "--- INICIO DEPURACIÓN (Hipótesis: Límites solo en S) ---";
+
+        // 1. Extraordinarias
+        $totalExtraordinaryNet = $entries->sum('extraordinary_minutes');
+        $debugLog[] = "REGLA 1 (E): Pagando 100% de E (Bruto: " . $totalExtraordinaryNet . " min)";
+
+        // 2. Suplementarias
+        $debugLog[] = "REGLA 2 (S): Aplicando límites 4h/día y 12h/sem solo a S...";
+
+        $totalSupplementalNet = 0;
+        $weeklyMinutesPaid_S = 0;
+        $currentWeekOfYear = null;
+
+        $dailyTotals = $entries->groupBy('date')->map(function ($dayEntries) {
+            return (object)[
+                'supp_minutes' => $dayEntries->sum('supplemental_minutes'),
+            ];
+        })->sortBy(function ($totals, $date) {
+            return $date;
+        });
+
+        foreach ($dailyTotals as $date => $totals) {
+            $carbonDate = Carbon::parse($date);
+            $rawDailySupp = $totals->supp_minutes;
+
+            if ($rawDailySupp == 0) continue;
+
+            $logLine = "Fecha: " . $carbonDate->format('Y-m-d');
+
+            $weekOfYear = $carbonDate->weekOfYear;
+            if ($weekOfYear != $currentWeekOfYear) {
+                $weeklyMinutesPaid_S = 0;
+                $currentWeekOfYear = $weekOfYear;
+                $logLine .= " [NUEVA SEMANA (Sem " . $weekOfYear . ")]";
+            }
+
+            $logLine .= " | Bruto (S: $rawDailySupp)";
+
+            // 1. Límite Diario (240 min)
+            $dayCap_Supp = min($rawDailySupp, self::MAX_MINUTES_PER_DAY);
+            $logLine .= " | Límite-Día (S: $dayCap_Supp)";
+
+            // 2. Límite Semanal (720 min)
+            $availableWeeklyMinutes = self::MAX_MINUTES_PER_WEEK - $weeklyMinutesPaid_S;
+
+            if ($availableWeeklyMinutes <= 0) {
+                $logLine .= " -> Pago (S: 0) [REGLA: Límite Semanal S Agotado]";
+                $debugLog[] = $logLine;
+                continue;
+            }
+
+            $finalDaySupp = min($dayCap_Supp, $availableWeeklyMinutes);
+
+            $totalSupplementalNet += $finalDaySupp;
+            $weeklyMinutesPaid_S += $finalDaySupp;
+
+            $logLine .= " -> Pago (S: $finalDaySupp) [Contador Sem S: $weeklyMinutesPaid_S / 720]";
+            $debugLog[] = $logLine;
+        }
+
+        $debugLog[] = "------------------------------------------";
+        $debugLog[] = "Total Neto S (Pagado): " . $totalSupplementalNet . " min";
+        $debugLog[] = "Total Neto E (Pagado): " . $totalExtraordinaryNet . " min";
+        $debugLog[] = "--- FIN DEPURACIÓN ---";
+
+        return $debugLog;
+    }
+
+    /**
+     * Calcula y actualiza los minutos S/E brutos para todas las entradas de un reporte.
+     * Esto es para que la UI pueda mostrarlos ANTES de enviar el reporte.
+     * No calcula totales ni aplica límites.
+     */
+    public function calculateRawEntries(ThOvertimeReport $report)
+    {
+        // Solo recalculamos si el reporte está en borrador
+        if ($report->status !== 'borrador') {
+            return;
+        }
+
+        $report->loadMissing('entries');
+
+        foreach ($report->entries as $entry) {
+            // Llama a la misma función privada que ya tenemos
+            list($supplemental, $extraordinary) = $this->calculateRawEntryMinutes($entry);
+
+            // Actualiza la entrada en la base de datos
+            // para que la UI pueda leer los nuevos valores.
+            $entry->update([
+                'supplemental_minutes' => $supplemental,
+                'extraordinary_minutes' => $extraordinary,
+            ]);
+        }
+    }
+}

@@ -230,3 +230,5 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 });
 
 Route::post('/ask-database', [AiQueryController::class, 'handleQuery']);
+
+require base_path('Modules/TalentoHumano/Routes/api.php');
