@@ -7,6 +7,7 @@ use Illuminate\Routing\Controller;
 use Modules\TalentoHumano\Entities\ThActivityType;
 use Modules\TalentoHumano\Entities\ThEmployeeConfig;
 use Modules\TalentoHumano\Entities\ThHoliday;
+use Modules\TalentoHumano\Entities\ThSetting;
 use Modules\TalentoHumano\Entities\ThVehicle;
 use Illuminate\Http\JsonResponse;
 use App\Models\User;
@@ -147,5 +148,40 @@ class ConfigController extends Controller
         $users = $query->limit(20)->get(['id', 'name']);
 
         return response()->json($users);
+    }
+
+    // --- Gestión de Autoridades ---
+
+    public function getAuthorities()
+    {
+        $settings = ThSetting::whereIn('key', ['daf_authority_id', 'mobility_authority_id'])->get();
+
+        // Formateamos para devolver también el nombre del usuario actual
+        $data = $settings->mapWithKeys(function ($item) {
+            $user = $item->value ? User::find($item->value) : null;
+            return [$item->key => [
+                'user_id' => $item->value,
+                'user_name' => $user ? $user->name : 'No asignado'
+            ]];
+        });
+
+        return response()->json($data);
+    }
+
+    public function updateAuthorities(Request $request)
+    {
+        $data = $request->validate([
+            'daf_authority_id' => 'nullable|exists:users,id',
+            'mobility_authority_id' => 'nullable|exists:users,id',
+        ]);
+
+        foreach ($data as $key => $value) {
+            ThSetting::updateOrCreate(
+                ['key' => $key],
+                ['value' => $value]
+            );
+        }
+
+        return response()->json(['message' => 'Autoridades actualizadas correctamente.']);
     }
 }

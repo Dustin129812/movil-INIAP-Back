@@ -110,65 +110,69 @@ class OvertimeCalculationService
     }
 
     /**
-     * --- LÓGICA DE USUARIO (Límites solo en S) ---
-     * 1. Paga 100% de Horas Extraordinarias (E) sin límite.
-     * 2. Aplica límites 4h/día y 12h/semana SOLO a las Suplementarias (S).
+     * LÓGICA CORREGIDA:
+     * 1. Extraordinarias (E) tienen prioridad y NO restan del límite diario en fines de semana.
+     * 2. En días laborales, el límite de 4h es la SUMA de (S + E).
+     * 3. El límite semanal de 12h aplica al total acumulado de S.
      */
     private function calculateNetReportMinutes(Collection $entries): array
     {
-        // REGLA 1: Pagar 100% de Extraordinarias (E)
-        // Sumamos todos los minutos E brutos.
-        $totalExtraordinaryNet = $entries->sum('extraordinary_minutes');
-
-        // REGLA 2: Aplicar límites SOLO a Suplementarias (S)
         $totalSupplementalNet = 0;
-        $weeklyMinutesPaid_S = 0; // Contador semanal (SOLO para S)
+        $totalExtraordinaryNet = 0;
+
+        // Contadores Semanales
+        $weeklyMinutesPaid_S = 0;
         $currentWeekOfYear = null;
 
-        // Agrupar por fecha
+        // 1. Agrupar por fecha para evaluar límites diarios
         $dailyTotals = $entries->groupBy('date')->map(function ($dayEntries) {
             return (object)[
-                // Solo nos interesan los minutos S para esta lógica
-                'supp_minutes' => $dayEntries->sum('supplemental_minutes'),
+                'raw_supp' => $dayEntries->sum('supplemental_minutes'),
+                'raw_extra' => $dayEntries->sum('extraordinary_minutes'),
+                'date' => $dayEntries->first()->date, // Para chequear si es finde
             ];
-        })->sortBy(function ($totals, $date) {
-            return $date; // Ordenar por fecha
-        });
+        })->sortBy('date');
 
         foreach ($dailyTotals as $date => $totals) {
             $carbonDate = Carbon::parse($date);
-            $rawDailySupp = $totals->supp_minutes;
 
-            // Si no hay minutos S, saltar (esto ignora fines de semana)
-            if ($rawDailySupp == 0) continue;
-
-            // Lógica de reinicio semanal (robusta)
             $weekOfYear = $carbonDate->weekOfYear;
             if ($weekOfYear != $currentWeekOfYear) {
                 $weeklyMinutesPaid_S = 0;
                 $currentWeekOfYear = $weekOfYear;
             }
 
-            // 1. Aplicar Límite Diario (4 horas = 240 min)
-            $dayCap_Supp = min($rawDailySupp, self::MAX_MINUTES_PER_DAY);
+            $dayPaid_E = $totals->raw_extra;
+            $totalExtraordinaryNet += $dayPaid_E;
 
-            // 2. Aplicar Límite Semanal (12 horas = 720 min)
-            $availableWeeklyMinutes = self::MAX_MINUTES_PER_WEEK - $weeklyMinutesPaid_S;
 
-            if ($availableWeeklyMinutes <= 0) continue; // No queda tiempo en la semana
+            $dayPaid_S = 0;
 
-            $finalDaySupp = min($dayCap_Supp, $availableWeeklyMinutes);
+            if ($totals->raw_supp > 0) {
 
-            // 3. Sumar a los totales NETOS
-            $totalSupplementalNet += $finalDaySupp;
+                $isFreeDay = $this->isWeekend($carbonDate) || $this->isHoliday($carbonDate);
 
-            // 4. Actualizar el contador semanal (SOLO para S)
-            $weeklyMinutesPaid_S += $finalDaySupp;
+                if ($isFreeDay) {
+                    $dayCap_S = $totals->raw_supp;
+                } else {
+                    $dailyQuotaRemaining = self::MAX_MINUTES_PER_DAY - $dayPaid_E;
+
+                    $dayCap_S = max(0, min($totals->raw_supp, $dailyQuotaRemaining));
+                }
+
+                $availableWeekly = self::MAX_MINUTES_PER_WEEK - $weeklyMinutesPaid_S;
+
+                if ($availableWeekly > 0) {
+                    $finalDaySupp = min($dayCap_S, $availableWeekly);
+
+                    $totalSupplementalNet += $finalDaySupp;
+                    $weeklyMinutesPaid_S += $finalDaySupp;
+                }
+            }
         }
 
         return [$totalSupplementalNet, $totalExtraordinaryNet];
     }
-
 
     /**
      * Calcula los minutos de superposición (sin cambios)

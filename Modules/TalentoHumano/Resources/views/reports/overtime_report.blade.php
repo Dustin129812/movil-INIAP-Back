@@ -163,9 +163,9 @@
         <thead>
         <tr>
             <th>FECHA</th>
-            <th>ACTIVIDAD REALIZADA</th>
-            <th>HORA SALIDA</th>
-            <th>HORA LLEGADA</th>
+            <th>JUSTIFICACIÓN DE ACTIVIDAD</th>
+            <th>HORA DE INICIO</th>
+            <th>HORA DE FINALIZACIÓN</th>
             <th>H. SUPLE.</th>
             <th>H. EXTRA.</th>
         </tr>
@@ -250,13 +250,13 @@
                 <td>
                     <div class="signature-line"></div>
                     APROBADO POR<br>
-                    {{ $report->supervisorApprover->name ?? 'N/A' }}<br>
+                    {{ $mobilityAuthority->name ?? 'PENDIENTE DE ASIGNACIÓN' }}<br>
                     RESPONSABLE DE MOVILIDAD
                 </td>
                 <td>
                     <div class="signature-line"></div>
                     APROBADO POR<br>
-                    {{ $report->dafApprover->name ?? 'N/A' }}<br>
+                    {{ $dafAuthority->name ?? 'PENDIENTE DE ASIGNACIÓN' }}<br>
                     DIRECTOR ADMINISTRATIVO FINANCIERO
                 </td>
             </tr>

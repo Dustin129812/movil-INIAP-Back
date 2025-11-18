@@ -2,12 +2,14 @@
 
 namespace Modules\TalentoHumano\Http\Controllers\Api\V1;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\TalentoHumano\Entities\ThOvertimeReport;
 use Illuminate\Http\JsonResponse;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Modules\TalentoHumano\Entities\ThSetting;
 
 // TODO: Importar el servicio de PDF cuando lo creemos
 // use Modules\TalentoHumano\Services\PdfReportGeneratorService;
@@ -64,14 +66,20 @@ class AdminReportController extends Controller
             'driver.position',
             'driver.location',
             'entries.activityType',
-            'supervisorApprover:id,name',
-            'dafApprover:id,name'
         ]);
+
+        $dafId = ThSetting::where('key', 'daf_authority_id')->value('value');
+        $mobilityId = ThSetting::where('key', 'mobility_authority_id')->value('value');
+
+        $dafUser = $dafId ? User::find($dafId) : null;
+        $mobilityUser = $mobilityId ? User::find($mobilityId) : null;
 
         $filename = "solicitud_horas_extras_{$report->driver->name}_{$report->month}_{$report->year}.pdf";
 
         $pdf = PDF::loadView('talentohumano::reports.overtime_report', [
-            'report' => $report
+            'report' => $report,
+            'dafAuthority' => $dafUser,
+            'mobilityAuthority' => $mobilityUser
         ]);
 
         return $pdf->stream($filename);

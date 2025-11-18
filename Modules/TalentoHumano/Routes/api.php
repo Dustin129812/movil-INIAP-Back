@@ -91,6 +91,11 @@ Route::middleware('auth:api')->prefix('v1/talento-humano')->name('api.th.v1.')->
         Route::post('/employee-configs', [ConfigController::class, 'employeeConfigsStore']);
         Route::put('/employee-configs/{config}', [ConfigController::class, 'employeeConfigsUpdate']);
 
+        // --- Gestión de Autoridades (Firmas PDF) ---
+        Route::get('/authorities', [ConfigController::class, 'getAuthorities'])->name('authorities.get');
+        Route::post('/authorities', [ConfigController::class, 'updateAuthorities'])->name('authorities.update');
+
+        // --- Utilidades ---
         Route::get('/all-users', [ConfigController::class, 'getAllUsers'])->name('config.all-users');
 
     });
