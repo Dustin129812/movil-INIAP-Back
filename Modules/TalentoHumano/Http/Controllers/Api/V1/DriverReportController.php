@@ -86,17 +86,32 @@ class DriverReportController extends Controller
     public function storeEntry(StoreEntryRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $tempEntry = new ThOvertimeEntry($data);
 
-        // Calcular duración
         $start = Carbon::parse($data['start_time']);
         $end = Carbon::parse($data['end_time']);
-        $data['duration_minutes'] = $end->diffInMinutes($start);
 
+        $duration = $end->diffInMinutes($start);
+
+        if ($start->isWeekday()) {
+            $workStart = $start->copy()->setTime(8, 0, 0);
+            $workEnd = $start->copy()->setTime(16, 30, 0);
+
+            // Calcular intersección
+            $overlapStart = $start->max($workStart);
+            $overlapEnd = $end->min($workEnd);
+
+            if ($overlapStart < $overlapEnd) {
+                $officeMinutes = $overlapEnd->diffInMinutes($overlapStart);
+                $duration -= $officeMinutes;
+            }
+        }
+
+        $data['duration_minutes'] = max(0, $duration); // Guardamos la duración neta
         $entry = ThOvertimeEntry::create($data);
 
         return response()->json($entry, 201);
     }
-
     /**
      * Actualiza una entrada (viaje)
      * PUT /api/v1/talento-humano/entries/{entry}
