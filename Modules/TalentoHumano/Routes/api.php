@@ -4,7 +4,6 @@ use Illuminate\Support\Facades\Route;
 
 // --- Importar todos los Controladores ---
 use Modules\TalentoHumano\Http\Controllers\Api\V1\DriverReportController;
-use Modules\TalentoHumano\Http\Controllers\Api\V1\ApprovalSupervisorController;
 use Modules\TalentoHumano\Http\Controllers\Api\V1\ApprovalDafController;
 use Modules\TalentoHumano\Http\Controllers\Api\V1\AdminReportController;
 use Modules\TalentoHumano\Http\Controllers\Api\V1\ConfigController;
