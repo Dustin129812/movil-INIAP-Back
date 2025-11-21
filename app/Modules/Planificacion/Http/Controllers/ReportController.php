@@ -90,6 +90,50 @@ class ReportController extends Controller
         });
 
         $totalActivities = $weekActivities->count();
+
+        $allActivitiesFlat = $weekActivities->flatten();
+
+        // 2. DETECTAR SI EXISTEN DATOS
+        $hasSupport = $allActivitiesFlat->contains(function ($a) {
+            return $a->logisticSupportUsers && $a->logisticSupportUsers->isNotEmpty();
+        });
+
+        $hasIndicators = $allActivitiesFlat->contains(function ($a) {
+            return $a->performanceIndicators && $a->performanceIndicators->isNotEmpty();
+        });
+
+        // 3. DEFINIR ANCHOS BASE (Suman 100%)
+        // Ajustamos ligeramente para que cuadre perfecto
+        $widths = [
+            'date' => 7,
+            'product' => 12,
+            'rubro' => 12,
+            'activity' => 15,
+            'description' => 16, // Esta es la que crecerá
+            'support' => 10,
+            'indicator' => 10,
+            'observations' => 18
+        ];
+
+        $hiddenMessages = [];
+
+        // 4. REDISTRIBUIR ESPACIO
+        if (!$hasSupport) {
+            $widths['description'] += $widths['support'];
+            $widths['support'] = 0;
+            $hiddenMessages[] = 'Personal de Apoyo';
+        }
+
+        if (!$hasIndicators) {
+            $widths['description'] += $widths['indicator'];
+            $widths['indicator'] = 0;
+            $hiddenMessages[] = 'Indicador Asociado';
+        }
+
+        $omittedColumnsText = !empty($hiddenMessages)
+            ? 'Nota: Se han omitido las columnas: ' . implode(', ', $hiddenMessages) . ' por falta de datos, ampliando el espacio para la descripción.'
+            : null;
+
         $summary = [
             'completed' => $weekActivities->where('status', 'completed')->count(),
             'partial' => $weekActivities->where('status', 'partial')->count(),
@@ -119,10 +163,14 @@ class ReportController extends Controller
             'presentation_date' => Carbon::now()->translatedFormat('d \d\e F \d\e Y'),
             'week_range' => 'Del ' . $startDate->translatedFormat('d \d\e F \d\e Y') . ' al ' . $endDate->translatedFormat('d \d\e F \d\e Y'),
             'weekActivities' => $weekActivities,
-            'days_of_week' => [
-                'lunes', 'martes', 'miercoles', 'jueves', 'viernes',
-            ],
+            'days_of_week' => ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'], // Esto parece que no se usa en el blade actual, pero lo dejamos por si acaso
             'start_date_obj' => $startDate,
+            'visibility' => [
+                'support' => $hasSupport,
+                'indicators' => $hasIndicators,
+            ],
+            'widths' => $widths,
+            'omittedColumnsText' => $omittedColumnsText
         ];
 
         $pdf = Pdf::loadView('reports.weekly_plan', $reportData);
@@ -455,15 +503,13 @@ class ReportController extends Controller
                 $this->formatActivityDescription($item);
             });
 
-        // 2. OBTENER NOVEDADES
-        // Asumimos que NoveltyActivity tiene relaciones similares. Ajusta si difieren.
         $noveltyActivities = NoveltyActivity::where('user_id', $userId)
             ->whereBetween('date', [$startDate, $endDate])
             ->with([
-                'activity.product.rubro', // Puede ser nulo si la novedad no se ligó a una actividad
+                'activity.product.rubro',
                 'materials',
-                'indicators',      // Nota: a veces se llama 'performanceIndicators' en WeekActivity
-                'logisticSupport'  // Nota: a veces se llama 'logisticSupportUsers' en WeekActivity
+                'indicators',
+                'logisticSupport'
             ])
             ->get()
             ->each(function ($item) {
@@ -471,14 +517,56 @@ class ReportController extends Controller
                 $this->formatActivityDescription($item);
             });
 
-        // 3. COMBINAR Y ORDENAR CRONOLÓGICAMENTE
         $allActivities = $plannedActivities->concat($noveltyActivities)->sortBy('date')->values();
 
-        // 4. CÁLCULO DE RESUMEN (ESTO DEPENDE DE TU LÓGICA DE NEGOCIO)
-        // ¿El cumplimiento se basa solo en lo planificado o incluye novedades?
-        // Por lo general, el cumplimiento mide qué tanto hiciste de lo que PROMETISTE hacer.
-        // Las novedades son "valor extra".
-        // Aquí calculo el cumplimiento basándome SOLO en lo planificado, pero muestro el total de novedades.
+        // --- NUEVA LÓGICA: DETECCIÓN DE COLUMNAS VACÍAS ---
+        $hasMaterials = $allActivities->contains(function ($a) {
+            return $a->materials && $a->materials->isNotEmpty();
+        });
+
+        $hasIndicators = $allActivities->contains(function ($a) {
+            $inds = $a->is_novelty ? $a->indicators : $a->performanceIndicators;
+            return $inds && $inds->isNotEmpty();
+        });
+
+        $hasLogistics = $allActivities->contains(function ($a) {
+            $logs = $a->is_novelty ? $a->logisticSupport : $a->logisticSupportUsers;
+            return $logs && $logs->isNotEmpty();
+        });
+
+        // --- CÁLCULO DE ANCHOS DE COLUMNA (Total 100%) ---
+        // Configuración base original
+        $widths = [
+            'date' => 7,
+            'activity' => 33, // Esta absorberá el espacio extra
+            'verification' => 15,
+            'materials' => 15,
+            'logistics' => 10,
+            'status' => 8,
+            'observations' => 12
+        ];
+
+        $hiddenMessages = [];
+
+        if (!$hasMaterials) {
+            $widths['activity'] += $widths['materials'];
+            $widths['materials'] = 0;
+            $hiddenMessages[] = 'Materiales';
+        }
+        if (!$hasIndicators) {
+            $widths['activity'] += $widths['verification'];
+            $widths['verification'] = 0;
+            $hiddenMessages[] = 'Verificación';
+        }
+        if (!$hasLogistics) {
+            $widths['activity'] += $widths['logistics'];
+            $widths['logistics'] = 0;
+            $hiddenMessages[] = 'Apoyo Logístico';
+        }
+
+        $omittedColumnsText = !empty($hiddenMessages)
+            ? 'Nota: Se han omitido las columnas: ' . implode(', ', $hiddenMessages) . ' por falta de datos en este periodo, ampliando el espacio para la descripción de actividades.'
+            : null;
 
         $totalPlanned = $plannedActivities->count();
         $summary = [
@@ -511,8 +599,15 @@ class ReportController extends Controller
             'startDate' => $startDate,
             'endDate' => $endDate,
             'summary' => $summary,
-            'weekActivities' => $allActivities, // <-- AHORA PASAMOS LA LISTA COMBINADA
+            'weekActivities' => $allActivities,
             'program_rubro' => $mainRubro,
+            'visibility' => [
+                'materials' => $hasMaterials,
+                'indicators' => $hasIndicators,
+                'logistics' => $hasLogistics,
+            ],
+            'widths' => $widths,
+            'omittedColumnsText' => $omittedColumnsText
         ];
 
         $pdf = Pdf::loadView('reports.weekly_monitoring_report', $reportData);

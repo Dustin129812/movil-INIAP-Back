@@ -41,6 +41,34 @@
             vertical-align: middle;
             text-align: center;
         }
+        .alert-info {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e3a8a;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 9px;
+            margin-top: 15px;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+        .alert-info strong {
+            color: #172554;
+            font-weight: bold;
+        }
+        .info-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 12px;
+            font-size: 8px;
+            margin-right: 5px;
+            font-weight: bold;
+        }
         .header-logo.left { width: 10%; text-align: left; }
         .header-logo.right { width: 10%; text-align: right; }
         .header-title { width: 80%; }
@@ -91,22 +119,28 @@
 <table class="activity-table">
     <thead>
     <tr>
-        <th style="width: 7%;">Fecha</th>
-        <th style="width: 12%;">Producto</th>
-        <th style="width: 12%;">Rubro</th> {{-- NUEVA COLUMNA --}}
-        <th style="width: 15%;">Actividad</th>
-        <th style="width: 16%;">Descripción de Tarea</th>
-        <th style="width: 10%;">Personal de Apoyo</th>
-        <th style="width: 10%;">Indicador Asociado</th>
-        <th style="width: 18%;">Observaciones</th>
+        {{-- Usamos los anchos dinámicos calculados en el controlador --}}
+        <th style="width: {{ $widths['date'] }}%;">Fecha</th>
+        <th style="width: {{ $widths['product'] }}%;">Producto</th>
+        <th style="width: {{ $widths['rubro'] }}%;">Rubro</th>
+        <th style="width: {{ $widths['activity'] }}%;">Actividad</th>
+        <th style="width: {{ $widths['description'] }}%;">Descripción de Tarea</th>
+
+        @if($visibility['support'])
+            <th style="width: {{ $widths['support'] }}%;">Personal de Apoyo</th>
+        @endif
+
+        @if($visibility['indicators'])
+            <th style="width: {{ $widths['indicator'] }}%;">Indicador Asociado</th>
+        @endif
+
+        <th style="width: {{ $widths['observations'] }}%;">Observaciones</th>
     </tr>
     </thead>
     <tbody>
-    {{-- Usamos un @foreach anidado para respetar la agrupación por fecha --}}
     @forelse ($weekActivities as $date => $activitiesOnThisDay)
         @foreach ($activitiesOnThisDay as $activity)
             <tr>
-                {{-- Mostramos la fecha solo en la primera fila de cada día --}}
                 @if ($loop->first)
                     <td class="text-center capitalize" rowspan="{{ count($activitiesOnThisDay) }}">
                         {{ \Carbon\Carbon::parse($date)->translatedFormat('l d/m') }}
@@ -117,20 +151,41 @@
                 <td>{{ $activity->activity->product->rubro->name ?? '--' }}</td>
                 <td>{{ $activity->activity->description ?? '--' }}</td>
                 <td>{{ $activity->description ?? '--' }}</td>
-                <td>{{ $activity->logisticSupportUsers->pluck('name')->implode(', ') ?: '--' }}</td>
-                <td>{{ $activity->performanceIndicators->pluck('name')->implode(', ') ?: '--' }}</td>
+
+                {{-- Solo mostramos la celda si la columna es visible --}}
+                @if($visibility['support'])
+                    <td>{{ $activity->logisticSupportUsers->pluck('name')->implode(', ') ?: '--' }}</td>
+                @endif
+
+                @if($visibility['indicators'])
+                    <td>{{ $activity->performanceIndicators->pluck('name')->implode(', ') ?: '--' }}</td>
+                @endif
+
                 <td>{{ $activity->observations ?? '--' }}</td>
             </tr>
         @endforeach
     @empty
         <tr>
-            <td colspan="8" class="text-center" style="padding: 15px;">
+            {{-- Calculamos el colspan dinámicamente --}}
+            @php
+                $colspan = 5 + ($visibility['support'] ? 1 : 0) + ($visibility['indicators'] ? 1 : 0);
+            @endphp
+            <td colspan="{{ $colspan }}" class="text-center" style="padding: 15px;">
                 No se encontraron actividades planificadas para este rango de fechas.
             </td>
         </tr>
     @endforelse
     </tbody>
 </table>
+
+{{-- CUADRO AZUL INFORMATIVO AL FINAL --}}
+@if($omittedColumnsText)
+    <div class="alert-info">
+        <span class="info-icon">i</span>
+        <strong>Optimización de Espacio:</strong>
+        {{ $omittedColumnsText }}
+    </div>
+@endif
 
 </body>
 </html>

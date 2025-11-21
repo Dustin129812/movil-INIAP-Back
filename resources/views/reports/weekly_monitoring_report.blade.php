@@ -5,6 +5,38 @@
     <title>Informe de Monitoreo Semanal de Actividades</title>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <style>
+        .alert-info {
+            background-color: #eff6ff; /* Fondo azul muy claro */
+            border: 1px solid #bfdbfe; /* Borde azul suave */
+            color: #1e3a8a;            /* Texto azul oscuro para contraste */
+            padding: 10px;
+            border-radius: 6px;        /* Bordes redondeados */
+            font-size: 9px;
+            margin-top: 15px;          /* Separación de la tabla superior */
+            text-align: center;
+            display: block;            /* Asegura que ocupe el ancho */
+        }
+
+        .alert-info strong {
+            color: #172554;            /* Título un poco más oscuro */
+            font-weight: bold;
+            margin-right: 4px;
+        }
+
+        /* Icono simulado con texto (opcional) */
+        .info-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 12px;
+            font-size: 8px;
+            margin-right: 5px;
+            font-weight: bold;
+        }
         @page { size: A4 landscape; margin: 15mm; }
         body { font-family: 'Arial', sans-serif; font-size: 8px; color: #333; }
         table { width: 100%; border-collapse: collapse; }
@@ -77,7 +109,7 @@
     </tr>
 </table>
 
-{{-- Resumen de Cumplimiento (ACTUALIZADO CON NOVEDADES) --}}
+{{-- Resumen de Cumplimiento --}}
 <div class="summary-container">
     <div class="summary-title">Resumen General de Cumplimiento y Novedades</div>
     <table class="summary-table">
@@ -92,16 +124,30 @@
             </td>
         </tr>
     </table>
+
 </div>
 
 {{-- Tabla Principal de Actividades --}}
 <table>
     <thead>
     <tr>
-        <th style="width:7%;">Fecha</th>
-        <th style="width:33%;">Actividad</th> <th style="width:15%;">Verificación</th>
-        <th style="width:15%;">Materiales</th>
-        <th style="width:10%;">Apoyo Logístico</th> <th style="width:8%;">Estado</th> <th style="width:12%;">Observaciones</th>
+        <th style="width:{{ $widths['date'] }}%;">Fecha</th>
+        <th style="width:{{ $widths['activity'] }}%;">Actividad</th>
+
+        @if($visibility['indicators'])
+            <th style="width:{{ $widths['verification'] }}%;">Verificación</th>
+        @endif
+
+        @if($visibility['materials'])
+            <th style="width:{{ $widths['materials'] }}%;">Materiales</th>
+        @endif
+
+        @if($visibility['logistics'])
+            <th style="width:{{ $widths['logistics'] }}%;">Apoyo Logístico</th>
+        @endif
+
+        <th style="width:{{ $widths['status'] }}%;">Estado</th>
+        <th style="width:{{ $widths['observations'] }}%;">Observaciones</th>
     </tr>
     </thead>
     <tbody>
@@ -109,8 +155,6 @@
         @php
             $statusClass = '';
             $statusText = '';
-            // Si es novedad, forzamos un estado visual distinto si quieres, o usamos el mismo.
-            // Por ahora usamos el mismo pero ya viene marcado como completed desde el controlador.
             switch ($activity->status) {
                 case 'completed':
                     $statusClass = 'status-completed';
@@ -129,45 +173,45 @@
                     $statusText = $activity->status;
             }
         @endphp
-        {{-- APLICAMOS LA CLASE row-novelty SI ES NOVEDAD --}}
+
         <tr class="{{ $activity->is_novelty ? 'row-novelty' : '' }}">
             <td class="text-center capitalize">
                 {{ \Carbon\Carbon::parse($activity->date)->translatedFormat('l d/m') }}
             </td>
 
             <td class="font-bold">
-                {{-- ETIQUETA VISUAL SI ES NOVEDAD --}}
                 @if($activity->is_novelty)
                     <span class="novelty-tag">NOVEDAD</span><br>
                 @endif
                 {{ $activity->formatted_description }}
             </td>
 
-            <td>
-                {{-- Usamos 'indicators' para novedades y 'performanceIndicators' para normales, o el controlador ya lo normalizó --}}
-                {{-- Si el controlador NO lo normalizó, usa esto: --}}
-                {{-- {{ ($activity->is_novelty ? $activity->indicators : $activity->performanceIndicators)->pluck('name')->implode(', ') ?: '--' }} --}}
-                {{-- Si SÍ lo normalizaste (recomendado), usa solo una propiedad. Asumiré que NO está normalizado por seguridad: --}}
-                {{ ($activity->is_novelty ? $activity->indicators : $activity->performanceIndicators)->pluck('name')->implode(', ') ?: '--' }}
-            </td>
+            @if($visibility['indicators'])
+                <td>
+                    {{ ($activity->is_novelty ? $activity->indicators : $activity->performanceIndicators)->pluck('name')->implode(', ') ?: '--' }}
+                </td>
+            @endif
 
-            <td>
-                @if($activity->materials->isNotEmpty())
-                    @foreach($activity->materials as $material)
-                        <p class="material-detail">
-                            {{ $material->name }}
-                            ({{ $material->pivot->quantity ?? 'N/A' }} - {{ $material->pivot->description ?? 'N/A' }})
-                        </p>
-                    @endforeach
-                @else
-                    --
-                @endif
-            </td>
+            @if($visibility['materials'])
+                <td>
+                    @if($activity->materials->isNotEmpty())
+                        @foreach($activity->materials as $material)
+                            <p class="material-detail">
+                                {{ $material->name }}
+                                ({{ $material->pivot->quantity ?? 'N/A' }} - {{ $material->pivot->description ?? 'N/A' }})
+                            </p>
+                        @endforeach
+                    @else
+                        --
+                    @endif
+                </td>
+            @endif
 
-            <td>
-                {{-- Mismo caso de normalización para el apoyo logístico --}}
-                {{ ($activity->is_novelty ? $activity->logisticSupport : $activity->logisticSupportUsers)->pluck('name')->implode(', ') ?: '--' }}
-            </td>
+            @if($visibility['logistics'])
+                <td>
+                    {{ ($activity->is_novelty ? $activity->logisticSupport : $activity->logisticSupportUsers)->pluck('name')->implode(', ') ?: '--' }}
+                </td>
+            @endif
 
             <td class="text-center">
                 <div class="status {{ $statusClass }}">{{ $statusText }}</div>
@@ -179,13 +223,25 @@
         </tr>
     @empty
         <tr>
-            <td colspan="7" class="text-center" style="padding: 15px;">
+            {{-- Calculamos el colspan dinámicamente --}}
+            @php
+                $colspan = 4 + ($visibility['indicators'] ? 1 : 0) + ($visibility['materials'] ? 1 : 0) + ($visibility['logistics'] ? 1 : 0);
+            @endphp
+            <td colspan="{{ $colspan }}" class="text-center" style="padding: 15px;">
                 No se encontraron actividades para este rango de fechas.
             </td>
         </tr>
     @endforelse
     </tbody>
 </table>
+
+@if($omittedColumnsText)
+    <div class="alert-info">
+        <span class="info-icon">i</span>
+        <strong>Optimización de Espacio:</strong>
+        {{ $omittedColumnsText }}
+    </div>
+@endif
 
 </body>
 </html>
