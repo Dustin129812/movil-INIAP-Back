@@ -1,7 +1,9 @@
 <?php
 
 namespace App\Modules\Planificacion\Http\Controllers;
+
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use App\Modules\Planificacion\Http\Requests\Requests\StoreIndicatorRequest;
 use App\Modules\Planificacion\Http\Requests\Requests\UpdateIndicatorRequest;
 use App\Modules\Planificacion\Models\Performance_Indicator;
@@ -9,9 +11,15 @@ use Illuminate\Http\JsonResponse;
 
 class IndicatorController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(Performance_Indicator::latest()->paginate(15));
+        $query = Performance_Indicator::query();
+
+        $query->when($request->input('search'), function ($q, $search) {
+            return $q->where('name', 'like', "%{$search}%");
+        });
+
+        return response()->json($query->latest()->paginate(15));
     }
 
     public function store(StoreIndicatorRequest $request): JsonResponse

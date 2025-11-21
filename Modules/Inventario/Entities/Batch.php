@@ -9,13 +9,14 @@ class Batch extends Model
 {
     protected $table = 'inv_batches';
     protected $fillable = [
-        'product_id', 'batch_code', 'expiration_date',
+        'product_id', 'batch_code', 'entry_date', 'expiration_date',
         'unit_cost', 'initial_quantity', 'current_quantity',
         'is_active', 'is_expired'
     ];
 
     protected $casts = [
         'expiration_date' => 'datetime:Y-m-d',
+        'entry_date' => 'datetime:Y-m-d',
         'is_active' => 'boolean',
         'is_expired' => 'boolean',
         'unit_cost' => 'decimal:4',

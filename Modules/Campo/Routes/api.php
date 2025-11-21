@@ -1,10 +1,12 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Modules\Campo\Http\Controllers\FieldLogController;
+use Modules\Campo\Http\Controllers\ActivityController;
+use Modules\Campo\Http\Controllers\FieldController;
 
-Route::middleware('auth:api')->prefix('v1/campo')->group(function() {
+Route::middleware('auth:api')->prefix('/campo')->group(function() {
 
-    Route::post('logs', [FieldLogController::class, 'store']);
-
+    Route::apiResource('fields',FieldController::class);
+    Route::get('activities/pending-plan', [ActivityController::class, 'getPendingPlannedActivities']);
+    Route::apiResource('activities', ActivityController::class);
 });

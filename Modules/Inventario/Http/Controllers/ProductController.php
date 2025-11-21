@@ -12,13 +12,11 @@ class ProductController extends Controller
 {
     public function index()
     {
-        // Traemos productos con sus lotes activos ordenados por fecha de caducidad (FEFO)
         $products = Product::with(['category', 'batches' => function($q) {
             $q->where('current_quantity', '>', 0)
                 ->orderBy('expiration_date', 'asc');
         }])->get();
 
-        // Agregamos el total calculado
         $products->each(function($p) {
             $p->total_stock_calculated = $p->total_stock;
         });
@@ -28,24 +26,35 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        // Crear Producto (Catálogo)
-        $product = Product::create($request->validate([
+        $validated = $request->validate([
             'name' => 'required|string',
-            'unit' => 'required|string', // kg, lt
-            'category_id' => 'required|integer', // Asumiendo que tienes categorías
+            'scientific_name' => 'nullable|string',
+            'active_ingredient' => 'nullable|string',
+            'unit' => 'required|string',
+            'category_id' => 'required|integer',
             'min_stock' => 'integer'
-        ]));
+        ]);
+
+        $product = Product::create($validated);
         return response()->json($product);
     }
 
     public function addBatch(Request $request, $productId)
     {
-        // Agregar Stock (Nuevo Lote)
+        $request->validate([
+            'batch_code' => 'required|string',
+            'entry_date' => 'required|date',
+            'expiration_date' => 'required|date',
+            'quantity' => 'required|numeric|min:0.1',
+            'unit_cost' => 'required|numeric|min:0',
+        ]);
+
         $batch = Batch::create([
             'product_id' => $productId,
             'batch_code' => $request->batch_code,
-            'expiration_date' => $request->expiration_date, //
-            'unit_cost' => $request->unit_cost, // [cite: 27]
+            'entry_date' => $request->entry_date,
+            'expiration_date' => $request->expiration_date,
+            'unit_cost' => $request->unit_cost,
             'initial_quantity' => $request->quantity,
             'current_quantity' => $request->quantity
         ]);

@@ -1,12 +1,12 @@
 <?php
 
-namespace Modules\Campo\Http\Controllers;
+namespace Modules\Produccion\Http\Controllers;
 
 use Illuminate\Contracts\Support\Renderable;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 
-class CampoController extends Controller
+class ProduccionController extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -14,7 +14,7 @@ class CampoController extends Controller
      */
     public function index()
     {
-        return view('campo::index');
+        return view('produccion::index');
     }
 
     /**
@@ -23,7 +23,7 @@ class CampoController extends Controller
      */
     public function create()
     {
-        return view('campo::create');
+        return view('produccion::create');
     }
 
     /**
@@ -43,7 +43,7 @@ class CampoController extends Controller
      */
     public function show($id)
     {
-        return view('campo::show');
+        return view('produccion::show');
     }
 
     /**
@@ -53,7 +53,7 @@ class CampoController extends Controller
      */
     public function edit($id)
     {
-        return view('campo::edit');
+        return view('produccion::edit');
     }
 
     /**

@@ -7,8 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 class Product extends Model
 {
     protected $table = 'inv_products';
-    protected $fillable = ['category_id', 'name', 'unit', 'min_stock', 'requires_batch_control'];
-
+    protected $fillable = [
+        'category_id',
+        'name',
+        'scientific_name',
+        'active_ingredient',
+        'unit',
+        'min_stock',
+        'requires_batch_control'
+    ];
     public function batches() {
         return $this->hasMany(Batch::class);
     }
