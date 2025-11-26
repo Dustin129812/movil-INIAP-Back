@@ -16,13 +16,13 @@ class FieldController extends Controller
         );
     }
 
-    // 2. Crear Nuevo Lote (Ej: "Lote A - Cacao")
     public function store(Request $request)
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'area_hectares' => 'required|numeric|min:0.1',
-            'current_crop' => 'nullable|string' // Ej: Maíz, Cacao, Pasto
+            'type' => 'required|in:OPEN_FIELD,FACILITY',
+            'area_hectares' => 'required|numeric|min:0.01',
+            'current_crop' => 'nullable|string'
         ]);
 
         $field = Field::create($data);
@@ -37,7 +37,8 @@ class FieldController extends Controller
 
         $data = $request->validate([
             'name' => 'string|max:255',
-            'area_hectares' => 'numeric|min:0.1',
+            'type' => 'in:OPEN_FIELD,FACILITY',
+            'area_hectares' => 'numeric|min:0.01',
             'current_crop' => 'nullable|string'
         ]);
 
@@ -46,11 +47,9 @@ class FieldController extends Controller
         return response()->json($field);
     }
 
-    // 4. Eliminar (Soft Delete lógico para no romper historial)
     public function destroy($id)
     {
         $field = Field::findOrFail($id);
-        // No borramos físicamente, solo lo desactivamos para que no salga en nuevos registros
         $field->update(['is_active' => false]);
 
         return response()->json(['message' => 'Lote desactivado correctamente']);

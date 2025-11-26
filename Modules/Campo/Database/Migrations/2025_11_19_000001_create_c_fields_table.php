@@ -10,9 +10,10 @@ return new class extends Migration
     {
         Schema::create('p_fields', function (Blueprint $table) {
             $table->id();
-            $table->string('name'); // Ej: "Lote Norte - Sector Río"
-            $table->decimal('area_hectares', 8, 2); // Para calcular rendimiento/ha
-            $table->string('current_crop')->nullable(); // Ej: "Cacao"
+            $table->string('name');
+            $table->enum('type', ['OPEN_FIELD', 'FACILITY'])->default('OPEN_FIELD');
+            $table->decimal('area_hectares', 8, 2);
+            $table->string('current_crop')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

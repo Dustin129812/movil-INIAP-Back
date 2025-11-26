@@ -22,7 +22,11 @@ class ProductionBatchController extends Controller
             $batch->real_unit_cost = $batch->unit_cost;
         });
 
-        return response()->json($batches);
+        return response()->json(
+            ProductionBatch::with(['protocol.variety', 'field'])
+                ->where('status', '!=', 'CANCELED')
+                ->get()
+        );
     }
 
     // 2. CREAR LOTE (El momento de la verdad)
@@ -30,25 +34,27 @@ class ProductionBatchController extends Controller
     {
         $request->validate([
             'protocol_id' => 'required|exists:prod_protocols,id',
+            'field_id' => 'nullable|exists:p_fields,id', // <--- NUEVO
             'start_date' => 'required|date',
-            'initial_quantity' => 'required|integer|min:1', // Ej: Voy a sembrar 5,000 (El protocolo base es 10,000)
-            'batch_code' => 'required|string|unique:prod_batches,batch_code'
+            'initial_quantity' => 'required|integer|min:1',
+            'batch_code' => 'required|string|unique:prod_batches,batch_code',
+            'environment' => 'required|in:NURSERY,FIELD' // <--- NUEVO
         ]);
 
         $protocol = ProdProtocol::findOrFail($request->protocol_id);
-
-        // Calculamos fecha fin estimada
         $endDate = Carbon::parse($request->start_date)->addDays($protocol->estimated_days);
 
         $batch = ProductionBatch::create([
             'batch_code' => $request->batch_code,
             'protocol_id' => $protocol->id,
+            'field_id' => $request->field_id,
+            'environment' => $request->environment,
             'start_date' => $request->start_date,
             'estimated_end_date' => $endDate,
             'initial_quantity' => $request->initial_quantity,
-            'current_quantity' => $request->initial_quantity, // Al inicio todos vivos
+            'current_quantity' => $request->initial_quantity,
             'status' => 'IN_PROGRESS',
-            'current_stage' => 'Inicio / Siembra'
+            'current_stage' => 'Inicio'
         ]);
 
         return response()->json($batch, 201);
@@ -104,5 +110,59 @@ class ProductionBatchController extends Controller
         }
 
         return response()->json($suggestions);
+    }
+
+    /**
+     * REPORTE FINANCIERO DEL LOTE
+     * Responde: ¿Cuánto me costó producir cada Kilo?
+     */
+    public function getBatchFinancialReport($id)
+    {
+        $batch = ProductionBatch::findOrFail($id);
+
+        // 1. Sumar todos los Costos (Inputs)
+        // Buscamos todas las actividades de este lote
+        $activities = \Modules\Campo\Entities\Activity::where('prod_batch_id', $id)
+            ->with(['products', 'machinery'])
+            ->get();
+
+        $totalLaborCost = $activities->sum('labor_cost_total');
+
+        $totalProductCost = $activities->flatMap->products->sum('total_cost');
+
+        $totalMachineryCost = $activities->flatMap->machinery->sum('total_cost');
+
+        $grandTotalCost = $totalLaborCost + $totalProductCost + $totalMachineryCost;
+
+        // 2. Sumar toda la Producción (Outputs)
+        $totalHarvested = DB::table('p_harvests')
+            ->where('prod_batch_id', $id)
+            ->sum('quantity'); // Asumimos que todo está en la misma unidad (ej: kg)
+
+        // 3. Cálculo de KPIs
+        $unitCost = 0;
+        if ($totalHarvested > 0) {
+            $unitCost = $grandTotalCost / $totalHarvested;
+        }
+
+        return response()->json([
+            'batch_code' => $batch->batch_code,
+            'status' => $batch->status,
+            'financials' => [
+                'total_investment' => round($grandTotalCost, 2),
+                'breakdown' => [
+                    'labor' => round($totalLaborCost, 2),
+                    'inputs' => round($totalProductCost, 2),
+                    'machinery' => round($totalMachineryCost, 2),
+                ],
+                'production' => [
+                    'total_quantity' => round($totalHarvested, 2),
+                    'unit' => 'kg', // Podrías hacerlo dinámico
+                ],
+                'kpi' => [
+                    'unit_production_cost' => round($unitCost, 2) // Ej: $0.45 por kilo
+                ]
+            ]
+        ]);
     }
 }

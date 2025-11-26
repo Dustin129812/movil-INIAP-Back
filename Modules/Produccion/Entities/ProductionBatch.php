@@ -4,11 +4,23 @@ namespace Modules\Produccion\Entities;
 
 use Illuminate\Database\Eloquent\Model;
 use Modules\Campo\Entities\Activity;
+use Modules\Campo\Entities\Field;
 
 class ProductionBatch extends Model
 {
     protected $table = 'prod_batches';
-    protected $guarded = [];
+    protected $fillable = [
+        'batch_code',
+        'protocol_id',
+        'field_id',
+        'environment',
+        'start_date',
+        'estimated_end_date',
+        'initial_quantity',
+        'current_quantity',
+        'status',
+        'current_stage'
+    ];
 
     public function activities()
     {
@@ -40,7 +52,11 @@ class ProductionBatch extends Model
     // Helper para saber qué variedad es
     public function getVarietyAttribute()
     {
-        // Agregamos un chequeo de seguridad por si el protocolo fue borrado
         return $this->protocol ? $this->protocol->variety : null;
+    }
+
+    public function field()
+    {
+        return $this->belongsTo(Field::class, 'field_id');
     }
 }

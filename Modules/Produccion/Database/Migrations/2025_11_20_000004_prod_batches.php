@@ -13,10 +13,11 @@ return new class extends Migration
 
             // Código único del lote (Ej: NAR-2025-001)
             $table->string('batch_code')->unique();
+            $table->enum('environment', ['NURSERY', 'FIELD'])->default('NURSERY');
 
             // Qué estamos produciendo y con qué receta
             $table->foreignId('protocol_id')->constrained('prod_protocols');
-
+            $table->foreignId('field_id')->nullable();
             // Fechas Reales
             $table->date('start_date'); // Fecha de siembra/inicio
             $table->date('estimated_end_date')->nullable();
