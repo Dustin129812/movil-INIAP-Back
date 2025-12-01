@@ -19,7 +19,6 @@ return new class extends Migration
 
             // 1. Identificación
             $table->string('name'); // Nombre Comercial (Ej: Fiprex)
-            $table->string('scientific_name')->nullable(); // Nombre Científico (Opcional)
             $table->string('active_ingredient')->nullable(); // Reactivo (Ej: Fipronil)
 
             // 2. Métricas

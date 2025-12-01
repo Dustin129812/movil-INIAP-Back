@@ -13,13 +13,7 @@ class StoreEntryRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        // Solo autorizamos si el reporte pertenece al usuario
-        // y si el reporte está en estado 'borrador'.
-        $report = ThOvertimeReport::find($this->input('overtime_report_id'));
-
-        return $report &&
-            $report->driver_id === Auth::id() &&
-            $report->status === 'borrador';
+        return true; // Dejamos que el Controller maneje la lógica de "Estado Borrador"
     }
 
     /**

@@ -46,34 +46,41 @@ class DriverReportController extends Controller
      * Obtiene el reporte del mes actual, o lo crea si no existe.
      * GET /api/v1/talento-humano/reports/current
      */
-    public function getCurrentReport(): JsonResponse
+    public function getCurrentReport(Request $request): JsonResponse
     {
         $user = Auth::user();
 
-        // 1. Verificar que el conductor esté configurado
+        // 1. Verificar configuración (igual que antes)
         $config = ThEmployeeConfig::where('user_id', $user->id)->first();
         if (!$config) {
             return response()->json([
-                'message' => 'Usuario no configurado para registrar horas extras. Contacte a Talento Humano.'
+                'message' => 'Usuario no configurado para registrar horas extras.'
             ], 403);
         }
 
-        // 2. Buscar o crear el reporte del mes
+        // 2. Determinar fecha solicitada (Por defecto HOY)
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+
+        // 3. Buscar o crear el reporte para ESA fecha específica
         $report = ThOvertimeReport::firstOrCreate(
             [
                 'driver_id' => $user->id,
-                'month' => now()->month,
-                'year' => now()->year,
+                'month' => $month,
+                'year' => $year,
             ],
             [
-                // Valores por defecto si se está creando
                 'status' => 'borrador',
                 'rmu_at_submission' => $config->rmu,
-                'hour_value' => $config->rmu / self::RMU_HOURS_DIVISOR
+                'hour_value' => $config->rmu / 240
             ]
         );
 
-        $this->calculationService->calculateRawEntries($report);
+        // Recalculamos para asegurar que la UI vea los datos frescos
+        if($report->status === 'borrador') {
+            $this->calculationService->calculateRawEntries($report);
+        }
+
         $report->load('entries.activityType', 'entries.vehicle');
 
         return response()->json($report);
@@ -85,7 +92,51 @@ class DriverReportController extends Controller
      */
     public function storeEntry(StoreEntryRequest $request): JsonResponse
     {
+        // 1. Obtenemos los datos validados
         $data = $request->validated();
+
+        // 2. Analizamos la fecha de la actividad
+        $entryDate = Carbon::parse($data['date']);
+        $targetMonth = $entryDate->month;
+        $targetYear = $entryDate->year;
+        $userId = Auth::id();
+
+        // 3. ENRUTAMIENTO DINÁMICO:
+        // Buscamos o creamos el reporte correspondiente a la FECHA de la actividad,
+        // no a la fecha actual del sistema.
+
+        // Obtenemos config para poder crear el reporte si no existe
+        $config = ThEmployeeConfig::where('user_id', $userId)->first();
+        if (!$config) {
+            return response()->json(['message' => 'Usuario no configurado.'], 403);
+        }
+
+        $targetReport = ThOvertimeReport::firstOrCreate(
+            [
+                'driver_id' => $userId,
+                'month' => $targetMonth,
+                'year' => $targetYear,
+            ],
+            [
+                'status' => 'borrador',
+                'rmu_at_submission' => $config->rmu,
+                'hour_value' => $config->rmu / 240 // Usamos el divisor constante
+            ]
+        );
+
+        // 4. VALIDACIÓN DE SEGURIDAD CRÍTICA
+        // Si el usuario intenta guardar algo en Noviembre, pero el reporte de Noviembre
+        // ya fue enviado (no está en borrador), debemos bloquearlo.
+        if ($targetReport->status !== 'borrador') {
+            return response()->json([
+                'message' => "No puedes agregar actividades a {$targetMonth}/{$targetYear} porque ese reporte ya se encuentra en estado: {$targetReport->status}."
+            ], 409);
+        }
+
+        // 5. Sobreescribimos el ID del reporte en la data con el ID correcto
+        $data['overtime_report_id'] = $targetReport->id;
+
+        // --- (El resto de tu lógica de cálculo se mantiene igual) ---
         $tempEntry = new ThOvertimeEntry($data);
 
         $start = Carbon::parse($data['start_time']);
@@ -97,7 +148,6 @@ class DriverReportController extends Controller
             $workStart = $start->copy()->setTime(8, 0, 0);
             $workEnd = $start->copy()->setTime(16, 30, 0);
 
-            // Calcular intersección
             $overlapStart = $start->max($workStart);
             $overlapEnd = $end->min($workEnd);
 
@@ -107,8 +157,13 @@ class DriverReportController extends Controller
             }
         }
 
-        $data['duration_minutes'] = max(0, $duration); // Guardamos la duración neta
+        $data['duration_minutes'] = max(0, $duration);
+
+        // Creamos la entrada vinculada al reporte correcto
         $entry = ThOvertimeEntry::create($data);
+
+        // Opcional: Recalcular solo los "Raw Entries" de ese reporte para tener los datos frescos
+        $this->calculationService->calculateRawEntries($targetReport);
 
         return response()->json($entry, 201);
     }

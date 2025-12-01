@@ -28,7 +28,6 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string',
-            'scientific_name' => 'nullable|string',
             'active_ingredient' => 'nullable|string',
             'unit' => 'required|string',
             'category_id' => 'required|integer',

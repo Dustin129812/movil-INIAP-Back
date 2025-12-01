@@ -25,4 +25,5 @@ Route::middleware('auth:api')->prefix('produccion')->group(function() {
 
     Route::get('batches/{id}/financial-report', [ProductionBatchController::class, 'getBatchFinancialReport']);
     Route::get('batches/{id}/suggestions', [ProductionBatchController::class, 'getSuggestedActivities']);
+    Route::get('dashboard-stats', [ProductionBatchController::class, 'getGlobalStats']);
 });

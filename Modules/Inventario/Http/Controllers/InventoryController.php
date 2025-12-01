@@ -5,12 +5,12 @@ namespace Modules\Inventario\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Modules\Inventario\Entities\Machinery;
 use Modules\Inventario\Entities\Product;
 use Modules\Inventario\Entities\Batch;
 
 class InventoryController extends Controller
 {
-    // Resumen de Stock para el Dashboard
     public function stockSummary()
     {
         $products = Product::with(['batches' => function($q) {
@@ -32,7 +32,6 @@ class InventoryController extends Controller
         return response()->json($data);
     }
 
-    // Acción de COMPRA: Agrega stock creando un nuevo lote
     public function addBatch(Request $request, $productId)
     {
         $request->validate([
@@ -70,7 +69,6 @@ class InventoryController extends Controller
 
     public function store(Request $request)
     {
-        // Lógica simple para crear el producto catálogo (nombre, unidad)
         $validated = $request->validate([
             'name' => 'required',
             'category_id' => 'required',
@@ -151,34 +149,68 @@ class InventoryController extends Controller
         }
     }
 
-    // ... (tus otras funciones)
-
     public function getDashboardStats()
     {
-        $totalValue = Batch::where('is_active', true)
-            ->where('current_quantity', '>', 0)
-            ->get()
-            ->sum(function($batch) {
-                return $batch->current_quantity * $batch->unit_cost;
-            });
+        // 1. TARJETAS SUPERIORES (Conteos Rápidos)
+        $productsCount = Product::count();
+        $machineryCount = Machinery::where('type', 'VEHICLE')->count();
+        $toolsCount = Machinery::where('type', 'TOOL')->count();
 
-        $lowStockProducts = Product::get()->filter(function($p) {
-            return $p->total_stock <= $p->min_stock;
-        })->values(); // values() para reindexar el array JSON
+        // Valorización (Sigue siendo útil para reportes a contraloría aunque sea gobierno)
+        $totalValue = Batch::where('current_quantity', '>', 0)
+            ->sum(DB::raw('current_quantity * unit_cost'));
 
-        $expiringBatches = Batch::where('is_active', true)
-            ->where('current_quantity', '>', 0)
-            ->whereDate('expiration_date', '<=', now()->addDays(90))
+        // 2. ÚLTIMOS MOVIMIENTOS (Traer de actividades recientes)
+        $recentMovements = DB::table('p_activity_products as pivot')
+            ->join('p_activities as act', 'pivot.activity_id', '=', 'act.id')
+            ->join('inv_products as prod', 'pivot.product_id', '=', 'prod.id')
+            ->leftJoin('prod_batches as batch', 'act.prod_batch_id', '=', 'batch.id') // Para saber si fue Vivero/Campo
+            ->leftJoin('p_fields as field', 'act.field_id', '=', 'field.id')
+            ->select(
+                'prod.name as product_name',
+                'pivot.quantity',
+                'prod.unit',
+                'act.activity_date',
+                'batch.environment', // NURSERY o FIELD
+                'field.name as field_name'
+            )
+            ->orderBy('act.activity_date', 'desc')
+            ->limit(5)
+            ->get();
+
+        // 3. GRÁFICO COMPARATIVO (Consumo por Entorno últimos 6 meses)
+        $consumptionStats = DB::table('p_activity_products as pivot')
+            ->join('p_activities as act', 'pivot.activity_id', '=', 'act.id')
+            ->join('prod_batches as batch', 'act.prod_batch_id', '=', 'batch.id')
+            ->select(
+            // CORRECCIÓN: Usar TO_CHAR en lugar de DATE_FORMAT para Postgres
+                DB::raw("TO_CHAR(act.activity_date, 'YYYY-MM') as month"),
+                'batch.environment',
+                DB::raw('count(*) as total_tasks'),
+                DB::raw('sum(pivot.total_cost) as estimated_cost')
+            )
+            ->where('act.activity_date', '>=', now()->subMonths(6))
+            ->groupBy('month', 'batch.environment')
+            ->orderBy('month', 'asc')
+            ->get();
+
+        // 4. ALERTA DE CADUCIDAD (Semáforo)
+        $expiringBatches = Batch::where('current_quantity', '>', 0)
+            ->where('expiration_date', '<=', now()->addDays(60))
+            ->with('product')
             ->orderBy('expiration_date', 'asc')
-            ->with('product') // Para saber el nombre
-            ->take(10) // Solo los 10 más urgentes
+            ->take(5)
             ->get();
 
         return response()->json([
-            'total_inventory_value' => round($totalValue, 2),
-            'low_stock_count' => $lowStockProducts->count(),
-            'expiring_count' => $expiringBatches->count(),
-            'low_stock_items' => $lowStockProducts->take(5), // Top 5 alertas
+            'cards' => [
+                'products' => $productsCount,
+                'machinery' => $machineryCount,
+                'tools' => $toolsCount,
+                'valuation' => round($totalValue, 2)
+            ],
+            'recent_movements' => $recentMovements,
+            'chart_data' => $consumptionStats,
             'expiring_items' => $expiringBatches
         ]);
     }

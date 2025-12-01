@@ -13,20 +13,41 @@ class ProductionBatchController extends Controller
 {
     public function index()
     {
-        $batches = ProductionBatch::with(['protocol.variety'])
+        // 1. Obtenemos los lotes
+        $batches = ProductionBatch::with(['protocol.variety', 'field'])
             ->where('status', '!=', 'CANCELED')
+            ->orderBy('created_at', 'desc') // Ordenar por más reciente
             ->get();
 
-        $batches->each(function($batch) {
-            $batch->real_accumulated_cost = $batch->real_cost;
-            $batch->real_unit_cost = $batch->unit_cost;
+        // 2. Iteramos para calcular el costo real acumulado (Igual que en el Dashboard)
+        $batches->transform(function($batch) {
+
+            // A. Suma Mano de Obra
+            $labor = DB::table('p_activities')
+                ->where('prod_batch_id', $batch->id)
+                ->where('status', '!=', 'cancelled')
+                ->sum('labor_cost_total');
+
+            // B. Suma Insumos
+            $products = DB::table('p_activity_products')
+                ->join('p_activities', 'p_activity_products.activity_id', '=', 'p_activities.id')
+                ->where('p_activities.prod_batch_id', $batch->id)
+                ->where('p_activities.status', '!=', 'cancelled')
+                ->sum('p_activity_products.total_cost');
+
+            // C. Suma Maquinaria
+            $machinery = DB::table('p_activity_machinery')
+                ->join('p_activities', 'p_activity_machinery.activity_id', '=', 'p_activities.id')
+                ->where('p_activities.prod_batch_id', $batch->id)
+                ->where('p_activities.status', '!=', 'cancelled')
+                ->sum('p_activity_machinery.total_cost');
+
+            $batch->real_accumulated_cost = round($labor + $products + $machinery, 2);
+
+            return $batch;
         });
 
-        return response()->json(
-            ProductionBatch::with(['protocol.variety', 'field'])
-                ->where('status', '!=', 'CANCELED')
-                ->get()
-        );
+        return response()->json($batches);
     }
 
     // 2. CREAR LOTE (El momento de la verdad)
@@ -116,53 +137,203 @@ class ProductionBatchController extends Controller
      * REPORTE FINANCIERO DEL LOTE
      * Responde: ¿Cuánto me costó producir cada Kilo?
      */
+    /**
+     * REPORTE FINANCIERO DETALLADO (KARDEX DE COSTOS)
+     * Calcula KPIs: Costo Total, Costo Unitario (Yield), Costo por Área.
+     */
     public function getBatchFinancialReport($id)
     {
-        $batch = ProductionBatch::findOrFail($id);
+        $batch = ProductionBatch::with(['field', 'protocol', 'protocol.variety'])->findOrFail($id);
 
-        // 1. Sumar todos los Costos (Inputs)
-        // Buscamos todas las actividades de este lote
+        // 1. OBTENER TODAS LAS ACTIVIDADES Y SUS GASTOS
         $activities = \Modules\Campo\Entities\Activity::where('prod_batch_id', $id)
-            ->with(['products', 'machinery'])
+            ->where('status', '!=', 'cancelled')
+            ->with(['products.product', 'machinery.machine'])
+            ->orderBy('activity_date', 'asc')
             ->get();
 
-        $totalLaborCost = $activities->sum('labor_cost_total');
+        // 2. CALCULAR TOTALES Y PREPARAR DETALLES
+        $totalLabor = 0;
+        $totalInputs = 0;
+        $totalMachinery = 0;
 
-        $totalProductCost = $activities->flatMap->products->sum('total_cost');
+        $detailsInputs = [];
+        $detailsMachinery = [];
+        $detailsLabor = [];
 
-        $totalMachineryCost = $activities->flatMap->machinery->sum('total_cost');
+        foreach ($activities as $act) {
+            // A. Mano de Obra
+            if ($act->labor_cost_total > 0) {
+                $totalLabor += $act->labor_cost_total;
+                $detailsLabor[] = [
+                    'date' => $act->activity_date,
+                    'task' => $act->task_type,
+                    'workers' => $act->workers_count,
+                    'cost' => $act->labor_cost_total
+                ];
+            }
 
-        $grandTotalCost = $totalLaborCost + $totalProductCost + $totalMachineryCost;
+            // B. Insumos (Agrupamos por si se repiten productos en diferentes fechas)
+            foreach ($act->products as $pivot) {
+                $cost = $pivot->total_cost; // Ya calculado en store/update
+                $totalInputs += $cost;
 
-        // 2. Sumar toda la Producción (Outputs)
-        $totalHarvested = DB::table('p_harvests')
-            ->where('prod_batch_id', $id)
-            ->sum('quantity'); // Asumimos que todo está en la misma unidad (ej: kg)
+                $detailsInputs[] = [
+                    'date' => $act->activity_date,
+                    'product' => $pivot->product->name, // Nombre producto
+                    'quantity' => $pivot->quantity,
+                    'unit' => $pivot->product->unit,
+                    'unit_cost' => $pivot->historical_unit_cost,
+                    'total' => $cost
+                ];
+            }
 
-        // 3. Cálculo de KPIs
-        $unitCost = 0;
-        if ($totalHarvested > 0) {
-            $unitCost = $grandTotalCost / $totalHarvested;
+            // C. Maquinaria
+            foreach ($act->machinery as $pivot) {
+                $cost = $pivot->total_cost;
+                $totalMachinery += $cost;
+
+                $detailsMachinery[] = [
+                    'date' => $act->activity_date,
+                    'machine' => $pivot->machine->name,
+                    'usage' => $pivot->hours_or_km, // Horas o Km
+                    'unit_cost' => $pivot->historical_hourly_cost,
+                    'total' => $cost
+                ];
+            }
         }
 
+        $grandTotalCost = $totalLabor + $totalInputs + $totalMachinery;
+
+        // 3. DATOS DE PRODUCCIÓN (COSECHA)
+        $harvests = DB::table('p_harvests')->where('prod_batch_id', $id)->get();
+        $totalHarvestedQty = $harvests->sum('quantity');
+        // Nota: Asumimos homogeneidad en unidades (todo kg o todo lb).
+        // Si mezclas unidades, necesitarías una tabla de conversión.
+        $harvestUnit = $harvests->first()->unit ?? 'Unidades';
+
+        // 4. DATOS DE TERRENO (ÁREA)
+        $area = $batch->field ? $batch->field->area_hectares : 0;
+        $areaUnit = ($batch->environment === 'NURSERY') ? 'm²' : 'Ha';
+
+        // 5. CÁLCULO DE KPIS (INDICADORES CLAVE)
+
+        // Costo Unitario de Producción (Ej: Cuánto costó producir 1 Kg)
+        $unitCost = ($totalHarvestedQty > 0) ? ($grandTotalCost / $totalHarvestedQty) : 0;
+
+        // Costo por Unidad de Tierra (Ej: Cuánto he gastado por Hectárea)
+        $areaCost = ($area > 0) ? ($grandTotalCost / $area) : 0;
+
         return response()->json([
-            'batch_code' => $batch->batch_code,
-            'status' => $batch->status,
+            'meta' => [
+                'batch_code' => $batch->batch_code,
+                'variety' => $batch->protocol->variety->name ?? 'N/A',
+                'field_name' => $batch->field->name ?? 'Sin Asignar',
+                'area' => $area,
+                'area_unit' => $areaUnit,
+                'status' => $batch->status,
+                'start_date' => $batch->start_date
+            ],
             'financials' => [
                 'total_investment' => round($grandTotalCost, 2),
                 'breakdown' => [
-                    'labor' => round($totalLaborCost, 2),
-                    'inputs' => round($totalProductCost, 2),
-                    'machinery' => round($totalMachineryCost, 2),
+                    'labor' => round($totalLabor, 2),
+                    'inputs' => round($totalInputs, 2),
+                    'machinery' => round($totalMachinery, 2),
                 ],
                 'production' => [
-                    'total_quantity' => round($totalHarvested, 2),
-                    'unit' => 'kg', // Podrías hacerlo dinámico
+                    'total_harvested' => round($totalHarvestedQty, 2),
+                    'unit' => $harvestUnit,
+                    'harvest_count' => $harvests->count()
                 ],
                 'kpi' => [
-                    'unit_production_cost' => round($unitCost, 2) // Ej: $0.45 por kilo
+                    'cost_per_product_unit' => round($unitCost, 2), // $ / kg
+                    'cost_per_land_unit' => round($areaCost, 2)     // $ / Ha
                 ]
+            ],
+            'details' => [
+                'inputs' => $detailsInputs,
+                'machinery' => $detailsMachinery,
+                'labor' => $detailsLabor
             ]
+        ]);
+    }
+
+    public function getGlobalStats()
+    {
+        // 1. Traer lotes activos
+        $activeBatches = ProductionBatch::where('status', 'IN_PROGRESS')->get();
+
+        $totalInvestment = 0;
+        $batchesByStage = [];
+
+        // Iteramos para calcular el costo real de cada lote
+        foreach($activeBatches as $batch) {
+
+            // A. Suma Mano de Obra (Tabla Activities)
+            $labor = DB::table('p_activities')
+                ->where('prod_batch_id', $batch->id)
+                ->where('status', '!=', 'cancelled')
+                ->sum('labor_cost_total');
+
+            // B. Suma Insumos (Tabla Pivote Productos)
+            $products = DB::table('p_activity_products')
+                ->join('p_activities', 'p_activity_products.activity_id', '=', 'p_activities.id')
+                ->where('p_activities.prod_batch_id', $batch->id)
+                ->where('p_activities.status', '!=', 'cancelled')
+                ->sum('p_activity_products.total_cost');
+
+            // C. Suma Maquinaria (Tabla Pivote Maquinaria)
+            $machinery = DB::table('p_activity_machinery')
+                ->join('p_activities', 'p_activity_machinery.activity_id', '=', 'p_activities.id')
+                ->where('p_activities.prod_batch_id', $batch->id)
+                ->where('p_activities.status', '!=', 'cancelled')
+                ->sum('p_activity_machinery.total_cost');
+
+            $batchCost = $labor + $products + $machinery;
+
+            // Guardamos el costo calculado en el objeto para poder ordenarlo luego
+            $batch->calculated_total_cost = round($batchCost, 2);
+
+            $totalInvestment += $batchCost;
+
+            // Conteo por fases
+            $stage = $batch->current_stage ?? 'Inicio';
+            if(!isset($batchesByStage[$stage])) $batchesByStage[$stage] = 0;
+            $batchesByStage[$stage]++;
+        }
+
+        // 2. Estructura de Gastos Global (De todos los activos)
+        $batchIds = $activeBatches->pluck('id');
+
+        $globalBreakdown = [
+            'Labor' => DB::table('p_activities')
+                ->whereIn('prod_batch_id', $batchIds)
+                ->where('status', '!=', 'cancelled')
+                ->sum('labor_cost_total'),
+
+            'Insumos' => DB::table('p_activity_products')
+                ->join('p_activities', 'p_activity_products.activity_id', '=', 'p_activities.id')
+                ->whereIn('p_activities.prod_batch_id', $batchIds)
+                ->where('p_activities.status', '!=', 'cancelled')
+                ->sum('p_activity_products.total_cost'),
+
+            'Maquinaria' => DB::table('p_activity_machinery')
+                ->join('p_activities', 'p_activity_machinery.activity_id', '=', 'p_activities.id')
+                ->whereIn('p_activities.prod_batch_id', $batchIds)
+                ->where('p_activities.status', '!=', 'cancelled')
+                ->sum('p_activity_machinery.total_cost'),
+        ];
+
+        // Ordenar los lotes por costo (el más caro primero) para la tabla resumen
+        $sortedBatches = $activeBatches->sortByDesc('calculated_total_cost')->values()->take(5);
+
+        return response()->json([
+            'total_active_investment' => round($totalInvestment, 2),
+            'active_batches_count' => $activeBatches->count(),
+            'batches_by_stage' => $batchesByStage,
+            'cost_structure' => $globalBreakdown,
+            'top_expensive_batches' => $sortedBatches
         ]);
     }
 }
