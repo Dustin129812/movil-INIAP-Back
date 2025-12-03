@@ -155,7 +155,7 @@ class OvertimeCalculationService
                 if ($isFreeDay) {
                     $dayCap_S = $totals->raw_supp;
                 } else {
-                    $dailyQuotaRemaining = self::MAX_MINUTES_PER_DAY - $dayPaid_E;
+                    $dailyQuotaRemaining = self::MAX_MINUTES_PER_DAY;
 
                     $dayCap_S = max(0, min($totals->raw_supp, $dailyQuotaRemaining));
                 }

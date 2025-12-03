@@ -140,13 +140,14 @@
         <tbody>
         <tr>
             <td>SUPLEMENTARIAS (1.5x)</td>
-            <td class="text-center">{{ sprintf('%02d:%02d', $total_s_net_hours, $total_s_net_minutes) }}</td>
-            <td class="text-right">${{ number_format($report->total_supplemental_usd, 2) }}</td>
+            <td>{{ number_format($report->total_supplemental_minutes / 60, 2) }}</td>
+            <td>${{ number_format($report->total_supplemental_usd, 2) }}</td>
         </tr>
+
         <tr>
             <td>EXTRAORDINARIAS (2.0x)</td>
-            <td class="text-center">{{ sprintf('%02d:%02d', $total_e_net_hours, $total_e_net_minutes) }}</td>
-            <td class="text-right">${{ number_format($report->total_extraordinary_usd, 2) }}</td>
+            <td>{{ number_format($report->total_extraordinary_minutes / 60, 2) }}</td>
+            <td>${{ number_format($report->total_extraordinary_usd, 2) }}</td>
         </tr>
 
         <tr style="font-weight: bold; background-color: #F0F0F0;">
