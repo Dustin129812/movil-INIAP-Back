@@ -71,6 +71,11 @@ return [
             'database' => env('DB_DATABASE', 'forge'),
             'username' => env('DB_USERNAME', 'forge'),
             'password' => env('DB_PASSWORD', ''),
+            'dump' => [
+                'dump_binary_path' => '/usr/bin',
+                'use_single_transaction',
+                'timeout' => 60 * 5,
+            ],
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
