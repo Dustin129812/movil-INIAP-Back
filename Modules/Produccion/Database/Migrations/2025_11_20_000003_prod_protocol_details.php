@@ -46,6 +46,10 @@ return new class extends Migration
 
     public function down()
     {
+        Schema::table('prod_protocol_details', function (Blueprint $table) {
+            $table->dropForeign(['inv_product_id']);
+            $table->dropForeign(['inv_machinery_id']);
+        });
         Schema::dropIfExists('prod_protocol_details');
     }
 };

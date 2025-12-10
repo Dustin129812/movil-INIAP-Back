@@ -40,6 +40,9 @@ return new class extends Migration
      */
     public function down()
     {
+        Schema::table('inv_batches', function (Blueprint $table) {
+            $table->dropForeign(['product_id']);
+        });
         Schema::dropIfExists('inv_batches');
     }
 };
