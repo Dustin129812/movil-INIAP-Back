@@ -13,6 +13,8 @@ use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\BudgetTypeController;
+use Illuminate\Routing\Router;
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
 Route::post('fiasa/login', [AuthController::class, 'fiasaLogin']);
@@ -87,6 +89,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::resource('materials', MaterialController::class);
     Route::apiResource('rubros', RubroController::class);
     Route::apiResource('indicators', IndicatorController::class);
+
+    Route::apiResource('budgettypes', BudgetTypeController::class);
 
     Route::get('user-associated-counts', [PlannerController::class, 'getUserAssociatedCounts']);
 

@@ -37,6 +37,8 @@ return new class extends Migration
      */
     public function down()
     {
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('inv_products');
+        Schema::enableForeignKeyConstraints();
     }
 };
