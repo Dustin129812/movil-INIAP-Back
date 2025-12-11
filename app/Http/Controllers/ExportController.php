@@ -19,6 +19,8 @@ class ExportController extends Controller
 
         $products = $response['data']['products'] ?? [];
 
+        $products = collect($products)->sortBy('rubro.id')->values()->all();
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         // Agregar título
@@ -91,27 +93,27 @@ class ExportController extends Controller
         $lastRubroId = null; // Para saber cuándo cambia de rubro
 
         foreach ($products as $product) {
+            // Verifica si cambiamos de rubro
             if (!empty($product['rubro']) && $product['rubro']['id'] !== $lastRubroId) {
-        $sheet->setCellValue("A{$row}", "Rubro: " . $product['rubro']['name']);
-        $sheet->mergeCells("A{$row}:AG{$row}"); // Unir columnas
-        $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
-            'font' => ['bold' => true],
-            'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'color' => ['rgb' => '68A829'] // color de rubro
-            ],
-            'alignment' => ['vertical' => 'center']
-        ]);
-        $row++;
-
-        $lastRubroId = $product['rubro']['id']; // Guardamos el rubro actual
-    }
-
+                $sheet->setCellValue("A{$row}", "Rubro: " . $product['rubro']['name']);
+                $sheet->mergeCells("A{$row}:AG{$row}");
+                $sheet->getStyle("A{$row}:AG{$row}")->applyFromArray([
+                    'font' => ['bold' => true],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'color' => ['rgb' => '68A829']
+                    ],
+                    'alignment' => ['vertical' => 'center']
+                ]);
+                $row++;
+                $lastRubroId = $product['rubro']['id'];
+            }
 
             // FILA DEL PRODUCTO
 
             $sheet->setCellValue("A{$row}", "Producto: " . $product['name']);
             $sheet->setCellValue("E{$row}", $product['budget']);
+            $sheet->setCellValue("F{$row}", $product['budget_type']);
 
             // Estilos producto (azul claro)
             $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
@@ -157,7 +159,7 @@ class ExportController extends Controller
                     $indicadores,
                     $activity['budget'], // presupuesto
                     "", // fuente solo producto
-                    "", // presupuesto usado
+                    $activity['accrued_budget'], // presupuesto usado
                 ], $plan, $avance, [
                     "" // observaciones
                 ]);
