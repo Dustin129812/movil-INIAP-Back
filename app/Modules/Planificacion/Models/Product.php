@@ -52,9 +52,9 @@ class Product extends Model
         return $this->belongsTo(Location::class);
     }
 
-    public function Budget_Type()
+    public function budget_type()
     {
-        return $this->belongsTo(Budget_Type::class);
+        return $this->belongsTo(Budget_Type::class,'budget_types_id');
     }
 
     public function scopeWhereUserRelated($query, $userId)
