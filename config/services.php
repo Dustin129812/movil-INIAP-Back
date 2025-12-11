@@ -30,5 +30,14 @@ return [
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
+	'facebook' => [
+        'page_token' => env('FB_PAGE_TOKEN'),
+        'verify_token' => env('FB_VERIFY_TOKEN'),
+    ],
+
+    'botpress' => [
+        'url' => env('BOTPRESS_URL'),
+        'bot_id' => env('BOTPRESS_BOT_ID'),
+    ],
 
 ];

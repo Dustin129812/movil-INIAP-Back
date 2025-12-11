@@ -14,31 +14,33 @@ class BotController extends Controller
     private $fbPageToken;
     private $verifyToken;
 
-    public function __construct()
+	public function __construct()
     {
-        $this->botpressUrl = env('BOTPRESS_URL', 'http://localhost:3000');
-        $this->botId       = env('BOTPRESS_BOT_ID', 'iniap');
-        $this->fbPageToken = env('FB_PAGE_TOKEN');
-        $this->verifyToken = env('FB_VERIFY_TOKEN');
+        // USAR config() EN LUGAR DE env()
+        $this->botpressUrl = config('services.botpress.url', 'http://localhost:3000');
+        $this->botId       = config('services.botpress.bot_id', 'iniap');
+        $this->fbPageToken = config('services.facebook.page_token');
+        $this->verifyToken = config('services.facebook.verify_token');
     }
-
     /**
      * 1. Verificación del Webhook (Requisito de Facebook)
      */
-    public function verifyWebhook(Request $request)
+
+	public function verifyWebhook(Request $request)
     {
-        $mode = $request->query('hub_mode');
-        $token = $request->query('hub_verify_token');
-        $challenge = $request->query('hub_challenge');
+        $mode = $request->input('hub_mode') ?? $request->input('hub.mode');
+        $token = $request->input('hub_verify_token') ?? $request->input('hub.verify_token');
+        $challenge = $request->input('hub_challenge') ?? $request->input('hub.challenge');
 
         if ($mode && $token) {
+            // Ahora $this->verifyToken SÍ tendrá valor
             if ($mode === 'subscribe' && $token === $this->verifyToken) {
-                Log::info("Webhook de Facebook verificado correctamente.");
+                Log::info("Webhook verificado correctamente.");
                 return response($challenge, 200);
             }
         }
-
-        Log::warning("Intento fallido de verificación de Webhook.");
+        
+        Log::warning("Fallo verificación. Token esperado: " . $this->verifyToken . " - Recibido: " . $token);
         return response('Forbidden', 403);
     }
 
