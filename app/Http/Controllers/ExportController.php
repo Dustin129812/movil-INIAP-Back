@@ -14,6 +14,7 @@ use App\Modules\Planificacion\Http\Controllers\PlannerController;
 class ExportController extends Controller
 {
     public function exportPlanificacion(Request $request)
+
     {$response = app(PlannerController::class)->getProductsWithActivities($request)->getData(true);
 
         $products = $response['data']['products'] ?? [];
@@ -43,15 +44,14 @@ class ExportController extends Controller
             'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
         ]);
         // Agregar usuario que genera el reporte
-        $sheet->setCellValue('A4', 'Usuario: ' . auth()->user()->name ?? 'Sistema');
+        $sheet->setCellValue('A4', 'Generado por: ' . auth()->user()->name ?? 'Sistema');
         $sheet->mergeCells('A4:AI4');
         $sheet->getStyle('A4')->applyFromArray([
             'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
         ]);
 
-        // -------------------------------------------
+
         // ENCABEZADOS
-        // -------------------------------------------
 
         $headers = [
             "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
@@ -68,14 +68,14 @@ class ExportController extends Controller
         $sheet->fromArray($headers, null, 'A6');
 
         // Estilos del header
-        $sheet->getStyle('A6:AG6')->applyFromArray([
+        $sheet->getStyle('A6:AF6')->applyFromArray([
             'font' => [
                 'bold' => true,
-                'color' => ['rgb' => 'FFFFFF']
+                'color' => ['rgb' => 'F2F3F2']
             ],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'color' => ['rgb' => '002B5B'] // tu color
+                'color' => ['rgb' => '008000']
             ],
             'alignment' => [
                 'horizontal' => 'center',
@@ -94,11 +94,11 @@ class ExportController extends Controller
             if (!empty($product['rubro']) && $product['rubro']['id'] !== $lastRubroId) {
         $sheet->setCellValue("A{$row}", "Rubro: " . $product['rubro']['name']);
         $sheet->mergeCells("A{$row}:AG{$row}"); // Unir columnas
-        $sheet->getStyle("A{$row}:AG{$row}")->applyFromArray([
+        $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
             'font' => ['bold' => true],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'color' => ['rgb' => 'FFD966'] // color de rubro
+                'color' => ['rgb' => '68A829'] // color de rubro
             ],
             'alignment' => ['vertical' => 'center']
         ]);
@@ -107,18 +107,18 @@ class ExportController extends Controller
         $lastRubroId = $product['rubro']['id']; // Guardamos el rubro actual
     }
 
-            // -------------------
+
             // FILA DEL PRODUCTO
-            // -------------------
+
             $sheet->setCellValue("A{$row}", "Producto: " . $product['name']);
             $sheet->setCellValue("E{$row}", $product['budget']);
 
             // Estilos producto (azul claro)
-            $sheet->getStyle("A{$row}:AI{$row}")->applyFromArray([
+            $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                 'font' => ['bold' => true],
                 'fill' => [
                     'fillType' => Fill::FILL_SOLID,
-                    'color' => ['rgb' => 'CAE5FF']
+                    'color' => ['rgb' => '949994']
                 ],
                 'borders' => [
                     'allBorders' => ['borderStyle' => Border::BORDER_THIN]
@@ -128,9 +128,9 @@ class ExportController extends Controller
 
             $row++;
 
-            // -----------------------------------
+
             // ACTIVIDADES DE ESTE PRODUCTO
-            // -----------------------------------
+
             foreach ($product['activities'] as $activity) {
 
                 $responsables = implode(", ", array_column($activity['users'], 'name'));
@@ -165,7 +165,7 @@ class ExportController extends Controller
                 $sheet->fromArray($rowData, null, "A{$row}");
 
                 // Estilos fila actividad
-                $sheet->getStyle("A{$row}:AG{$row}")->applyFromArray([
+                $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                     'borders' => [
                         'allBorders' => ['borderStyle' => Border::BORDER_THIN]
                     ],
@@ -179,13 +179,29 @@ class ExportController extends Controller
             }
         }
 
-        // Auto-size
-        $highestColumn = $sheet->getHighestColumn(); // devuelve 'AI' por ejemplo
-        $highestColumnIndex = Coordinate::columnIndexFromString($highestColumn); // convierte 'AI' a número
+        //Definimos el ancho de cada tambla
+        $sheet->getColumnDimension('A')->setWidth(40); // Producto / Actividad
+        $sheet->getColumnDimension('B')->setWidth(50); // Descripción
+        $sheet->getColumnDimension('C')->setWidth(25); // Responsable
+        $sheet->getColumnDimension('D')->setWidth(30); // Indicadores
+        $sheet->getColumnDimension('E')->setWidth(15); // Presupuesto
+        $sheet->getColumnDimension('F')->setWidth(20); // Fuente
+        $sheet->getColumnDimension('G')->setWidth(15); // Presupuesto Utilizado
 
-        for ($col = 1; $col <= $highestColumnIndex; $col++) {
-        $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->setAutoSize(true);
+        //Se busca el rango de los meses de planificacion y avance
+        $highestColumn = $sheet->getHighestColumn();
+        $highestColumnIndex = Coordinate::columnIndexFromString($highestColumn);
+
+        //Establecemos el ancho para todos los meses
+        for ($col = 8; $col <= $highestColumnIndex; $col++) {
+            $colString = Coordinate::stringFromColumnIndex($col);
+            $sheet->getColumnDimension($colString)->setWidth(12); // Ancho para números/porcentajes
         }
+
+        //Asegura que TODAS las celdas tengan wrapText activado
+        $lastRow = $row - 1;
+        $sheet->getStyle("A6:{$highestColumn}{$lastRow}")
+                ->getAlignment()->setWrapText(true);
 
         // Descargar Excel
         $writer = new Xlsx($spreadsheet);
