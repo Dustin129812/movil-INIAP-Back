@@ -15,6 +15,7 @@ class Activity extends Model
         'description',
         'budget',
         'product_id',
+        'accrued_budget'
     ];
 
     public function users()

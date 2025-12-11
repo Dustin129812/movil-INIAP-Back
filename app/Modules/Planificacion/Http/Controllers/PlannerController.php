@@ -31,6 +31,7 @@ class PlannerController extends Controller
             $product = new Product();
             $product->name = $request->input('name');
             $product->budget = $request->input('budget');
+            $product->budget_types_id= $request->input('budget_types_id'); //presupuesto update
             $product->ponderacion = $request->input('ponderacion');
             $product->user_id = $request->input('user');
             $product->rubro_id = $request->input('rubro');
@@ -46,6 +47,7 @@ class PlannerController extends Controller
                 $activity = new Activity();
                 $activity->description = $activityData['description'];
                 $activity->budget = $activityData['budget'];
+                $activity->accrued_budget= $activityData['accrued_budget']; //presupuesto update
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
