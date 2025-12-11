@@ -351,6 +351,7 @@ class PlannerController extends Controller
                         'id' => $activity->id,
                         'description' => $activity->description,
                         'absolute_weight' => $activityAbsoluteWeight,
+                        'budget'=>$activity->budget,
                         'total_progress' => $totalActivityProgress, // Este es el valor clave actualizado.
                         'total_completion_percentage' => $totalExecutedPercentage,// Suma del aporte de todas sus semanas
                         'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
@@ -374,6 +375,7 @@ class PlannerController extends Controller
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
+                    'budget'=>$product->budget,
                     'absolute_weight' => $productAbsoluteWeight, // Peso real en el 100% del proyecto
                     'total_progress' => $totalProductProgress, // Suma del aporte de todas sus actividades
                     'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,

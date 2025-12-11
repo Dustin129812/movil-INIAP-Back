@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\BudgetTypeController;
 use Illuminate\Routing\Router;
+use  App\Http\Controllers\ExportController;
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
 Route::post('fiasa/login', [AuthController::class, 'fiasaLogin']);
@@ -102,6 +103,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
     Route::get('getProductsByLocation', [GeneralController::class, 'getProductsByLocation']);
     Route::get('getRubrosByLocation', [GeneralController::class, 'getRubrosByLocation']);
+
+    Route::get('exportPlanificacion', [ExportController::class, 'exportPlanificacion']);
 
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
