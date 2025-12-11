@@ -2,6 +2,7 @@
 
 namespace App\Modules\Planificacion\Http\Controllers;
 
+use App\Http\Controllers\BotController;
 use App\Http\Controllers\IniapBotController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -230,8 +231,8 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
 });
 
-Route::post('/iniap-bot/consultar', [IniapBotController::class, 'processRequest']);
-Route::post('/ask-database', [AiQueryController::class, 'handleQuery']);
+Route::get('/webhook', [BotController::class, 'verifyWebhook']);
+Route::post('/webhook', [BotController::class, 'handleMessage']);
 
 require base_path('Modules/TalentoHumano/Routes/api.php');
 require_once base_path('Modules/Inventario/Routes/api.php');
