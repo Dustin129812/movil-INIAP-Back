@@ -805,6 +805,7 @@ class PlannerController extends Controller
             'reports.*.activity_id' => ['required', 'exists:activities,id'],
             'reports.*.month' => ['required', 'date_format:Y-m-d'],
             'reports.*.percentage' => ['required', 'numeric', 'min:0'],
+            'reports.*.accrued_budget' => ['required'],
         ]);
 
         DB::beginTransaction();
@@ -823,6 +824,14 @@ class PlannerController extends Controller
                     ]
                 );
             }
+            Log::debug('Detalle para la depuración: {acurred_budget}', [$report['accrued_budget']]);
+            $activity = Activity::find($report['activity_id']);
+
+                if ($activity) {
+                    // Actualizamos el campo en la tabla activities
+                    $activity->accrued_budget = $report['accrued_budget'];
+                    $activity->save();
+                }
 
             DB::commit();
             return response()->json([
@@ -881,6 +890,7 @@ class PlannerController extends Controller
                     'description' => $activity->description,
                     'month_to_report' => $targetMonth->format('Y-m-d'),
                     'planned_percentage' => $plannedProgress ? $plannedProgress->percentage : 0,
+                    'budget'=>$activity->budget,
                 ];
             });
 

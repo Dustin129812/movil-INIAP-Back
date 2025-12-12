@@ -23,15 +23,15 @@ class ExportController extends Controller
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        // Agregar título
+        // Agrega título
         $sheet->setCellValue('A1', 'Reporte de Planificacion POA');
-        $sheet->mergeCells('A1:AI1'); // Unir columnas para el título
+        $sheet->mergeCells('A1:AI1'); // Unir columnas 
         $sheet->getStyle('A1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 16],
             'alignment' => ['horizontal' => 'center', 'vertical' => 'center']
         ]);
 
-        // Agregar fecha de generación
+        // Agrega fecha de generación
         $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
         $sheet->mergeCells('A2:AI2');
         $sheet->getStyle('A2')->applyFromArray([
@@ -39,16 +39,26 @@ class ExportController extends Controller
             'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
         ]);
 
-        //agrega la locacion
+        //Agrega la locacion
         $sheet->setCellValue('A3', 'Locación: ' . auth()->user()->location['name'] ?? 'Sistema');
         $sheet->mergeCells('A3:AI3');
         $sheet->getStyle('A3')->applyFromArray([
             'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
         ]);
-        // Agregar usuario que genera el reporte
+        // Agrega usuario que genera el reporte
         $sheet->setCellValue('A4', 'Generado por: ' . auth()->user()->name ?? 'Sistema');
         $sheet->mergeCells('A4:AI4');
         $sheet->getStyle('A4')->applyFromArray([
+            'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
+        ]);
+        $sheet->setCellValue('A5', 'Objetivo: ');
+        $sheet->mergeCells('A5:AI5');
+        $sheet->getStyle('A5')->applyFromArray([
+            'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
+        ]);
+        $sheet->setCellValue('A6', 'Director: ');
+        $sheet->mergeCells('A6:AI6');
+        $sheet->getStyle('A6')->applyFromArray([
             'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
         ]);
 
@@ -67,10 +77,10 @@ class ExportController extends Controller
             "Observaciones"
         ];
 
-        $sheet->fromArray($headers, null, 'A6');
+        $sheet->fromArray($headers, null, 'A8');
 
         // Estilos del header
-        $sheet->getStyle('A6:AF6')->applyFromArray([
+        $sheet->getStyle('A8:AF8')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'color' => ['rgb' => 'F2F3F2']
@@ -89,15 +99,15 @@ class ExportController extends Controller
             ]
         ]);
 
-        $row = 7;
+        $row = 9;
         $lastRubroId = null; // Para saber cuándo cambia de rubro
 
         foreach ($products as $product) {
             // Verifica si cambiamos de rubro
             if (!empty($product['rubro']) && $product['rubro']['id'] !== $lastRubroId) {
                 $sheet->setCellValue("A{$row}", "Rubro: " . $product['rubro']['name']);
-                $sheet->mergeCells("A{$row}:AG{$row}");
-                $sheet->getStyle("A{$row}:AG{$row}")->applyFromArray([
+                $sheet->mergeCells("A{$row}:AF{$row}");
+                $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                     'font' => ['bold' => true],
                     'fill' => [
                         'fillType' => Fill::FILL_SOLID,
@@ -142,14 +152,14 @@ class ExportController extends Controller
                 $plan = array_fill(0, 12, "");
                 foreach ($activity['monthly_plannig'] as $p) {
                     $m = Carbon::parse($p['month'])->month - 1;
-                    $plan[$m] = $p['percentage'];
+                    $plan[$m] = $p['percentage']."%";
                 }
 
                 // Mapear avance (12 meses)
                 $avance = array_fill(0, 12, "");
                 foreach ($activity['execution_progress'] as $e) {
                     $m = Carbon::parse($e['month'])->month - 1;
-                    $avance[$m] = $e['reported_percentage'];
+                    $avance[$m] = $e['reported_percentage']."%";
                 }
 
                 $rowData = array_merge([
