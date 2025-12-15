@@ -14,9 +14,7 @@ class MessengerController extends Controller
     private $verifyToken = 'iniap_secreto_v12'; // El token que pones en Meta
     private $pageAccessToken = 'EAAZCUnZCpJFWwBQFgtEuMqYL5vnC6y4GspLwzdYer6KLBsnwJwQQJYyb8ZBOFYmD0PtWfzM9gChZBrC4L43gID1wP8hDIuhoZCqBSrZCJyxEvJkzzvtAvX4U6C4JGodaIhUxIskjdykexKOuKL3vFoc4shPdmPVCD49PqixURC0Y80dLUWJnVpmeVTmZBpbenbWn2BAVd5n'; // ¡El nuevo token permanente!
 
-    // ----------------------------------------------------------------------------------
 
-    // 1. Maneja la verificación inicial (GET)
     public function verify(Request $request)
     {
         $hubMode = $request->get('hub_mode');
@@ -24,14 +22,12 @@ class MessengerController extends Controller
         $challenge = $request->get('hub_challenge');
 
         if ($hubMode === 'subscribe' && $verifyToken === $this->verifyToken) {
-            // Devuelve el hub_challenge que pide Meta
             return response($challenge, 200)->header('Content-Type', 'text/plain');
         }
 
         return response('Verification failed: Token mismatch', 403);
     }
 
-    // 2. Maneja los mensajes entrantes (POST)
     public function handleMessage(Request $request)
     {
         $data = $request->all();
@@ -43,30 +39,25 @@ class MessengerController extends Controller
                     $senderId = $messagingEvent['sender']['id'];
                     $messageText = null;
 
-                    // Si es un mensaje de texto normal (usuario escribió)
-                    if (isset($messagingEvent['message']['text'])) {
-                        $messageText = $messagingEvent['message']['text'];
+                    if (isset($messagingEvent['message']['quick_reply']['payload'])) {
+                        $messageText = $messagingEvent['message']['quick_reply']['payload'];
                     }
-                    // Si es un postback (clic en un botón de opción rápida)
                     elseif (isset($messagingEvent['postback']['payload'])) {
                         $messageText = $messagingEvent['postback']['payload'];
                     }
-                    // Si es un quick_reply (clic en un botón de opción rápida)
-                    elseif (isset($messagingEvent['message']['quick_reply']['payload'])) {
-                        $messageText = $messagingEvent['message']['quick_reply']['payload'];
+                    // 3. Prioridad: Texto escrito por usuario ("Danny")
+                    elseif (isset($messagingEvent['message']['text'])) {
+                        $messageText = $messagingEvent['message']['text'];
                     }
 
                     if ($messageText) {
-                        // 1. Enviar el mensaje/payload a Botpress (Converse API)
                         $botpressResponse = Http::post($this->botpressUrl . $senderId, [
                             'type' => 'text',
-                            'text' => $messageText,
+                            'text' => $messageText
                         ]);
 
-                        // 2. Procesar la respuesta de Botpress y enviarla a Meta
                         if ($botpressResponse->successful()) {
                             $responses = $botpressResponse->json()['responses'] ?? [];
-
                             foreach ($responses as $response) {
                                 $this->processBotpressResponse($senderId, $response);
                             }
@@ -75,8 +66,6 @@ class MessengerController extends Controller
                 }
             }
         }
-
-        // Meta siempre espera una respuesta 200 OK
         return response('EVENT_RECEIVED', 200);
     }
 
@@ -86,33 +75,38 @@ class MessengerController extends Controller
     {
         $messageData = [];
         $isQuickReply = false;
-        $textForQR = $response['text'] ?? null;
+        $textForQR = null;
         $choices = [];
 
-        // --- 1. MANEJO DEL FORMATO "single-choice" (La Skill Choice) ---
+        //  MANEJO DEL FORMATO "single-choice"
         if ($response['type'] === 'single-choice' && isset($response['choices'])) {
             $isQuickReply = true;
             $choices = $response['choices'];
-            // Usamos el texto del mensaje anterior o el texto de la opción (Investigación científica)
-            $textForQR = 'Por favor selecciona una de las siguientes opciones:';
+            $textForQR = $response['text'] ?? 'Selecciona una opción:';
         }
-
-        // --- 2. MANEJO DE QUICK REPLIES ESTÁNDAR (Si el bot las envía así) ---
+        //  MANEJO DE QUICK REPLIES ESTÁNDAR
         elseif (isset($response['quick_replies'])) {
             $isQuickReply = true;
             $choices = $response['quick_replies'];
+            $textForQR = $response['text'] ?? 'Opciones:';
         }
 
-        // --- CONSTRUCCIÓN DEL PAYLOAD SI HAY OPCIONES ---
         if ($isQuickReply) {
             $quickReplies = [];
 
-            // Mapear la lista de opciones (ya sean de 'choices' o 'quick_replies')
             foreach ($choices as $reply) {
+                $fullTitle = $reply['title'] ?? $reply['text'];
+
+                $payloadToSend = $fullTitle;
+
+                $displayTitle = mb_strlen($fullTitle) > 20
+                    ? mb_substr($fullTitle, 0, 17) . '...'
+                    : $fullTitle;
+
                 $quickReplies[] = [
                     'content_type' => 'text',
-                    'title' => $reply['title'] ?? $reply['text'], // Usa 'title' o 'text'
-                    'payload' => $reply['value'] ?? $reply['payload'] ?? $reply['text'] // Usa 'value' (de choice) o 'payload'
+                    'title' => $displayTitle,
+                    'payload' => $payloadToSend
                 ];
             }
 
@@ -121,33 +115,28 @@ class MessengerController extends Controller
                 'quick_replies' => $quickReplies
             ];
         }
-
-        // --- 3. MANEJO DE TEXTO SIMPLE (solo si no hay quick replies) ---
+        // MANEJO DE TEXTO SIMPLE
         elseif ($response['type'] === 'text' && !empty($response['text'])) {
             $messageData = [
                 'text' => $response['text']
             ];
         }
 
-        // Enviamos solo si hay contenido que enviar
         if (!empty($messageData)) {
             $this->sendFacebookPayload($recipientId, $messageData);
         }
     }
-// --- Fin del Método processBotpressResponse ---
 
-    // 4. Envía el mensaje (payload) al usuario a través de la API de Meta
     private function sendFacebookPayload($recipientId, $messageData)
     {
         $apiUrl = "https://graph.facebook.com/{$this->metaApiVersion}/me/messages";
 
         $response = Http::withToken($this->pageAccessToken)->post($apiUrl, [
             'recipient' => ['id' => $recipientId],
-            'message' => $messageData // Enviamos el JSON de mensaje completo
+            'message' => $messageData
         ]);
 
         if (!$response->successful()) {
-            // Opcional: Loggear el error si Meta rechaza el formato
             Log::error('Meta Send Failed', $response->json());
         }
     }

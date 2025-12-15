@@ -2,8 +2,6 @@
 
 namespace App\Modules\Planificacion\Http\Controllers;
 
-use App\Http\Controllers\BotController;
-use App\Http\Controllers\IniapBotController;
 use App\Http\Controllers\MessengerController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
