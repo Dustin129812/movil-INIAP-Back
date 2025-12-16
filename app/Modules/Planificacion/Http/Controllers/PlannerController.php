@@ -116,6 +116,7 @@ class PlannerController extends Controller
             $product->update($request->only([
                 'name',
                 'budget',
+                'budget_types_id',
                 'ponderacion',
                 'user_id',
                 'rubro_id',
@@ -134,7 +135,8 @@ class PlannerController extends Controller
                 $activity = Activity::findOrNew($activityData['id'] ?? null);
 
                 $activity->description = $activityData['description'];
-                $activity->budget = $activityData['budget'];
+                $activity->budget = $activityData['budget'];            
+                $activity->accrued_budget= $activityData['accrued_budget'];           
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
@@ -656,6 +658,7 @@ class PlannerController extends Controller
                 ->with([
                     'location',
                     'rubro',
+                    'budget_type',
                     'user',
                     'activities' => function ($query) {
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
@@ -712,11 +715,13 @@ class PlannerController extends Controller
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
+                    'budget'=> $product->budget,
                     'absolute_weight' => $productAbsoluteWeight,
                     'total_progress' => $totalProductProgress,
                     'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
                     'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                    'budget_type' => $product->budget_type ? ['id' => $product->budget_type->id, 'name' => $product->budget_type->name] : null,
                     'activities' => $mappedActivities->toArray(),
                 ];
             });
