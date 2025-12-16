@@ -173,7 +173,9 @@
         <tbody>
 
         @php
-            $sortedEntries = $report->entries->sortBy('date');
+            $sortedEntries = $report->entries->sortBy(function ($entry) {
+                return $entry->date . ' ' . $entry->start_time;
+            });
         @endphp
 
         @forelse ($sortedEntries as $entry)
