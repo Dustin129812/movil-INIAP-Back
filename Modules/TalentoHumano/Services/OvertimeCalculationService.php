@@ -73,7 +73,6 @@ class OvertimeCalculationService
 
     /**
      * Calcula los minutos brutos (sin límites) para una sola entrada.
-     * (Esta función NO CAMBIA, ya es correcta)
      */
     private function calculateRawEntryMinutes($entry): array
     {
@@ -81,10 +80,26 @@ class OvertimeCalculationService
         $startTime = $entryDate->copy()->setTimeFromTimeString($entry->start_time);
         $endTime = $entryDate->copy()->setTimeFromTimeString($entry->end_time);
 
+        // Si es día de semana y la hora de fin está en la ventana de "llegada" (ej: 07:30 - 08:00),
+        // extendemos el cálculo hasta las 08:00 para cubrir esos minutos muertos.
+
+        if (!$this->isWeekend($entryDate) && !$this->isHoliday($entryDate)) {
+            $workdayStart = $entryDate->copy()->setTimeFromTimeString(self::WORKDAY_START); // 08:00:00
+
+            // Definimos una ventana de 30 minutos (ajustable)
+            // Si termina después de las 7:30 y antes de las 8:00, redondeamos.
+            $roundingThreshold = $workdayStart->copy()->subMinutes(30);
+
+            if ($endTime->gt($roundingThreshold) && $endTime->lt($workdayStart)) {
+                // Para el cálculo, empujamos el fin hasta las 08:00
+                $endTime = $workdayStart;
+            }
+        }
+
         $supplemental = 0;
         $extraordinary = 0;
 
-        // REGLA 1: Fines de semana y Feriados
+        // REGLA 1: Fines de semana y Feriados (Sin cambios)
         if ($this->isWeekend($entryDate) || $this->isHoliday($entryDate)) {
             $extraordinary = $endTime->diffInMinutes($startTime);
         }
@@ -96,6 +111,7 @@ class OvertimeCalculationService
             $extraordinary += $this->calculateOverlap($startTime, $endTime, $extraStart, $extraEnd);
 
             // S (Bloque 1) = 06:00:00 hasta 08:00:00
+            // Al haber ajustado $endTime arriba, este bloque capturará los minutos faltantes hasta las 8:00
             $supp1_Start = $extraEnd;
             $supp1_End = $entryDate->copy()->setTimeFromTimeString(self::WORKDAY_START);
             $supplemental += $this->calculateOverlap($startTime, $endTime, $supp1_Start, $supp1_End);
@@ -198,84 +214,6 @@ class OvertimeCalculationService
     private function isHoliday(Carbon $date): bool
     {
         return $this->holidays->has($date->toDateString());
-    }
-
-    /**
-     * --- MODO DE DEPURACIÓN ---
-     * (Esta función la puedes dejar o quitar, no afecta el cálculo principal)
-     */
-    public function debugReportLogic(Collection $entries): array
-    {
-        $debugLog = []; // Aquí guardaremos el log
-
-        // Simulación de la lógica de "Límites solo en S"
-
-        $debugLog[] = "--- INICIO DEPURACIÓN (Hipótesis: Límites solo en S) ---";
-
-        // 1. Extraordinarias
-        $totalExtraordinaryNet = $entries->sum('extraordinary_minutes');
-        $debugLog[] = "REGLA 1 (E): Pagando 100% de E (Bruto: " . $totalExtraordinaryNet . " min)";
-
-        // 2. Suplementarias
-        $debugLog[] = "REGLA 2 (S): Aplicando límites 4h/día y 12h/sem solo a S...";
-
-        $totalSupplementalNet = 0;
-        $weeklyMinutesPaid_S = 0;
-        $currentWeekOfYear = null;
-
-        $dailyTotals = $entries->groupBy('date')->map(function ($dayEntries) {
-            return (object)[
-                'supp_minutes' => $dayEntries->sum('supplemental_minutes'),
-            ];
-        })->sortBy(function ($totals, $date) {
-            return $date;
-        });
-
-        foreach ($dailyTotals as $date => $totals) {
-            $carbonDate = Carbon::parse($date);
-            $rawDailySupp = $totals->supp_minutes;
-
-            if ($rawDailySupp == 0) continue;
-
-            $logLine = "Fecha: " . $carbonDate->format('Y-m-d');
-
-            $weekOfYear = $carbonDate->weekOfYear;
-            if ($weekOfYear != $currentWeekOfYear) {
-                $weeklyMinutesPaid_S = 0;
-                $currentWeekOfYear = $weekOfYear;
-                $logLine .= " [NUEVA SEMANA (Sem " . $weekOfYear . ")]";
-            }
-
-            $logLine .= " | Bruto (S: $rawDailySupp)";
-
-            // 1. Límite Diario (240 min)
-            $dayCap_Supp = min($rawDailySupp, self::MAX_MINUTES_PER_DAY);
-            $logLine .= " | Límite-Día (S: $dayCap_Supp)";
-
-            // 2. Límite Semanal (720 min)
-            $availableWeeklyMinutes = self::MAX_MINUTES_PER_WEEK - $weeklyMinutesPaid_S;
-
-            if ($availableWeeklyMinutes <= 0) {
-                $logLine .= " -> Pago (S: 0) [REGLA: Límite Semanal S Agotado]";
-                $debugLog[] = $logLine;
-                continue;
-            }
-
-            $finalDaySupp = min($dayCap_Supp, $availableWeeklyMinutes);
-
-            $totalSupplementalNet += $finalDaySupp;
-            $weeklyMinutesPaid_S += $finalDaySupp;
-
-            $logLine .= " -> Pago (S: $finalDaySupp) [Contador Sem S: $weeklyMinutesPaid_S / 720]";
-            $debugLog[] = $logLine;
-        }
-
-        $debugLog[] = "------------------------------------------";
-        $debugLog[] = "Total Neto S (Pagado): " . $totalSupplementalNet . " min";
-        $debugLog[] = "Total Neto E (Pagado): " . $totalExtraordinaryNet . " min";
-        $debugLog[] = "--- FIN DEPURACIÓN ---";
-
-        return $debugLog;
     }
 
     /**

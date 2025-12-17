@@ -26,8 +26,15 @@ Route::middleware('auth:api')->prefix('v1/talento-humano')->name('api.th.v1.')->
         // Catálogos (Vehículos, Actividades) para el formulario
         Route::get('/form-data', [DriverReportController::class, 'getFormData'])->name('form-data');
 
+        // Obtener lista de versiones (V1, V2...)
+        Route::get('/reports/history', [DriverReportController::class, 'getMonthHistory'])->name('reports.history');
+
         // Reporte del mes actual (o lo crea si no existe)
         Route::get('/reports/current', [DriverReportController::class, 'getCurrentReport'])->name('reports.current');
+
+
+        // Ver un reporte específico por ID (Necesario para ver la V1 en solo lectura)
+        Route::get('/reports/{report}', [DriverReportController::class, 'show'])->name('reports.show');
 
         // CRUD para las entradas (viajes)
         Route::post('/entries', [DriverReportController::class, 'storeEntry'])->name('entries.store');

@@ -70,7 +70,10 @@
         .text-right { text-align: right; }
         .font-bold { font-weight: bold; }
         .w-25 { width: 25%; }
-        .w-50 { width: 50%; }
+        /* Clases auxiliares para anchos */
+        .col-date { width: 65px; } /* Ajustado para que la fecha entre en una línea */
+        .col-time { width: 45px; }
+
         .signature-box {
             width: 100%;
             margin-top: 40px;
@@ -162,12 +165,12 @@
     <table>
         <thead>
         <tr>
-            <th>FECHA</th>
+            <th class="col-date">FECHA</th>
             <th>JUSTIFICACIÓN DE ACTIVIDAD</th>
-            <th>HORA DE INICIO</th>
-            <th>HORA DE FINALIZACIÓN</th>
-            <th>H. SUPLE.</th>
-            <th>H. EXTRA.</th>
+            <th class="col-time">HORA DE INICIO</th>
+            <th class="col-time">HORA DE FINALIZACIÓN</th>
+            <th class="col-time">H. SUPLE.</th>
+            <th class="col-time">H. EXTRA.</th>
         </tr>
         </thead>
         <tbody>
@@ -179,8 +182,30 @@
         @endphp
 
         @forelse ($sortedEntries as $entry)
+            @php
+                $dateObj = \Carbon\Carbon::parse($entry->date);
+
+                // CORRECCIÓN: Usamos $dateObj->format('Y-m-d') para limpiar cualquier "00:00:00" que traiga la fecha
+                $cleanDate = $dateObj->format('Y-m-d');
+
+                // Ahora concatenamos limpio: "2025-12-01" + " " + "18:00:00"
+                $endObj = \Carbon\Carbon::parse($cleanDate . ' ' . $entry->end_time);
+
+                $displayEndTime = $endObj->format('H:i');
+
+                if ($dateObj->isWeekday()) {
+                    // Usamos la misma lógica de fecha limpia para las comparaciones
+                    $roundingWindowStart = \Carbon\Carbon::parse($cleanDate)->setTime(7, 30, 0);
+                    $roundingTarget = \Carbon\Carbon::parse($cleanDate)->setTime(8, 0, 0);
+
+                    if ($endObj->gt($roundingWindowStart) && $endObj->lt($roundingTarget)) {
+                        $displayEndTime = '08:00';
+                    }
+                }
+            @endphp
+
             <tr>
-                <td class="text-center">{{ \Carbon\Carbon::parse($entry->date)->format('Y-m-d') }}</td>
+                <td class="text-center">{{ $dateObj->format('Y-m-d') }}</td>
                 <td>
                     {{ $entry->activityType->name ?? 'N/A' }}
                     @if($entry->observations)
@@ -188,7 +213,9 @@
                     @endif
                 </td>
                 <td class="text-center">{{ \Carbon\Carbon::parse($entry->start_time)->format('H:i') }}</td>
-                <td class="text-center">{{ \Carbon\Carbon::parse($entry->end_time)->format('H:i') }}</td>
+
+                <td class="text-center">{{ $displayEndTime }}</td>
+
                 <td class="text-center">{{ \Carbon\CarbonInterval::minutes($entry->supplemental_minutes)->cascade()->format('%H:%I') }}</td>
                 <td class="text-center">{{ \Carbon\CarbonInterval::minutes($entry->extraordinary_minutes)->cascade()->format('%H:%I') }}</td>
             </tr>
@@ -198,8 +225,10 @@
             </tr>
         @endforelse
 
+        {{-- TOTALES --}}
         @if($report->entries->isNotEmpty())
             @php
+                // Cálculos de totales (Sin cambios)
                 $total_s_bruto_min = $report->entries->sum('supplemental_minutes');
                 $total_s_bruto_hours = floor($total_s_bruto_min / 60);
                 $total_s_bruto_minutes = $total_s_bruto_min % 60;
@@ -207,14 +236,6 @@
                 $total_e_bruto_min = $report->entries->sum('extraordinary_minutes');
                 $total_e_bruto_hours = floor($total_e_bruto_min / 60);
                 $total_e_bruto_minutes = $total_e_bruto_min % 60;
-
-                $total_s_diff_min = $total_s_bruto_min - $report->total_supplemental_minutes;
-                $total_s_diff_hours = floor($total_s_diff_min / 60);
-                $total_s_diff_minutes = $total_s_diff_min % 60;
-
-                $total_e_diff_min = $total_e_bruto_min - $report->total_extraordinary_minutes;
-                $total_e_diff_hours = floor($total_e_diff_min / 60);
-                $total_e_diff_minutes = $total_e_diff_min % 60;
             @endphp
             <tr style="background-color: #F9F9F9; font-weight: bold;">
                 <td colspan="4" class="text-right">TOTAL NRO HORAS:</td>
