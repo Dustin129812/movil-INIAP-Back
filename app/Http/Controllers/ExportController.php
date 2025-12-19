@@ -25,7 +25,7 @@ class ExportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         // Agrega título
         $sheet->setCellValue('A1', 'Reporte de Planificacion POA');
-        $sheet->mergeCells('A1:AI1'); // Unir columnas 
+        $sheet->mergeCells('A1:AI1'); // Unir columnas
         $sheet->getStyle('A1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 16],
             'alignment' => ['horizontal' => 'center', 'vertical' => 'center']
@@ -163,7 +163,7 @@ class ExportController extends Controller
                 }
 
                 $rowData = array_merge([
-                    "Actividad: " . $activity['description'],
+                    "Actividad: ",
                     $activity['description'],
                     $responsables,
                     $indicadores,

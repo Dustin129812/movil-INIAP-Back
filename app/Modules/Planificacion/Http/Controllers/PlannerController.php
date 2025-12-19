@@ -649,108 +649,132 @@ class PlannerController extends Controller
     }
 
     public function getProductsByLocationId(Request $request, $locationId)
-    {
-        try {
-            $products = Product::where('location_id', $locationId)
-                ->whereHas('rubro', function ($query) {
-                    $query->where('name', '!=', 'OFICIAL');
-                })
-                ->with([
-                    'location',
-                    'rubro',
-                    'budget_type',
-                    'user',
-                    'activities' => function ($query) {
-                        $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
-                    },
-                ])->get();
+{
+    try {
+        $products = Product::where('location_id', $locationId)
+            ->whereHas('rubro', function ($query) {
+                $query->where('name', '!=', 'OFICIAL');
+            })
+            ->with([
+                'location',
+                'rubro',
+                'user',
+                'budget_type',
+                'activities' => function ($query) {
+                    // 1. IMPORTANTE: Agregamos 'monthlyExecutionProgress' a la consulta
+                    $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
+                },
+            ])->get();
 
-            // Mapear los datos y añadir los cálculos de ponderación (LÓGICA COPIADA)
-            $formattedProducts = $products->map(function ($product) {
+        $formattedProducts = $products->map(function ($product) {
 
-                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+            $productAbsoluteWeight = (float) $product->ponderacion / 100;
 
-                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+            $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
 
-                    $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
-                    $totalActivityProgress = 0;
+                $activityWeight = (float) $activity->ponderacion;
+                $activityAbsoluteWeight = $productAbsoluteWeight * ($activityWeight / 100);
 
-                    $executionProgress = ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activityAbsoluteWeight, &$totalActivityProgress) {
+                // 2. LÓGICA HÍBRIDA: Detectar si usar Mensual o Semanal
+                // Si tiene progreso mensual, usamos ese. Si no, miramos el semanal.
+                $useMonthly = $activity->monthlyExecutionProgress->isNotEmpty();
 
-                        $globalContribution = $activityAbsoluteWeight * ((float) $weekActivity->percentage / 100);
-                        $totalActivityProgress += $globalContribution;
+                $sourceCollection = $useMonthly
+                    ? $activity->monthlyExecutionProgress
+                    : ($activity->weeklyActivities ?? collect([]));
 
-                        return [
-                            'week_id' => $weekActivity->id,
-                            'date' => Carbon::parse($weekActivity->date)->format('Y-m-d'),
-                            'reported_percentage' => (float) $weekActivity->percentage,
-                            'global_contribution' => $globalContribution,
-                            'observations' => $weekActivity->observations,
-                        ];
-                    })->toArray();
+                // 3. Cálculos de totales
+                $totalRealProgress = $sourceCollection->sum('percentage'); // Suma directa (0-100)
+                $totalWeightedProgress = $activityAbsoluteWeight * ($totalRealProgress / 100); // Contribución al proyecto
+
+                // 4. Mapeo unificado para el Frontend
+                $executionProgress = $sourceCollection->map(function ($item) use ($useMonthly) {
+                    // El frontend espera fecha para filtrar.
+                    // Si es mensual viene en 'month', si es semanal viene en 'date'.
+                    $dateValue = $useMonthly ? $item->month : $item->date;
 
                     return [
-                        'id' => $activity->id,
-                        'description' => $activity->description,
-                        'relative_weight' => (float) $activity->ponderacion,
-                        'absolute_weight' => $activityAbsoluteWeight,
-                        'total_progress' => $totalActivityProgress,
-                        'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
-                        'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
-                        'users' => ($activity->users ?? collect([]))->map(function ($user) {
-                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre'];
-                        })->toArray(),
-                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
-                            return ['id' => $indicator->id, 'name' => $indicator->name];
-                        })->toArray(),
-                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
-                            return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
-                        })->toArray(),
-                        'execution_progress' => $executionProgress,
+                        'id' => $item->id,
+                        'week_id' => $useMonthly ? null : $item->id, // Mantener compatibilidad si algo viejo lo usa
+                        // Enviamos ambas llaves para asegurar que el filtro (p.month || p.date) funcione
+                        'month' => Carbon::parse($dateValue)->format('Y-m-d'),
+                        'date' => Carbon::parse($dateValue)->format('Y-m-d'),
+                        'reported_percentage' => (float) $item->percentage,
+                        'observations' => $item->observations ?? '',
                     ];
-                });
-
-                $totalProductProgress = $mappedActivities->sum('total_progress');
+                })->toArray();
 
                 return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'budget'=> $product->budget,
-                    'absolute_weight' => $productAbsoluteWeight,
-                    'total_progress' => $totalProductProgress,
-                    'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
-                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
-                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
-                    'budget_type' => $product->budget_type ? ['id' => $product->budget_type->id, 'name' => $product->budget_type->name] : null,
-                    'activities' => $mappedActivities->toArray(),
+                    'id' => $activity->id,
+                    'description' => $activity->description,
+                    'accrued_budget'=> $activity->accrued_budget,
+                    'budget' => $activity->budget,
+                    'relative_weight' => $activityWeight,
+                    'absolute_weight' => $activityAbsoluteWeight,
+
+                    // Totales corregidos
+                    'total_progress' => $totalWeightedProgress,
+                    'progreso_real' => $totalRealProgress,
+
+                    'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                    'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                    'users' => ($activity->users ?? collect([]))->map(function ($user) {
+                        return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre'];
+                    })->toArray(),
+                    'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
+                        return ['id' => $indicator->id, 'name' => $indicator->name];
+                    })->toArray(),
+                    'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                        return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
+                    })->toArray(),
+
+                    // Aquí va el array lleno
+                    'execution_progress' => $executionProgress,
                 ];
             });
 
-            $totalRubroProgress = $formattedProducts->sum('total_progress');
+            $totalProductProgress = $mappedActivities->sum('total_progress');
 
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Success',
-                    'detail' => 'Productos obtenidos por ubicación correctamente',
-                    'code' => 200,
-                ],
-                'data' => [
-                    'total_rubro_progress' => $totalRubroProgress,
-                    'products' => $formattedProducts->values()->toArray(),
-                ]
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error al obtener productos por ubicación: ' . $e->getMessage());
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'Error al obtener productos por ubicación: ' . $e->getMessage(),
-                    'code' => 500,
-                ],
-            ], 500);
-        }
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'ponderacion' => $product->ponderacion,
+                // Corrección: Enviar el nombre directamente para evitar error en frontend
+                'budget_type' => $product->budget_type,
+                'budget' => $product->budget,
+                'absolute_weight' => $productAbsoluteWeight,
+                'total_progress' => $totalProductProgress,
+                'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
+                'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
+                'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                'activities' => $mappedActivities->toArray(),
+            ];
+        });
+
+        $totalRubroProgress = $formattedProducts->sum('total_progress');
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Success',
+                'detail' => 'Productos obtenidos por ubicación correctamente',
+                'code' => 200,
+            ],
+            'data' => [
+                'total_rubro_progress' => $totalRubroProgress,
+                'products' => $formattedProducts->values()->toArray(),
+            ]
+        ]);
+    } catch (Exception $e) {
+        Log::error('Error al obtener productos por ubicación: ' . $e->getMessage());
+        return response()->json([
+            'msg' => [
+                'summary' => 'Error',
+                'detail' => 'Error al obtener productos por ubicación: ' . $e->getMessage(),
+                'code' => 500,
+            ],
+        ], 500);
     }
-
+}
     public function getPlannableProductsForCurrentUser(Request $request)
     {
         $user = $request->user();
@@ -828,15 +852,14 @@ class PlannerController extends Controller
                         // Podríamos añadir un campo user_id a la tabla si queremos saber quién reportó.
                     ]
                 );
-            }
-            Log::debug('Detalle para la depuración: {acurred_budget}', [$report['accrued_budget']]);
-            $activity = Activity::find($report['activity_id']);
+                $activity = Activity::find($report['activity_id']);
 
-                if ($activity) {
-                    // Actualizamos el campo en la tabla activities
-                    $activity->accrued_budget = $report['accrued_budget'];
-                    $activity->save();
-                }
+                    if ($activity) {
+                        // Actualizamos el campo en la tabla activities
+                        $activity->accrued_budget = $report['accrued_budget'];
+                        $activity->save();
+                    }
+            }
 
             DB::commit();
             return response()->json([
