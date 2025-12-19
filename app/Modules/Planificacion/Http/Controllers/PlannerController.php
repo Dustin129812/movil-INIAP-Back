@@ -116,6 +116,7 @@ class PlannerController extends Controller
             $product->update($request->only([
                 'name',
                 'budget',
+                'budget_types_id',
                 'ponderacion',
                 'user_id',
                 'rubro_id',
@@ -134,7 +135,8 @@ class PlannerController extends Controller
                 $activity = Activity::findOrNew($activityData['id'] ?? null);
 
                 $activity->description = $activityData['description'];
-                $activity->budget = $activityData['budget'];
+                $activity->budget = $activityData['budget'];            
+                $activity->accrued_budget= $activityData['accrued_budget'];           
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
