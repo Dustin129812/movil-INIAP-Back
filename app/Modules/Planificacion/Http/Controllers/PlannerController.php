@@ -135,8 +135,8 @@ class PlannerController extends Controller
                 $activity = Activity::findOrNew($activityData['id'] ?? null);
 
                 $activity->description = $activityData['description'];
-                $activity->budget = $activityData['budget'];            
-                $activity->accrued_budget= $activityData['accrued_budget'];           
+                $activity->budget = $activityData['budget'];
+                $activity->accrued_budget= $activityData['accrued_budget'];
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
@@ -316,6 +316,111 @@ class PlannerController extends Controller
 
             $products = Product::where('location_id', $user->location_id)
                 ->whereHas('rubro', function ($query) {
+                    $query->where('name', '!=', 'OFICIAL');
+                })
+                ->with([
+                    'location',
+                    'rubro',
+                    'user',
+                    'budget_type',
+                    'activities' => function ($query) {
+                        $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
+                    },
+                ])->get();
+
+            // Mapear los datos y añadir los cálculos de ponderación
+            $formattedProducts = $products->map(function ($product) {
+
+                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+
+                    $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
+
+                    $activity->loadMissing('monthlyExecutionProgress');
+
+                    $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
+
+                    $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
+
+                    $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
+                        return [
+                            'month' => Carbon::parse($execProgress->month)->format('Y-m-d'),
+                            'reported_percentage' => (float) $execProgress->percentage,
+                        ];
+                    })->toArray();
+
+                    return [
+                        'id' => $activity->id,
+                        'description' => $activity->description,
+                        'absolute_weight' => $activityAbsoluteWeight,
+                        'budget'=>$activity->budget,
+                        'accrued_budget'=> $activity->accrued_budget,
+                        'total_progress' => $totalActivityProgress, // Este es el valor clave actualizado.
+                        'total_completion_percentage' => $totalExecutedPercentage,// Suma del aporte de todas sus semanas
+                        'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                        'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                        'users' => ($activity->users ?? collect([]))->map(function ($user) {
+                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre'];
+                        })->toArray(),
+                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
+                            return ['id' => $indicator->id, 'name' => $indicator->name];
+                        })->toArray(),
+                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                            return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
+                        })->toArray(),
+                        'execution_progress' => $executionProgress,
+                    ];
+                });
+
+                // Calculamos el progreso total del producto sumando el progreso de sus actividades
+                $totalProductProgress = $mappedActivities->sum('total_progress');
+
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'budget'=>$product->budget,
+                    'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
+                    'absolute_weight' => $productAbsoluteWeight, // Peso real en el 100% del proyecto
+                    'total_progress' => $totalProductProgress, // Suma del aporte de todas sus actividades
+                    'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
+                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
+                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                    'activities' => $mappedActivities->toArray(),
+                ];
+            });
+
+            // Opcional: Calcular el avance total de todo el rubro
+            $totalRubroProgress = $formattedProducts->sum('total_progress');
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Productos obtenidos correctamente',
+                    'code' => 200,
+                ],
+                'data' => [
+                    'total_rubro_progress' => $totalRubroProgress,
+                    'products' => $formattedProducts->values()->toArray(),
+                ]
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error al obtener los productos en getProductsWithActivities: ' . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener los productos: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
+        }
+    }
+    public function getAllProductsWithActivities(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            $products = Product::whereHas('rubro', function ($query) {
                     $query->where('name', '!=', 'OFICIAL');
                 })
                 ->with([
