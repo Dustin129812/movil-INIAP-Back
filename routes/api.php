@@ -105,6 +105,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getRubrosByLocation', [GeneralController::class, 'getRubrosByLocation']);
 
     Route::get('exportPlanificacion', [ExportController::class, 'exportPlanificacion']);
+    Route::get('exportPlanificacionAllLocations', [ExportController::class, 'exportPlanificacionAllLocations']);
 
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
