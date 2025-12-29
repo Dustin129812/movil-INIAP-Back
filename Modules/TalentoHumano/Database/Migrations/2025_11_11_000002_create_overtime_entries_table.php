@@ -18,6 +18,7 @@ return new class extends Migration
 
             $table->integer('month');
             $table->integer('year');
+            $table->integer('version')->default(1);
 
             $table->string('status')->default('borrador'); // borrador, pendiente_supervisor, pendiente_daf, pendiente_dath, aprobado, rechazado
             $table->text('rejection_reason')->nullable(); // Razón si se rechaza
@@ -42,7 +43,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->unique(['driver_id', 'month', 'year']);
+            $table->unique(['driver_id', 'month', 'year', 'version']);
         });
     }
 

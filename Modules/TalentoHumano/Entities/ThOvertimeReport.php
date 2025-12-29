@@ -17,6 +17,7 @@ class ThOvertimeReport extends Model
         'driver_id',
         'month',
         'year',
+        'version',
         'status',
         'rejection_reason',
         'supervisor_approver_id',

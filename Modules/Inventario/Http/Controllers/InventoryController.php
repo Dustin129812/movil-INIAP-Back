@@ -149,7 +149,7 @@ class InventoryController extends Controller
         }
     }
 
-    public function getDashboardStats()
+	public function getDashboardStats()
     {
         // 1. TARJETAS SUPERIORES (Conteos Rápidos)
         $productsCount = Product::count();
