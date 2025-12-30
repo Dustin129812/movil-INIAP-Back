@@ -21,6 +21,12 @@ public function up(): void
     Schema::table('activities', function (Blueprint $table){
         // Asegúrate de que esto esté bien escrito también (sin _id)
         $table->float('accrued_budget')->default(0);
+        
+    });
+
+    Schema::table('activity_execution_progress', function (Blueprint $table){
+        $table->string('observation')->nullable();
+        
     });
 }
 
