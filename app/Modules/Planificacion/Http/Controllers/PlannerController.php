@@ -387,6 +387,7 @@ class PlannerController extends Controller
                     'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
                     'activities' => $mappedActivities->toArray(),
+                    'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                 ];
             });
 
@@ -492,6 +493,7 @@ class PlannerController extends Controller
                     'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
                     'activities' => $mappedActivities->toArray(),
+                    'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null, //cambio 
                 ];
             });
 
@@ -844,6 +846,7 @@ class PlannerController extends Controller
                 'id' => $product->id,
                 'name' => $product->name,
                 'ponderacion' => $product->ponderacion,
+                'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                 // Corrección: Enviar el nombre directamente para evitar error en frontend
                 'budget_type' => $product->budget_type,
                 'budget' => $product->budget,
@@ -940,6 +943,7 @@ class PlannerController extends Controller
             'reports.*.month' => ['required', 'date_format:Y-m-d'],
             'reports.*.percentage' => ['required', 'numeric', 'min:0'],
             'reports.*.accrued_budget' => ['required'],
+            'reports.*.observation' => ['nullable', 'string'],
         ]);
 
         DB::beginTransaction();
@@ -954,6 +958,7 @@ class PlannerController extends Controller
                     ],
                     [
                         'percentage' => $report['percentage'],
+                        'observation' => $report['observation'] 
                         // Podríamos añadir un campo user_id a la tabla si queremos saber quién reportó.
                     ]
                 );
@@ -973,6 +978,7 @@ class PlannerController extends Controller
 
 
         } catch (Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',
@@ -1039,4 +1045,60 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+
+    public function getMonthlyActivitiesReported(Request $request)
+{
+    $request->validate([
+        'month' => 'nullable|date_format:Y-m',
+    ]);
+
+    try {
+        $user = $request->user();
+
+        // Si no envías mes, toma el anterior
+        $targetMonth = $request->has('month')
+            ? Carbon::parse($request->input('month'))->startOfMonth()
+            : Carbon::now()->subMonth()->startOfMonth();
+
+        $activities = Activity::whereHas('users', function ($query) use ($user) {
+                $query->where('users.id', $user->id);
+            })
+            // FILTRO CRÍTICO: Solo las que SÍ tienen reporte
+            ->whereHas('monthlyExecutionProgress', function ($query) use ($targetMonth) {
+                $query->where('month', $targetMonth);
+            })
+            ->with(['monthlyProgress' => function ($query) use ($targetMonth) {
+                $query->where('month', $targetMonth);
+            }])
+            ->with(['monthlyExecutionProgress' => function ($query) use ($targetMonth) {
+                $query->where('month', $targetMonth);
+            }])
+            ->get();
+
+        $formattedData = $activities->map(function ($activity) use ($targetMonth) {
+            $planned = $activity->monthlyProgress->first();
+            // Obtenemos el registro de la tabla ActivityExecutionProgress
+            $execution = $activity->monthlyExecutionProgress->first(); 
+
+            return [
+                'id' => $activity->id,
+                'description' => $activity->description,
+                'budget' => $activity->budget,
+                'month_reported' => $targetMonth->format('Y-m'),
+                
+                // Meta original
+                'planned_percentage' => $planned ? $planned->percentage : 0,
+                
+                // DATOS REPORTADOS (Lo que te faltaba en el JSON)
+                'reported_percentage' => $execution ? $execution->percentage : 0,
+                'reported_observation' => $execution ? $execution->observation : 'Sin observación',
+            ];
+        });
+
+        return response()->json(['data' => $formattedData]);
+
+    } catch (Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+}
 }

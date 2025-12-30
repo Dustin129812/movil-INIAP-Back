@@ -67,7 +67,7 @@ class ExportController extends Controller
 
         $headers = [
             "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
-            "Presupuesto", "Fuente Financiamiento", "Presupuesto Utilizado",
+            "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
             // 12 meses planificado
             "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
             "Plan Jul","Plan Ago","Plan Sep","Plan Oct","Plan Nov","Plan Dic",
@@ -258,7 +258,7 @@ class ExportController extends Controller
 
         $headers = [
             "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
-            "Presupuesto", "Fuente Financiamiento", "Presupuesto Utilizado",
+            "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
             "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
             "Plan Jul","Plan Ago","Plan Sep","Plan Oct","Plan Nov","Plan Dic",
             "Avance Ene","Avance Feb","Avance Mar","Avance Abr","Avance May","Avance Jun",

@@ -15,12 +15,14 @@ class ActivityMonthlyProgress extends Model
     protected $fillable = [
         'activity_id',
         'month',
-        'percentage'
+        'percentage',
+        'observation',
     ];
 
     protected $casts = [
         'month' => 'date',
         'percentage' => 'decimal:2',
+        'observation',
     ];
 
     public function activity(): BelongsTo
