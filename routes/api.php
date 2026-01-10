@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // --- CONTROLADORES DEL NÚCLEO (Core) ---
+use App\Http\Controllers\CropsController;
+use App\Http\Controllers\ProductiveRubroController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\Admin\AdminUserController;
@@ -92,6 +94,10 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::apiResource('indicators', IndicatorController::class);
 
     Route::apiResource('budgettypes', BudgetTypeController::class);
+    Route::apiResource('productive-rubro',ProductiveRubroController::class);
+    Route::apiResource('crops',CropsController::class);
+    Route::get('getCrops',[CropsController::class,'getCrops']);
+    Route::get('getCropsbyProductiveRubro/{id}',[CropsController::class,'getCropsbyProductiveRubro']);
 
     Route::get('user-associated-counts', [PlannerController::class, 'getUserAssociatedCounts']);
 

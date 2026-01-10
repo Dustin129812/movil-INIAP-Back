@@ -14,19 +14,24 @@ public function up(): void
     Schema::table('products', function (Blueprint $table){
         // AGREGAR ->nullable() ES LA SOLUCIÓN
         $table->foreignId('budget_types_id')
-              ->nullable()                   
-              ->constrained('budget_types'); 
+              ->nullable()
+              ->constrained('budget_types');
     });
 
     Schema::table('activities', function (Blueprint $table){
         // Asegúrate de que esto esté bien escrito también (sin _id)
         $table->float('accrued_budget')->default(0);
-        
+
     });
 
     Schema::table('activity_execution_progress', function (Blueprint $table){
         $table->string('observation')->nullable();
-        
+
+    });
+
+    Schema::table('products', function (Blueprint $table){
+        $table->foreignId('crop_id')->nullable()->constrained('crops');
+
     });
 }
 

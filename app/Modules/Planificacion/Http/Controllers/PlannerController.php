@@ -35,6 +35,7 @@ class PlannerController extends Controller
             $product->ponderacion = $request->input('ponderacion');
             $product->user_id = $request->input('user');
             $product->rubro_id = $request->input('rubro');
+            $product->crop_id = $request->input('crops');
             $product->location_id = $userLocation->id;
             $product->save();
 
@@ -380,6 +381,7 @@ class PlannerController extends Controller
                     'id' => $product->id,
                     'name' => $product->name,
                     'budget'=>$product->budget,
+                    'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                     'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'absolute_weight' => $productAbsoluteWeight, // Peso real en el 100% del proyecto
                     'total_progress' => $totalProductProgress, // Suma del aporte de todas sus actividades
@@ -486,6 +488,7 @@ class PlannerController extends Controller
                     'id' => $product->id,
                     'name' => $product->name,
                     'budget'=>$product->budget,
+                    'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                     'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'absolute_weight' => $productAbsoluteWeight, // Peso real en el 100% del proyecto
                     'total_progress' => $totalProductProgress, // Suma del aporte de todas sus actividades
@@ -493,7 +496,7 @@ class PlannerController extends Controller
                     'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
                     'activities' => $mappedActivities->toArray(),
-                    'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null, //cambio 
+                    'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null, //cambio
                 ];
             });
 
@@ -767,6 +770,7 @@ class PlannerController extends Controller
                 'rubro',
                 'user',
                 'budget_type',
+                'crop',
                 'activities' => function ($query) {
                     // 1. IMPORTANTE: Agregamos 'monthlyExecutionProgress' a la consulta
                     $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
@@ -846,6 +850,7 @@ class PlannerController extends Controller
                 'id' => $product->id,
                 'name' => $product->name,
                 'ponderacion' => $product->ponderacion,
+                'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                 'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                 // Corrección: Enviar el nombre directamente para evitar error en frontend
                 'budget_type' => $product->budget_type,
@@ -958,7 +963,7 @@ class PlannerController extends Controller
                     ],
                     [
                         'percentage' => $report['percentage'],
-                        'observation' => $report['observation'] 
+                        'observation' => $report['observation']
                         // Podríamos añadir un campo user_id a la tabla si queremos saber quién reportó.
                     ]
                 );
@@ -1078,17 +1083,17 @@ class PlannerController extends Controller
         $formattedData = $activities->map(function ($activity) use ($targetMonth) {
             $planned = $activity->monthlyProgress->first();
             // Obtenemos el registro de la tabla ActivityExecutionProgress
-            $execution = $activity->monthlyExecutionProgress->first(); 
+            $execution = $activity->monthlyExecutionProgress->first();
 
             return [
                 'id' => $activity->id,
                 'description' => $activity->description,
                 'budget' => $activity->budget,
                 'month_reported' => $targetMonth->format('Y-m'),
-                
+
                 // Meta original
                 'planned_percentage' => $planned ? $planned->percentage : 0,
-                
+
                 // DATOS REPORTADOS (Lo que te faltaba en el JSON)
                 'reported_percentage' => $execution ? $execution->percentage : 0,
                 'reported_observation' => $execution ? $execution->observation : 'Sin observación',
