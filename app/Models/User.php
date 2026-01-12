@@ -2,13 +2,27 @@
 
 namespace App\Models;
 
+use App\Modules\Planificacion\Models\Activity;
+use App\Modules\Planificacion\Models\Conversation;
+use App\Modules\Planificacion\Models\Document;
+use App\Modules\Planificacion\Models\Ethnic_Group;
+use App\Modules\Planificacion\Models\Group;
+use App\Modules\Planificacion\Models\Location;
+use App\Modules\Planificacion\Models\Nationality;
+use App\Modules\Planificacion\Models\Position;
+use App\Modules\Planificacion\Models\Product;
+use App\Modules\Planificacion\Models\WeekActivity;
+use App\Modules\Planificacion\Models\WeeklyPulse;
+use App\Modules\TalentoHumano\HorasExtras\Models\RegistroHora;
+use App\Modules\TalentoHumano\HorasExtras\Models\ReporteMensualHE;
+use App\Modules\TalentoHumano\Shared\Models\Vehiculo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use Tymon\JWTAuth\Contracts\JWTSubject;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable  implements JWTSubject
 {
@@ -25,7 +39,8 @@ class User extends Authenticatable  implements JWTSubject
         'location_id',
         'nationality_id',
         'ethnic_id',
-        'position_id',
+        'position',
+        'sueldo',
     ];
 
     protected $hidden = [
@@ -102,4 +117,44 @@ class User extends Authenticatable  implements JWTSubject
         return $this->hasMany(WeeklyPulse::class);
     }
 
+    public function readConversations()
+    {
+        return $this->belongsToMany(Conversation::class)->withPivot('last_read_at')->withTimestamps();
+    }
+
+    public function position()
+    {
+        return $this->belongsTo(Position::class);
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    // --- RELACIONES DEL MÓDULO DE TALENTO HUMANO ---
+
+    /**
+     * Los vehículos (placas) que este usuario (conductor) tiene asignados.
+     */
+    public function vehiculos()
+    {
+        return $this->belongsToMany(Vehiculo::class, 'conductor_vehiculo');
+    }
+
+    /**
+     * Todos los registros de horas que este usuario (conductor) ha creado.
+     */
+    public function registrosHoras()
+    {
+        return $this->hasMany(RegistroHora::class, 'user_id');
+    }
+
+    /**
+     * Todos los reportes mensuales generados para este usuario (conductor).
+     */
+    public function reportesMensualesHE()
+    {
+        return $this->hasMany(ReporteMensualHE::class, 'user_id');
+    }
 }

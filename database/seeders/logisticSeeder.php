@@ -2,9 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Modules\Planificacion\Models\LogisticSupport;
 use Illuminate\Database\Seeder;
-use App\Models\LogisticSupport;
 
 class logisticSeeder extends Seeder
 {
@@ -25,7 +24,7 @@ class logisticSeeder extends Seeder
             ['name' => 'EL'],
             ['name' => 'Personal GET y otros proyectos'],
             ['name' => 'Personal administrativo y técnico GET'],
-            ['name' => 'Personal administrativo y técnico GET. Personal de huertos'],            
+            ['name' => 'Personal administrativo y técnico GET. Personal de huertos'],
         ];
 
         foreach ($logistics as $logistic) {

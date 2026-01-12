@@ -14,11 +14,14 @@ return new class extends Migration
         Schema::create('messages', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('conversation_id');
-            $table->text('content');
-            $table->unsignedBigInteger('sender_id')->nullable(); // ID del usuario o admin
-            $table->string('guest_id')->nullable(); // ID para invitados
+            $table->text('content')->nullable();
+            $table->unsignedBigInteger('sender_id')->nullable();
+            $table->string('guest_id')->nullable();
             $table->timestamps();
             $table->foreign('conversation_id')->references('id')->on('conversations')->onDelete('cascade');
+
+            $table->string('message_type')->default('text');
+            $table->string('file_path')->nullable();
         });
     }
 

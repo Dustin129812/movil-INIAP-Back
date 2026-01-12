@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class BroadcastServiceProvider extends ServiceProvider
@@ -12,11 +13,14 @@ class BroadcastServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Broadcast::routes(['middleware' => ['jwt.auth']]);
-
-        Broadcast::channel('conversation.{id}', function ($user, $id) {
-            $conversation = \App\Models\Conversation::findOrFail($id);
-            return $user || $conversation->guest_id === session('guest_id');
+        Route::prefix('api')->middleware(['jwt.auth'])->group(function () {
+            Broadcast::routes();
         });
+
+        Broadcast::channel('admin-notifications', function ($user) {
+            return $user->hasRole('administrador');
+        });
+
+        require base_path('routes/channels.php');
     }
 }

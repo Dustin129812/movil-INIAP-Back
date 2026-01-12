@@ -1,0 +1,11 @@
+{
+    "name": "Campo",
+    "alias": "campo",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Campo\\Providers\\CampoServiceProvider"
+    ],
+    "files": []
+}

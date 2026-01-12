@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
-use App\Models\Conversation;
 use App\Models\User;
+use App\Modules\Planificacion\Models\Conversation;
 use Illuminate\Http\Request;
-// ¡Asegúrate de importar JWTAuth!
 use Tymon\JWTAuth\Facades\JWTAuth;
+
+// ¡Asegúrate de importar JWTAuth!
 
 class AdminChatController extends Controller
 {
@@ -39,7 +40,6 @@ class AdminChatController extends Controller
      */
     public function listAdmins()
     {
-        // Busca todos los usuarios que tengan el rol 'administrador'
         $admins = User::role('administrador')->get(['id', 'name']);
 
         return response()->json($admins);
@@ -67,8 +67,6 @@ class AdminChatController extends Controller
             'sender_id' => $adminUser->id,
         ]);
 
-        // --- CORRECCIÓN AQUÍ ---
-        // Simplemente emitimos el evento. Ahora todos lo recibirán, incluido el admin que lo envió.
         broadcast(new MessageSent($message));
 
         return response()->json($message, 201);
