@@ -11,11 +11,12 @@ class ActivityExecutionProgress extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $fillable = ['activity_id', 'month', 'percentage'];
+    protected $fillable = ['activity_id', 'month', 'percentage', 'observation'];
 
     protected $casts = [
         'month' => 'date',
         'percentage' => 'decimal:2',
+        'observation',
     ];
 
     public function activity(): BelongsTo

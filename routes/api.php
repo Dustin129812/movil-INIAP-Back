@@ -7,12 +7,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // --- CONTROLADORES DEL NÚCLEO (Core) ---
+use App\Http\Controllers\CropsController;
+use App\Http\Controllers\ProductiveRubroController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\BudgetTypeController;
+use Illuminate\Routing\Router;
+use  App\Http\Controllers\ExportController;
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
 Route::post('fiasa/login', [AuthController::class, 'fiasaLogin']);
@@ -88,6 +93,12 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::apiResource('rubros', RubroController::class);
     Route::apiResource('indicators', IndicatorController::class);
 
+    Route::apiResource('budgettypes', BudgetTypeController::class);
+    Route::apiResource('productive-rubro',ProductiveRubroController::class);
+    Route::apiResource('crops',CropsController::class);
+    Route::get('getCrops',[CropsController::class,'getCrops']);
+    Route::get('getCropsbyProductiveRubro/{id}',[CropsController::class,'getCropsbyProductiveRubro']);
+
     Route::get('user-associated-counts', [PlannerController::class, 'getUserAssociatedCounts']);
 
     Route::get('getProducts', [GeneralController::class, 'getProducts']);
@@ -98,6 +109,9 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('activities/{productId}', [GeneralController::class, 'getActivitiesByProduct']);
     Route::get('getProductsByLocation', [GeneralController::class, 'getProductsByLocation']);
     Route::get('getRubrosByLocation', [GeneralController::class, 'getRubrosByLocation']);
+
+    Route::get('exportPlanificacion', [ExportController::class, 'exportPlanificacion']);
+    Route::get('exportPlanificacionAllLocations', [ExportController::class, 'exportPlanificacionAllLocations']);
 
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
@@ -154,6 +168,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/expense-types/search', [ExpenseTypeController::class, 'search']);
 
     Route::get('/monthly-report/activities', [PlannerController::class, 'getActivitiesForMonthlyReport']);
+    Route::get('/monthly-report/activities-reported', [PlannerController::class, 'getMonthlyActivitiesReported']);
     Route::post('/store-monthly-execution', [PlannerController::class, 'storeMonthlyExecution']);
 
     Route::apiResource('reusable-activities', ReusableActivityController::class);

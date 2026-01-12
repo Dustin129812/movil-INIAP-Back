@@ -2,6 +2,8 @@
 
 namespace App\Modules\Planificacion\Models;
 
+use App\Models\Budget_Type;
+use App\Models\Crops;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,7 +19,9 @@ class Product extends Model
         'budget',
         'user_id',
         'rubro_id',
-        'location_id'
+        'location_id',
+        'budget_types_id',
+        'crop_id'
     ];
 
     public function user()
@@ -48,6 +52,16 @@ class Product extends Model
     public function location()
     {
         return $this->belongsTo(Location::class);
+    }
+
+    public function budget_type()
+    {
+        return $this->belongsTo(Budget_Type::class,'budget_types_id');
+    }
+
+    public function crop()
+    {
+        return $this->belongsTo(Crops::class,'crop_id');
     }
 
     public function scopeWhereUserRelated($query, $userId)
