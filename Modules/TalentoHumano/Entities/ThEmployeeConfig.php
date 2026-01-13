@@ -2,9 +2,11 @@
 
 namespace Modules\TalentoHumano\Entities;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use App\Models\User; // Asegúrate que esta ruta a tu modelo User sea correcta
+use Illuminate\Database\Eloquent\Model;
+
+// Asegúrate que esta ruta a tu modelo User sea correcta
 
 class ThEmployeeConfig extends Model
 {

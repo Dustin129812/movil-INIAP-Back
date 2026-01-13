@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Planificacion\Models\Conversation;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Broadcast;
+use Modules\Investigacion\Entities\Conversation;
 
 Broadcast::channel('conversation.{id}', function ($user, $id) {
     // Verifica si el usuario autenticado tiene acceso a la conversación

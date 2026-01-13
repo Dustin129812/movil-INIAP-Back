@@ -13,10 +13,8 @@ return new class extends Migration
             $table->foreignId('activity_id')->constrained('p_activities')->onDelete('cascade');
             $table->foreignId('machinery_id')->constrained('inv_machinery');
 
-            // Aquí usamos tu lógica corregida: Puede ser horas o km
             $table->decimal('hours_or_km', 10, 2);
 
-            // Foto del costo en ese momento ($0.40/km o $10/hora)
             $table->decimal('historical_hourly_cost', 10, 4);
             $table->decimal('total_cost', 10, 2);
 

@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
-use App\Modules\Planificacion\Models\WeekActivity;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Modules\Investigacion\Entities\WeekActivity;
 
 class ProcessPilotKpis extends Command
 {

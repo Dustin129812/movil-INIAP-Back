@@ -2,29 +2,27 @@
 
 namespace App\Models;
 
-use App\Modules\Planificacion\Models\Activity;
-use App\Modules\Planificacion\Models\Conversation;
-use App\Modules\Planificacion\Models\Document;
-use App\Modules\Planificacion\Models\Ethnic_Group;
-use App\Modules\Planificacion\Models\Group;
-use App\Modules\Planificacion\Models\Location;
-use App\Modules\Planificacion\Models\Nationality;
-use App\Modules\Planificacion\Models\Position;
-use App\Modules\Planificacion\Models\Product;
-use App\Modules\Planificacion\Models\WeekActivity;
-use App\Modules\Planificacion\Models\WeeklyPulse;
-use App\Modules\TalentoHumano\HorasExtras\Models\RegistroHora;
-use App\Modules\TalentoHumano\HorasExtras\Models\ReporteMensualHE;
-use App\Modules\TalentoHumano\Shared\Models\Vehiculo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Modules\Investigacion\Entities\Activity;
+use Modules\Investigacion\Entities\Conversation;
+use Modules\Investigacion\Entities\Document;
+use Modules\Investigacion\Entities\Ethnic_Group;
+use Modules\Investigacion\Entities\Group;
+use Modules\Investigacion\Entities\Location;
+use Modules\Investigacion\Entities\Nationality;
+use Modules\Investigacion\Entities\Position;
+use Modules\Investigacion\Entities\Product;
+use Modules\Investigacion\Entities\WeekActivity;
+use Modules\Investigacion\Entities\WeeklyPulse;
 use Spatie\Permission\Traits\HasRoles;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable  implements JWTSubject
+class
+User extends Authenticatable  implements JWTSubject
 {
     use HasFactory, SoftDeletes, Notifiable, HasApiTokens, HasRoles;
     protected $guard_name = 'api';
@@ -39,7 +37,7 @@ class User extends Authenticatable  implements JWTSubject
         'location_id',
         'nationality_id',
         'ethnic_id',
-        'position',
+        'position_id',
         'sueldo',
     ];
 
