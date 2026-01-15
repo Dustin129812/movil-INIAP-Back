@@ -2,6 +2,8 @@
 
 namespace Modules\TalentoHumano\Http\Controllers\Api\V1;
 
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Modules\TalentoHumano\Entities\ThActivityType;
@@ -9,8 +11,6 @@ use Modules\TalentoHumano\Entities\ThEmployeeConfig;
 use Modules\TalentoHumano\Entities\ThHoliday;
 use Modules\TalentoHumano\Entities\ThSetting;
 use Modules\TalentoHumano\Entities\ThVehicle;
-use Illuminate\Http\JsonResponse;
-use App\Models\User;
 
 /**
  * NOTA: Este controlador gestiona múltiples recursos.

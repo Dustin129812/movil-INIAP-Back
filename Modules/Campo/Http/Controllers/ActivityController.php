@@ -2,15 +2,14 @@
 
 namespace Modules\Campo\Http\Controllers;
 
-use App\Modules\Planificacion\Models\WeekActivity;
 use Carbon\Carbon;
-use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\Campo\Entities\Activity;
-use Modules\Inventario\Entities\Product;
 use Modules\Inventario\Entities\Batch;
 use Modules\Inventario\Entities\Machinery;
+use Modules\Inventario\Entities\Product;
 
 class ActivityController extends Controller
 {

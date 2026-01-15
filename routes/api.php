@@ -2,17 +2,52 @@
 
 namespace App\Modules\Planificacion\Http\Controllers;
 
-use App\Http\Controllers\MessengerController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-
-// --- CONTROLADORES DEL NÚCLEO (Core) ---
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\FeatureFlagController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\MessengerController;
+use App\Http\Controllers\UserController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use Modules\Investigacion\Http\Controllers\AreaController;
+use Modules\Investigacion\Http\Controllers\BudgetTypeController;
+use Modules\Investigacion\Http\Controllers\CommentController;
+use Modules\Investigacion\Http\Controllers\ConversationController;
+use Modules\Investigacion\Http\Controllers\CropsController;
+use Modules\Investigacion\Http\Controllers\DashboardController;
+use Modules\Investigacion\Http\Controllers\DocumentController;
+use Modules\Investigacion\Http\Controllers\DocumentTypeController;
+use Modules\Investigacion\Http\Controllers\DocumentWorkflowController;
+use Modules\Investigacion\Http\Controllers\EstacionDashboardController;
+use Modules\Investigacion\Http\Controllers\EthnicGroupController;
+use Modules\Investigacion\Http\Controllers\ExpenseTypeController;
+use Modules\Investigacion\Http\Controllers\ExportController;
+use Modules\Investigacion\Http\Controllers\GeneralController;
+use Modules\Investigacion\Http\Controllers\GroupController;
+use Modules\Investigacion\Http\Controllers\ImportController;
+use Modules\Investigacion\Http\Controllers\IncidentController;
+use Modules\Investigacion\Http\Controllers\IndicatorController;
+use Modules\Investigacion\Http\Controllers\MaterialController;
+use Modules\Investigacion\Http\Controllers\MessageController;
+use Modules\Investigacion\Http\Controllers\NationalDashboardController;
+use Modules\Investigacion\Http\Controllers\NationalityController;
+use Modules\Investigacion\Http\Controllers\NotificationController;
+use Modules\Investigacion\Http\Controllers\NoveltyController;
+use Modules\Investigacion\Http\Controllers\PatchNoteController;
+use Modules\Investigacion\Http\Controllers\PlannerController;
+use Modules\Investigacion\Http\Controllers\ProductiveRubroController;
+use Modules\Investigacion\Http\Controllers\PulseController;
+use Modules\Investigacion\Http\Controllers\ReportController;
+use Modules\Investigacion\Http\Controllers\ResponseController;
+use Modules\Investigacion\Http\Controllers\ReusableActivityController;
+use Modules\Investigacion\Http\Controllers\RubroController;
+use Modules\Investigacion\Http\Controllers\StationNeedController;
+use Modules\Investigacion\Http\Controllers\SurveyController;
+use Modules\Investigacion\Http\Controllers\WeekActivityController;
+use Modules\Investigacion\Http\Controllers\WordPressController;
+
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
 Route::post('fiasa/login', [AuthController::class, 'fiasaLogin']);
@@ -75,6 +110,9 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('profile', [UserController::class, 'getProfile']);
     Route::put('profile/update-password', [UserController::class, 'updatePassword']);
     Route::get('getUsersbyLocation', [UserController::class, 'getUsersbyLocation']);
+
+    Route::get('exportPlanificacion', [ExportController::class, 'exportPlanificacion']);
+    Route::get('exportPlanificacionAllLocations', [ExportController::class, 'exportPlanificacionAllLocations']);
 
     Route::post('addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
     Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
@@ -227,6 +265,12 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/nationalities', [NationalityController::class, 'index']);
     Route::get('/ethnic_groups', [EthnicGroupController::class, 'index']);
     Route::get('/areas', [AreaController::class, 'index']);
+
+    Route::apiResource('budgettypes', BudgetTypeController::class);
+    Route::apiResource('productive-rubro',ProductiveRubroController::class);
+    Route::apiResource('crops',CropsController::class);
+    Route::get('getCrops',[CropsController::class,'getCrops']);
+    Route::get('getCropsbyProductiveRubro/{id}',[CropsController::class,'getCropsbyProductiveRubro']);
 
 });
 

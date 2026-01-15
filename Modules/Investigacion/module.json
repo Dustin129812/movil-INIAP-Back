@@ -1,0 +1,11 @@
+{
+    "name": "Investigacion",
+    "alias": "investigacion",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Investigacion\\Providers\\InvestigacionServiceProvider"
+    ],
+    "files": []
+}

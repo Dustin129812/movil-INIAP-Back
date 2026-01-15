@@ -4,9 +4,9 @@ namespace Modules\Campo\Services;
 
 use Illuminate\Support\Facades\DB;
 use Modules\Campo\Entities\FieldLog;
-use App\Modules\Planificacion\Models\WeekActivity;
-use Modules\Inventario\Entities\Machinery;
 use Modules\Inventario\Entities\Batch;
+use Modules\Inventario\Entities\Machinery;
+use Modules\Investigacion\Entities\WeekActivity;
 
 class FieldLogService
 {
