@@ -11,18 +11,23 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory, SoftDeletes;
+    use SoftDeletes;
 
     protected $table = 'products';
     protected $fillable = [
         'name',
         'budget',
-        'user_id',
         'rubro_id',
         'location_id',
         'budget_types_id',
-        'crop_id'
+        'crop_id',
+        'funding_source_name',
     ];
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'product_user');
+    }
 
     public function user()
     {
@@ -67,11 +72,13 @@ class Product extends Model
     public function scopeWhereUserRelated($query, $userId)
     {
         return $query->where(function ($query) use ($userId) {
-            $query->where('user_id', $userId)
-                ->orWhereHas('activity.users', function ($query) use ($userId) {
-                    $query->where('users.id', $userId);
+            $query->whereHas('users', function ($q) use ($userId) {
+                $q->where('users.id', $userId);
+            })
+                ->orWhereHas('activity.users', function ($q) use ($userId) {
+                    $q->where('users.id', $userId);
                 })
-            ->orWhere('name', 'Actividades Extra POA');
+                ->orWhere('name', 'Actividades Extra POA');
         });
     }
 

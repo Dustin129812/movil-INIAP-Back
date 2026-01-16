@@ -10,11 +10,14 @@ return new class extends Migration
     {
         Schema::create('activity_execution_progress', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('activity_id')->constrained()->onDelete('cascade');
             $table->date('month');
             $table->decimal('percentage', 5, 2)->default(0.00);
+            $table->string('observation')->nullable();
             $table->timestamps();
+
             $table->softDeletes();
+            $table->foreignId('activity_id')->constrained()->onDelete('cascade');
+
         });
     }
 

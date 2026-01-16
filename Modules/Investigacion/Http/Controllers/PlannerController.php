@@ -30,25 +30,38 @@ class PlannerController extends Controller
 
             $product = new Product();
             $product->name = $request->input('name');
-            $product->budget = $request->input('budget');
-            $product->budget_types_id= $request->input('budget_types_id'); //presupuesto update
+            $product->budget = (float) $request->input('budget');
+            $product->budget_types_id = $request->input('budget_types_id');
             $product->ponderacion = $request->input('ponderacion');
-            $product->user_id = $request->input('user');
+            $product->funding_source_name = $request->input('funding_source_name');
+
             $product->rubro_id = $request->input('rubro');
             $product->crop_id = $request->input('crops');
             $product->location_id = $userLocation->id;
             $product->save();
 
-            $user = User::find($request->input('user'));
-            if ($user) {
-                $user->assignRole('product-manager');
+            $userIds = $request->input('users', []);
+            if (!empty($userIds)) {
+                $product->users()->sync($userIds);
+
+                foreach ($userIds as $uid) {
+                    $user = User::find($uid);
+                    if ($user) {
+                        $user->assignRole('product-manager');
+
+                        // Notificar a los responsables (excepto si es el mismo que crea)
+                        if ($user->id !== auth()->id()) {
+                            $user->notify(new CreateProduct($product, auth()->user()));
+                        }
+                    }
+                }
             }
 
             foreach ($request->input('activities', []) as $activityData) {
                 $activity = new Activity();
                 $activity->description = $activityData['description'];
-                $activity->budget = $activityData['budget'];
-                $activity->accrued_budget= $activityData['accrued_budget']; //presupuesto update
+                $activity->budget = (float) $activityData['budget']; // Decimales
+                $activity->accrued_budget = (float) $activityData['accrued_budget'];
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
@@ -81,14 +94,6 @@ class PlannerController extends Controller
 
             DB::commit();
 
-            $productManager = User::find($product->user_id);
-            $updater = Auth::user();
-
-            if ($productManager && $updater && $productManager->id !== $updater->id) {
-                $productManager->notify(new CreateProduct($product, $updater));
-            }
-
-
             return response()->json([
                 'msg' => [
                     'summary' => 'Éxito',
@@ -101,7 +106,7 @@ class PlannerController extends Controller
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',
-                    'detail' => 'Error al guardar el producto y actividades: ' . $e->getMessage(),
+                    'detail' => 'Error al guardar: ' . $e->getMessage(),
                     'code' => 500,
                 ],
             ], 500);
@@ -114,19 +119,31 @@ class PlannerController extends Controller
 
         try {
             $product = Product::findOrFail($id);
-            $product->update($request->only([
-                'name',
-                'budget',
-                'budget_types_id',
-                'ponderacion',
-                'user_id',
-                'rubro_id',
-            ]));
 
-            if ($request->has('user_id')) {
-                $user = User::find($request->input('user_id'));
-                if ($user) {
-                    $user->assignRole('product-manager');
+            // Actualizamos campos básicos
+            $product->name = $request->input('name');
+            $product->budget = (float) $request->input('budget');
+            $product->budget_types_id = $request->input('budget_types_id');
+            $product->ponderacion = $request->input('ponderacion');
+            $product->rubro_id = $request->input('rubro');
+            // Actualizar fuente de financiamiento
+            $product->funding_source_name = $request->input('funding_source_name');
+            $product->save();
+
+            // Actualizar Múltiples Responsables
+            if ($request->has('users')) {
+                $userIds = $request->input('users', []);
+                $product->users()->sync($userIds);
+
+                foreach ($userIds as $uid) {
+                    $user = User::find($uid);
+                    if ($user) {
+                        $user->assignRole('product-manager');
+
+                        if ($user->id !== auth()->id()) {
+                            $user->notify(new ProductUpdated($product, auth()->user()));
+                        }
+                    }
                 }
             }
 
@@ -136,8 +153,8 @@ class PlannerController extends Controller
                 $activity = Activity::findOrNew($activityData['id'] ?? null);
 
                 $activity->description = $activityData['description'];
-                $activity->budget = $activityData['budget'];
-                $activity->accrued_budget= $activityData['accrued_budget'];
+                $activity->budget = (float) $activityData['budget'];
+                $activity->accrued_budget = (float) $activityData['accrued_budget'];
                 $activity->ponderacion = $activityData['ponderacion'];
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
@@ -174,13 +191,6 @@ class PlannerController extends Controller
 
             DB::commit();
 
-            $productManager = User::find($product->user_id);
-            $updater = Auth::user();
-
-            if ($productManager && $updater && $productManager->id !== $updater->id) {
-                $productManager->notify(new ProductUpdated($product, $updater));
-            }
-
             return response()->json([
                 'msg' => [
                     'summary' => 'Actualización Exitosa',
@@ -193,7 +203,7 @@ class PlannerController extends Controller
             return response()->json([
                 'msg' => [
                     'summary' => 'Error',
-                    'detail' => 'Error al actualizar el producto y actividades: ' . $e->getMessage(),
+                    'detail' => 'Error al actualizar: ' . $e->getMessage(),
                     'code' => 500,
                 ],
             ], 500);
@@ -312,6 +322,7 @@ class PlannerController extends Controller
     public function getProductsWithActivities(Request $request)
     {
         try {
+            Carbon::setLocale('es');
             $user = $request->user();
 
             $products = Product::where('location_id', $user->location_id)
@@ -321,7 +332,7 @@ class PlannerController extends Controller
                 ->with([
                     'location',
                     'rubro',
-                    'user',
+                    'users',
                     'budget_type',
                     'activities' => function ($query) {
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
@@ -336,14 +347,11 @@ class PlannerController extends Controller
                 $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
 
                     $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
-
                     $activity->loadMissing('monthlyExecutionProgress');
-
                     $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
-
                     $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
-
                     $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
+
                         return [
                             'month' => Carbon::parse($execProgress->month)->format('Y-m-d'),
                             'reported_percentage' => (float) $execProgress->percentage,
@@ -373,7 +381,6 @@ class PlannerController extends Controller
                     ];
                 });
 
-                // Calculamos el progreso total del producto sumando el progreso de sus actividades
                 $totalProductProgress = $mappedActivities->sum('total_progress');
 
                 return [

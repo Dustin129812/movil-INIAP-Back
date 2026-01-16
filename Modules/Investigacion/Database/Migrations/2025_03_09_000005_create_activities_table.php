@@ -21,6 +21,7 @@ return new class extends Migration
             $table->decimal('ponderacion', 5, 2)->default(0);
             $table->date('start_date')->nullable();
             $table->date('end_date')->nullable();
+            $table->float('accrued_budget')->default(0);
 
             $table->foreignId('product_id')->constrained('products');
         });

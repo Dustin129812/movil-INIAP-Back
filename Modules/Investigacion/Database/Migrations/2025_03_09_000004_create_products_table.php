@@ -19,10 +19,12 @@ return new class extends Migration
             $table->text('name');
             $table->decimal('budget', 15, 2)->default(0);
             $table->decimal('ponderacion', 5, 2)->default(0);
+            $table->string('funding_source_name')->nullable();
 
-            $table->foreignId('user_id')->constrained('users');
             $table->foreignId('rubro_id')->constrained('rubros');
             $table->foreignId('location_id')->constrained('locations');
+            $table->foreignId('budget_types_id')->nullable()->constrained('budget_types');
+            $table->foreignId('crop_id')->nullable()->constrained('crops');
         });
     }
 
