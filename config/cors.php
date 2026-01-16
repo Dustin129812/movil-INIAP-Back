@@ -7,6 +7,7 @@ return [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'https://simpagi.online',
+        ' https://denunciatory-mundane-cannon.ngrok-free.dev',
 
     ],
     'allowed_origins_patterns' => [],

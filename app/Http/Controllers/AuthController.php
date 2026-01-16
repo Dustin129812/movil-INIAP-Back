@@ -23,9 +23,6 @@ class AuthController extends Controller
         if ($token = Auth::guard('api')->attempt($credentials)) {
             $user = Auth::guard('api')->user();
 
-        } elseif ($token = Auth::guard('fiasa_api')->attempt($credentials)) {
-            $user = Auth::guard('fiasa_api')->user();
-
         } else {
             return response()->json([
                 'message' => 'Invalid credentials!',

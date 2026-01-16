@@ -15,10 +15,8 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 
 Route::post('login', [AuthController::class, 'login'])->name('login');
-Route::post('fiasa/login', [AuthController::class, 'fiasaLogin']);
 
 Route::apiResource('incidents', IncidentController::class);
-Route::post('/import-fiasa-users', [ImportController::class, 'importFiasaFile']);
 
 Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(function () {
 
@@ -26,7 +24,6 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
     Route::get('/users/{user}/roles', [AdminUserController::class, 'getUserRoles']);
-    Route::post('/import-users', [ImportController::class, 'importUserFile']);
 
     Route::post('/users', [UserController::class, 'store']);
 
@@ -232,6 +229,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
 Route::get('/webhook/messenger', [MessengerController::class, 'verify']);
 Route::post('/webhook/messenger', [MessengerController::class, 'handleMessage']);
+Route::post('/import-users', [ImportController::class, 'importUserFile']);
 
 require base_path('Modules/TalentoHumano/Routes/api.php');
 require_once base_path('Modules/Inventario/Routes/api.php');

@@ -8,12 +8,6 @@ use Illuminate\Support\Facades\Log;
 
 class MessengerController extends Controller
 {
-    // --- CONFIGURACIÓN DE BOTPRESS Y META ---
-    private $botpressUrl = 'https://data.iniap.gob.ec/bot/api/v1/bots/iniap/converse/';
-    private $metaApiVersion = 'v24.0'; // Usaremos la versión 24 de Meta
-    private $verifyToken = 'iniap_secreto_v12'; // El token que pones en Meta
-    private $pageAccessToken = 'EAAZCUnZCpJFWwBQFgtEuMqYL5vnC6y4GspLwzdYer6KLBsnwJwQQJYyb8ZBOFYmD0PtWfzM9gChZBrC4L43gID1wP8hDIuhoZCqBSrZCJyxEvJkzzvtAvX4U6C4JGodaIhUxIskjdykexKOuKL3vFoc4shPdmPVCD49PqixURC0Y80dLUWJnVpmeVTmZBpbenbWn2BAVd5n'; // ¡El nuevo token permanente!
-
 
     public function verify(Request $request)
     {
