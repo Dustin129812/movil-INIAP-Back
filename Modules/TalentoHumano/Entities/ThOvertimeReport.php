@@ -3,9 +3,8 @@
 namespace Modules\TalentoHumano\Entities;
 
 use App\Models\User;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Modules\TalentoHumano\Entities\ThOvertimeEntry;
+use Illuminate\Database\Eloquent\Model;
 
 class ThOvertimeReport extends Model
 {

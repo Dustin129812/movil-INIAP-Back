@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Modules\Planificacion\Models\Conversation;
 use Illuminate\Http\Request;
+use Modules\Investigacion\Entities\Conversation;
+use Modules\Investigacion\Events\MessageSent;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 // ¡Asegúrate de importar JWTAuth!

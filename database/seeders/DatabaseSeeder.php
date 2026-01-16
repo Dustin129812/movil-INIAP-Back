@@ -2,9 +2,16 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Modules\Investigacion\Database\Seeders\DocumentTypeSeeder;
+use Modules\Investigacion\Database\Seeders\ExpenseTypeSeeder;
+use Modules\Investigacion\Database\Seeders\FeatureFlagSeeder;
+use Modules\Investigacion\Database\Seeders\logisticSeeder;
+use Modules\Investigacion\Database\Seeders\MiscelaneoSeeder;
+use Modules\Investigacion\Database\Seeders\PositionSeeder;
+use Modules\Investigacion\Database\Seeders\RolesSeeder;
+
+// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 class DatabaseSeeder extends Seeder
 {
@@ -16,7 +23,6 @@ class DatabaseSeeder extends Seeder
         $this->call(MiscelaneoSeeder::class);
         $this->call(PositionSeeder::class);
         $this->call(RolesSeeder::class);
-        $this->call(logisticSeeder::class);
         $this->call(FeatureFlagSeeder::class);
         $this->call(ExpenseTypeSeeder::class);
         $this->call(DocumentTypeSeeder::class);

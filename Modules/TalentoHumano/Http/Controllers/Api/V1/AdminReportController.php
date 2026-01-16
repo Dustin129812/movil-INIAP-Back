@@ -3,12 +3,12 @@
 namespace Modules\TalentoHumano\Http\Controllers\Api\V1;
 
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\TalentoHumano\Entities\ThOvertimeReport;
-use Illuminate\Http\JsonResponse;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Modules\TalentoHumano\Entities\ThSetting;
 
 // TODO: Importar el servicio de PDF cuando lo creemos
