@@ -51,7 +51,7 @@ class UserController extends Controller
             'location_id'    => 'required|integer|exists:locations,id',
             'nationality_id' => 'required|integer|exists:nationalities,id',
             'ethnic_id'      => 'required|integer|exists:ethnic_groups,id',
-            'position_id'    => 'required|integer|exists:areas,id'
+            'position_id' => 'required|integer|exists:positions,id'
         ]);
 
         if ($validator->fails()) {

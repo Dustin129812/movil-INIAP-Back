@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::create('productive_rubros', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
-            $table->foreignId('location_id')->constrained('locations');
             $table->softDeletes();
             $table->timestamps();
         });

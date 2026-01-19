@@ -2,9 +2,8 @@
 
 namespace Modules\Investigacion\Http\Controllers;
 use App\Http\Controllers\Controller;
-use Modules\Investigacion\Entities\Area;
+use Modules\Investigacion\Entities\Position;
 
-// Este es el modelo para los cargos/posiciones
 
 class AreaController extends Controller
 {
@@ -13,7 +12,7 @@ class AreaController extends Controller
      */
     public function index()
     {
-        $areas = Area::orderBy('name')->get(['id', 'name']);
-        return response()->json(['data' => $areas]);
+        $positions = Position::orderBy('name')->get(['id', 'name']);
+        return response()->json(['data' => $positions]);
     }
 }

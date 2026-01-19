@@ -11,12 +11,11 @@ class ProductiveRubroController extends Controller
     public function store(Request $request){
         $location= auth()->user()->location['id'];
         $request->validate([
-            'name'=>'required',
+            'name'=>'required|unique:productive_rubros,name',
         ]);
 
         $productiveRubro=Productive_Rubro::create([
             'name'=>$request->name,
-            'location_id'=>$location
         ]);
 
         return response()->json([
@@ -26,13 +25,12 @@ class ProductiveRubroController extends Controller
     }
 
     public function index(){
-        $user_location= auth()->user()->location['id'];
+        $productiveRubros = Productive_Rubro::all();
 
-        $productiveRubros=Productive_Rubro::where('location_id',$user_location)->get();
-        if(!$productiveRubros){
+        if($productiveRubros->isEmpty()){
             return response()->json([
                 'message'=>'No se encontraron Rubros Productivos',
-            ],404);
+            ], 404);
         }
 
         return $productiveRubros;
@@ -40,22 +38,23 @@ class ProductiveRubroController extends Controller
 
     public function update(Request $request , $id){
         $request->validate([
-            'name'=>'required',
-            'location_id'=>'required'
+            'name'=>'required|unique:productive_rubros,name,'.$id,
         ]);
+
         $productiveRubro = Productive_Rubro::find($id);
 
+        if(!$productiveRubro){
+            return response()->json(['message'=>'No encontrado'], 404);
+        }
+
         $productiveRubro->update([
-            'id'=>$id
-        ],[
-            'name'=>$request->name,
-            'location_id'=>$request->location_id
+            'name' => $request->name
         ]);
 
         return response()->json([
             'message'=>'Rubro Productivo actualizado exitosamente',
             'data'=>$productiveRubro
-        ],200);
+        ], 200);
     }
 
     public function destroy($id){
