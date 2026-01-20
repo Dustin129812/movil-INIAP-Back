@@ -172,8 +172,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::put('/groups/{group}/responsible', [GroupController::class, 'changeResponsible'])->name('groups.changeResponsible');
     Route::apiResource('groups', GroupController::class);
 
-    Route::post('/weekly-pulse', [PulseController::class, 'store']);
-
     Route::get('/dashboard/researcher', [DashboardController::class, 'getResearcherDashboardData']);
     Route::get('/dashboard/product-manager', [DashboardController::class, 'getProductManagerDashboardData']);
 
