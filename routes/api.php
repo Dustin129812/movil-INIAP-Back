@@ -186,9 +186,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/expense-types', [ExpenseTypeController::class, 'index']);
     Route::get('/expense-types/search', [ExpenseTypeController::class, 'search']);
 
-    Route::get('/monthly-report/activities', [PlannerController::class, 'getActivitiesForMonthlyReport']);
-    Route::post('/store-monthly-execution', [PlannerController::class, 'storeMonthlyExecution']);
-
     Route::apiResource('reusable-activities', ReusableActivityController::class);
 
     Route::get('/document-types', [DocumentTypeController::class, 'index']);
@@ -277,3 +274,4 @@ require base_path('Modules/TalentoHumano/Routes/api.php');
 require_once base_path('Modules/Inventario/Routes/api.php');
 require_once base_path('Modules/Campo/Routes/api.php');
 require_once base_path('Modules/Produccion/Routes/api.php');
+require_once base_path('Modules/Investigacion/Routes/api.php');

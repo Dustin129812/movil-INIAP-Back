@@ -17,8 +17,8 @@ return new class extends Migration
             $table->enum('environment', ['NURSERY', 'FIELD'])->default('NURSERY');
 
             // Qué estamos produciendo y con qué receta
-            $table->foreignId('protocol_id')->constrained('prod_protocols');
-            $table->foreignId('field_id')->nullable()->constrained('p_fields');
+            //$table->foreignId('protocol_id')->constrained('prod_protocols');
+            //$table->foreignId('field_id')->nullable()->constrained('p_fields');
             // Fechas Reales
             $table->date('start_date'); // Fecha de siembra/inicio
             $table->date('estimated_end_date')->nullable();

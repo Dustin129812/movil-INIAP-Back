@@ -6,11 +6,9 @@ use App\Models\User;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Investigacion\Entities\Activity;
-use Modules\Investigacion\Entities\ActivityExecutionProgress;
 use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Product;
 use Modules\Investigacion\Entities\Rubro;
@@ -842,7 +840,7 @@ class PlannerController extends Controller
                         'description' => $activity->description,
                         'accrued_budget'=> $activity->accrued_budget,
                         'budget' => $activity->budget,
-                        'ponderacion' => $product->ponderacion,
+                        'ponderacion' => $activity->ponderacion,
                         'relative_weight' => $activityWeight,
                         'absolute_weight' => $activityAbsoluteWeight,
                         'total_progress' => $totalWeightedProgress,
@@ -960,172 +958,5 @@ class PlannerController extends Controller
         }
         $allPlannableProducts = $officialProducts->merge($specificProducts)->unique('id');
         return response()->json(['data' => $allPlannableProducts->values()]);
-    }
-
-    public function storeMonthlyExecution(Request $request)
-    {
-        $request->validate([
-            'reports' => ['required', 'array'],
-            'reports.*.activity_id' => ['required', 'exists:activities,id'],
-            'reports.*.month' => ['required', 'date_format:Y-m-d'],
-            'reports.*.percentage' => ['required', 'numeric', 'min:0'],
-            'reports.*.accrued_budget' => ['required'],
-            'reports.*.observation' => ['nullable', 'string'],
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $user = $request->user();
-
-            foreach ($request->reports as $report) {
-                ActivityExecutionProgress::updateOrCreate(
-                    [
-                        'activity_id' => $report['activity_id'],
-                        'month' => $report['month'],
-                    ],
-                    [
-                        'percentage' => $report['percentage'],
-                        'observation' => $report['observation']
-                        // Podríamos añadir un campo user_id a la tabla si queremos saber quién reportó.
-                    ]
-                );
-                $activity = Activity::find($report['activity_id']);
-
-                if ($activity) {
-                    // Actualizamos el campo en la tabla activities
-                    $activity->accrued_budget = $report['accrued_budget'];
-                    $activity->save();
-                }
-            }
-
-            DB::commit();
-            return response()->json([
-                'msg' => ['summary' => 'Éxito', 'detail' => 'Reporte de avance mensual guardado correctamente.', 'code' => 201]
-            ], 201);
-
-
-        } catch (Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'Error al enviar la ejecución mensual: ' . $e->getMessage(),
-                    'code' => 500,
-                ],
-            ], 500);
-        }
-    }
-
-    public function getActivitiesForMonthlyReport(Request $request)
-    {
-        $request->validate([
-            'month' => 'nullable|date_format:Y-m',
-        ]);
-
-        try {
-            $user = $request->user();
-
-            $targetMonth = $request->has('month')
-                ? Carbon::parse($request->input('month'))->startOfMonth()
-                : Carbon::now()->subMonth()->startOfMonth();
-
-            // --- INICIO DE LA NUEVA LÓGICA ---
-
-            // 1. Obtener los IDs de todas las actividades que YA tienen un reporte este mes.
-            // Consultamos la tabla de ejecución para ver qué actividades ya fueron reportadas por CUALQUIER usuario.
-            $reportedActivityIds = \Modules\Investigacion\Entities\ActivityExecutionProgress::where('month', $targetMonth)
-                ->pluck('activity_id') // Obtenemos solo la columna activity_id
-                ->unique(); // Nos aseguramos de que los IDs sean únicos
-
-            // --- FIN DE LA NUEVA LÓGICA ---
-
-            // 2. Busca todas las actividades del usuario, PERO excluye las que ya fueron reportadas.
-            $activities = Activity::whereHas('users', function ($query) use ($user) {
-                $query->where('users.id', $user->id);
-            })
-                ->whereNotIn('id', $reportedActivityIds) // <-- ¡LA CLAVE ESTÁ AQUÍ!
-                ->with(['monthlyProgress' => function ($query) use ($targetMonth) {
-                    $query->where('month', $targetMonth);
-                }])
-                ->get();
-
-            $formattedData = $activities->map(function ($activity) use ($targetMonth) {
-                $plannedProgress = $activity->monthlyProgress->first();
-                return [
-                    'id' => $activity->id,
-                    'description' => $activity->description,
-                    'month_to_report' => $targetMonth->format('Y-m-d'),
-                    'planned_percentage' => $plannedProgress ? $plannedProgress->percentage : 0,
-                    'budget'=>$activity->budget,
-                ];
-            });
-
-            return response()->json(['data' => $formattedData]);
-
-        } catch (Exception $e) {
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'Error al obtener la ejecución mensual: ' . $e->getMessage(),
-                    'code' => 500,
-                ],
-            ], 500);
-        }
-    }
-
-    public function getMonthlyActivitiesReported(Request $request)
-    {
-        $request->validate([
-            'month' => 'nullable|date_format:Y-m',
-        ]);
-
-        try {
-            $user = $request->user();
-
-            // Si no envías mes, toma el anterior
-            $targetMonth = $request->has('month')
-                ? Carbon::parse($request->input('month'))->startOfMonth()
-                : Carbon::now()->subMonth()->startOfMonth();
-
-            $activities = Activity::whereHas('users', function ($query) use ($user) {
-                $query->where('users.id', $user->id);
-            })
-                // FILTRO CRÍTICO: Solo las que SÍ tienen reporte
-                ->whereHas('monthlyExecutionProgress', function ($query) use ($targetMonth) {
-                    $query->where('month', $targetMonth);
-                })
-                ->with(['monthlyProgress' => function ($query) use ($targetMonth) {
-                    $query->where('month', $targetMonth);
-                }])
-                ->with(['monthlyExecutionProgress' => function ($query) use ($targetMonth) {
-                    $query->where('month', $targetMonth);
-                }])
-                ->get();
-
-            $formattedData = $activities->map(function ($activity) use ($targetMonth) {
-                $planned = $activity->monthlyProgress->first();
-                // Obtenemos el registro de la tabla ActivityExecutionProgress
-                $execution = $activity->monthlyExecutionProgress->first();
-
-                return [
-                    'id' => $activity->id,
-                    'description' => $activity->description,
-                    'budget' => $activity->budget,
-                    'month_reported' => $targetMonth->format('Y-m'),
-
-                    // Meta original
-                    'planned_percentage' => $planned ? $planned->percentage : 0,
-
-                    // DATOS REPORTADOS (Lo que te faltaba en el JSON)
-                    'reported_percentage' => $execution ? $execution->percentage : 0,
-                    'reported_observation' => $execution ? $execution->observation : 'Sin observación',
-                ];
-            });
-
-            return response()->json(['data' => $formattedData]);
-
-        } catch (Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
     }
 }

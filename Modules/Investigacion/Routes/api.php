@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
 
 /*
 |--------------------------------------------------------------------------
@@ -13,6 +14,14 @@ use Illuminate\Http\Request;
 |
 */
 
-Route::middleware('auth:api')->get('/investigacion', function (Request $request) {
-    return $request->user();
+Route::middleware('auth:api')->prefix('investigacion')->group(function () {
+
+    // Obtener actividades pendientes de reporte (filtradas por plan > 0)
+    Route::get('monthly-progress/pending', [MonthlyProgressController::class, 'index']);
+
+    // Guardar reporte (acepta evidence_url)
+    Route::post('monthly-progress/store', [MonthlyProgressController::class, 'store']);
+
+    // Ver historial de reportados
+    Route::get('monthly-progress/history', [MonthlyProgressController::class, 'getReported']);
 });

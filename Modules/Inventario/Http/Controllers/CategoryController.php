@@ -4,7 +4,7 @@ namespace Modules\Inventario\Http\Controllers;
 
 use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
-use Modules\Inventario\Entities\Category; // Asegúrate de tener el Modelo Category creado (si no, avísame)
+use Modules\Inventario\Entities\Category; // Asegúrate de tener el Modelo ProdCategory creado (si no, avísame)
 
 class CategoryController extends Controller
 {

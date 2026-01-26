@@ -19,7 +19,7 @@ class IndicatorController extends Controller
             return $q->where('name', 'like', "%{$search}%");
         });
 
-        return response()->json($query->latest()->paginate(15));
+        return response()->json($query->latest()->get());
     }
 
     public function store(StoreIndicatorRequest $request): JsonResponse

@@ -9,9 +9,16 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ActivityExecutionProgress extends Model
 {
-    use HasFactory, SoftDeletes;
+    use SoftDeletes;
 
-    protected $fillable = ['activity_id', 'month', 'percentage', 'observation'];
+    protected $fillable =
+        [
+            'activity_id',
+            'month',
+            'percentage',
+            'observation',
+            'evidence_url',
+        ];
 
     protected $casts = [
         'month' => 'date',

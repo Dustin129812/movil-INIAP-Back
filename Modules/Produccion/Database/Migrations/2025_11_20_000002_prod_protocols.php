@@ -11,7 +11,7 @@ return new class extends Migration
     {
         Schema::create('prod_protocols', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('variety_id')->constrained('prod_varieties'); // Relación con Naranjilla/Durazno
+            //$table->foreignId('variety_id')->constrained('prod_varieties'); // Relación con Naranjilla/Durazno
 
             $table->string('name'); // Ej: "Protocolo Estándar 2022"
             $table->text('description')->nullable();

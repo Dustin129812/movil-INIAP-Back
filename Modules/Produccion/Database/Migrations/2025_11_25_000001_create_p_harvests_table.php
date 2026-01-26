@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('p_harvests', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('activity_id')->constrained('p_activities')->onDelete('cascade');
-            $table->foreignId('prod_batch_id')->constrained('prod_batches');
+            //$table->foreignId('activity_id')->constrained('p_activities')->onDelete('cascade');
+            //$table->foreignId('prod_batch_id')->constrained('prod_batches');
 
             $table->decimal('quantity', 12, 2);
             $table->string('unit')->default('kg');
@@ -28,7 +28,7 @@ return new class extends Migration
     public function down()
     {
         Schema::table('p_harvests', function (Blueprint $table) {
-            $table->dropForeign(['prod_batch_id']);
+        //    $table->dropForeign(['prod_batch_id']);
         });
         Schema::dropIfExists('p_harvests');
     }
