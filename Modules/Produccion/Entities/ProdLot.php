@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProdLot extends Model
 {
+    protected $table = 'lots';
     protected $fillable = [
         'name',
         'surface',

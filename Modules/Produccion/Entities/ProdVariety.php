@@ -2,22 +2,35 @@
 
 namespace Modules\Produccion\Entities;
 
+use App\Models\Productive_Rubro; // Mayúscula inicial
+use App\Models\Crops;            // Mayúscula inicial
 use Illuminate\Database\Eloquent\Model;
-use app\Models\Crops;
 
 class ProdVariety extends Model
 {
+    protected $table = 'varieties';
+
     protected $fillable = [
         'productive_rubro_id',
         'crop_id',
-        'name',
         'category_id',
-        'variety_type_id'
+        'variety_type_id',
+        'name'
     ];
+
+    public function productive_rubro()
+    {
+        return $this->belongsTo(Productive_Rubro::class, 'productive_rubro_id');
+    }
 
     public function crop()
     {
-        return $this->belongsTo(Crops::class); // Asumiendo que tienes el modelo Crop
+        return $this->belongsTo(Crops::class);
+    }
+
+    public function crops()
+    {
+        return $this->belongsTo(Crops::class);
     }
 
     public function category()
@@ -25,8 +38,9 @@ class ProdVariety extends Model
         return $this->belongsTo(ProdCategory::class);
     }
 
-    public function type()
+    public function variety_type()
     {
+        // Asegúrate de usar App con mayúscula como corregimos antes
         return $this->belongsTo(ProdVarietyType::class, 'variety_type_id');
     }
 }

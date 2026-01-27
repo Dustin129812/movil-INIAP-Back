@@ -2,33 +2,58 @@
 
 namespace Modules\Produccion\Http\Controllers;
 
-use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
-use Modules\Produccion\Entities\Variety;
+use Illuminate\Routing\Controller;
+use Modules\Produccion\Entities\ProdVariety;
+use Illuminate\Support\Facades\DB;
 
 class VarietyController extends Controller
 {
+    // Listar variedades con todas sus relaciones para la tabla
     public function index()
     {
-        // Retornamos con relaciones para que el front pueda mostrar nombres (ej: "Tomate - Cherry")
-        return response()->json(Variety::with(['crop', 'category', 'type'])->get());
+        return ProdVariety::with(['productive_rubro', 'crop', 'category', 'variety_type'])
+            ->orderBy('name', 'asc')
+            ->get();
     }
 
+    // LÓGICA CORE: Guardar sistematizado
     public function store(Request $request)
     {
-        $request->validate([
-            'name'                => 'required|string|max:255',
+        // 1. Validamos que lleguen los 4 pilares
+        $validated = $request->validate([
             'productive_rubro_id' => 'required|exists:productive_rubros,id',
-            'crop_id'             => 'required|exists:crops,id',
+            'crop_id'             => 'nullable|exists:crops,id', // Opcional si el rubro es genérico
             'category_id'         => 'required|exists:categories,id',
             'variety_type_id'     => 'required|exists:variety_types,id',
+            'name'                => 'required|string|max:255',
         ]);
 
-        $variety = Variety::create($request->all());
+        // 2. Validación de Unicidad Compuesta (Evitar duplicados exactos)
+        // Buscamos si ya existe esta combinación exacta
+        $exists = ProdVariety::where('productive_rubro_id', $request->productive_rubro_id)
+            ->where('category_id', $request->category_id)
+            ->where('variety_type_id', $request->variety_type_id)
+            ->where('name', $request->name) // ej: "Superchola"
+            ->exists();
 
-        return response()->json([
-            'message' => 'Variedad creada correctamente',
-            'data' => $variety
-        ], 201);
+        if ($exists) {
+            return response()->json(['message' => 'Esta variedad ya existe con esa configuración exacta.'], 422);
+        }
+
+        // 3. Crear la Variedad
+        $variety = ProdVariety::create([
+            'productive_rubro_id' => $request->productive_rubro_id,
+            'crop_id'             => $request->crop_id ?? $this->getDefaultCrop($request->productive_rubro_id), // Fallback inteligente
+            'category_id'         => $request->category_id,
+            'variety_type_id'     => $request->variety_type_id,
+            'name'                => strtoupper($request->name), // Estandarizar a mayúsculas
+        ]);
+
+        return response()->json($variety, 201);
+    }
+
+    private function getDefaultCrop($rubroId) {
+        return \DB::table('crops')->where('productive_rubro_id', $rubroId)->value('id');
     }
 }

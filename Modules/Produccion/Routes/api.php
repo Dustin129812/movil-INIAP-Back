@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Produccion\Http\Controllers\ProduccionController;
 use Modules\Produccion\Http\Controllers\ProductionBatchController;
 use Modules\Produccion\Http\Controllers\VarietyController;
 use Modules\Produccion\Http\Controllers\ProtocolController;
@@ -35,4 +36,12 @@ Route::middleware('auth:api')->prefix('produccion')->group(function() {
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('variety-types', VarietyTypeController::class);
     Route::apiResource('lots', LotController::class);
+
+    Route::get('rubros', [ProduccionController::class, 'getRubros']);
+    Route::get('rubros/{id}/crops', [ProduccionController::class, 'getCropsByRubro']);
+    Route::apiResource('variety-types', VarietyTypeController::class);
+    Route::apiResource('categories', CategoryController::class);
+
+// Ruta Principal
+    Route::apiResource('varieties', VarietyController::class);
 });

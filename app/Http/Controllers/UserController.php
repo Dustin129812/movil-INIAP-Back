@@ -8,6 +8,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
@@ -139,5 +140,46 @@ class UserController extends Controller
             'email' => $user->email,
             'location' => $user->location->name ?? null,
         ]);
+    }
+
+    public function adminResetPassword(Request $request, $userId)
+    {
+        if (!$request->user()->hasRole('administrador') && !$request->user()->can('manage-users')) {
+            return response()->json(['msg' => 'No autorizado'], 403);
+        }
+
+        $request->validate([
+            'new_password' => 'required|string|min:6',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $userToUpdate = User::findOrFail($userId);
+
+            $userToUpdate->password = Hash::make($request->input('new_password'));
+            $userToUpdate->save();
+
+            $userToUpdate->tokens()->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Éxito',
+                    'detail' => 'Contraseña actualizada correctamente para el usuario ' . $userToUpdate->name,
+                    'code' => 200
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'No se pudo cambiar la contraseña',
+                    'code' => 500
+                ]
+            ], 500);
+        }
     }
 }

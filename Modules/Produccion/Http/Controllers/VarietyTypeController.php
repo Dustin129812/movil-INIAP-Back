@@ -10,7 +10,7 @@ class VarietyTypeController extends Controller
 {
     public function index()
     {
-        return response()->json(ProdVarietyType::all());
+        return response()->json(ProdVarietyType::orderBy('name')->get());
     }
 
     public function store(Request $request)

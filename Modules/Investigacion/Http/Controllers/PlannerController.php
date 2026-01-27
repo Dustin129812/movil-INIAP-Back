@@ -337,17 +337,32 @@ class PlannerController extends Controller
             Carbon::setLocale('es');
             $user = $request->user();
 
-            $products = Product::where('location_id', $user->location_id)
-                ->whereHas('rubro', function ($query) {
-                    $query->where('name', '!=', 'OFICIAL');
-                })
+            // 1. Iniciamos el Query Builder
+            $query = Product::query();
+
+            // 2. LOGICA DE PERMISOS:
+            // Si el usuario NO tiene el permiso de ver todo (ni es admin, ni dirección),
+            // entonces filtramos por su ubicación.
+            // Ajusta 'view-admin-panel' por tu permiso específico 'poa.view_all_locations' si ya lo creaste.
+            $hasGlobalView = $user->can('view-admin-panel') ||
+                $user->hasRole('administrador') ||
+                $user->hasRole('research-direction');
+
+            if (!$hasGlobalView) {
+                $query->where('location_id', $user->location_id);
+            }
+
+            // 3. Continuamos con los filtros y relaciones normales
+            $products = $query->whereHas('rubro', function ($q) {
+                $q->where('name', '!=', 'OFICIAL');
+            })
                 ->with([
                     'location',
                     'rubro',
                     'users',
                     'budget_type',
-                    'activities' => function ($query) {
-                        $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
+                    'activities' => function ($q) {
+                        $q->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
                     },
                 ])->get();
 
@@ -362,8 +377,8 @@ class PlannerController extends Controller
                     $activity->loadMissing('monthlyExecutionProgress');
                     $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
                     $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
-                    $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
 
+                    $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
                         return [
                             'month' => Carbon::parse($execProgress->month)->format('Y-m-d'),
                             'reported_percentage' => (float) $execProgress->percentage,
@@ -376,8 +391,8 @@ class PlannerController extends Controller
                         'absolute_weight' => $activityAbsoluteWeight,
                         'budget'=>$activity->budget,
                         'accrued_budget'=> $activity->accrued_budget,
-                        'total_progress' => $totalActivityProgress, // Este es el valor clave actualizado.
-                        'total_completion_percentage' => $totalExecutedPercentage,// Suma del aporte de todas sus semanas
+                        'total_progress' => $totalActivityProgress,
+                        'total_completion_percentage' => $totalExecutedPercentage,
                         'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
                         'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
                         'users' => ($activity->users ?? collect([]))->map(function ($user) {
@@ -403,20 +418,20 @@ class PlannerController extends Controller
                     'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'budget_types_id' => $product->budget_types_id,
                     'ponderacion' => $product->ponderacion,
-                    'absolute_weight' => $productAbsoluteWeight, // Peso real en el 100% del proyecto
-                    'total_progress' => $totalProductProgress, // Suma del aporte de todas sus actividades
+                    'absolute_weight' => $productAbsoluteWeight,
+                    'total_progress' => $totalProductProgress,
                     'user' => $product->user ? [
                         'id' => $product->user->id,
                         'name' => $product->user->name ?? 'Sin nombre',
-                        'last_name' => $product->user->last_name ?? '' // <--- AGREGAR ESTO
-                    ] : null,                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
+                        'last_name' => $product->user->last_name ?? ''
+                    ] : null,
+                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
                     'activities' => $mappedActivities->toArray(),
                     'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                 ];
             });
 
-            // Opcional: Calcular el avance total de todo el rubro
             $totalRubroProgress = $formattedProducts->sum('total_progress');
 
             return response()->json([

@@ -38,7 +38,6 @@ use Modules\Investigacion\Http\Controllers\NoveltyController;
 use Modules\Investigacion\Http\Controllers\PatchNoteController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
 use Modules\Investigacion\Http\Controllers\ProductiveRubroController;
-use Modules\Investigacion\Http\Controllers\PulseController;
 use Modules\Investigacion\Http\Controllers\ReportController;
 use Modules\Investigacion\Http\Controllers\ResponseController;
 use Modules\Investigacion\Http\Controllers\ReusableActivityController;
@@ -59,6 +58,8 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::post('/users/{id}/roles', [UserController::class, 'updateRoles']);
     Route::get('/users/{user}/roles', [AdminUserController::class, 'getUserRoles']);
+
+    Route::put('/users/{id}/reset-password', [UserController::class, 'adminResetPassword']);
 
     Route::post('/users', [UserController::class, 'store']);
 
@@ -106,7 +107,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getUsers', [UserController::class, 'getUsers']);
     Route::get('profile', [UserController::class, 'getProfile']);
     Route::put('profile/update-password', [UserController::class, 'updatePassword']);
-    Route::get('getUsersbyLocation', [UserController::class, 'getUsersbyLocation']);
 
     Route::get('exportPlanificacion', [ExportController::class, 'exportPlanificacion']);
     Route::get('exportPlanificacionAllLocations', [ExportController::class, 'exportPlanificacionAllLocations']);
@@ -126,7 +126,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('user-associated-counts', [PlannerController::class, 'getUserAssociatedCounts']);
 
     Route::get('getProducts', [GeneralController::class, 'getProducts']);
-    Route::get('products-with-activities', [GeneralController::class, 'getProductsWithActivities']);
     Route::get('getUniqueLocations', [PlannerController::class, 'getUniqueLocations']);
     Route::get('products-by-location/{locationId}', [PlannerController::class, 'getProductsByLocationId']);
     Route::get('activities', [GeneralController::class, 'getActivitiesByProduct']);
@@ -137,10 +136,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::post('weeklyPlanner', [WeekActivityController::class, 'weeklyPlanner']);
     Route::get('week-activities/previous', [WeekActivityController::class, 'getPreviousWeekActivities']);
     Route::put('week-activities/progress', [WeekActivityController::class, 'updateWeeklyProgress']);
-    Route::get('activities/progress', [WeekActivityController::class, 'getActivitiesWithProgress']);
-    Route::get('/previous-week-activities', [WeekActivityController::class, 'getPreviousWeekActivitiesForReview']);
-    Route::post('/novelties', [WeekActivityController::class, 'storeNovelty']);
-    Route::get('/novelties', [WeekActivityController::class, 'getNoveltiesForWeek']);
 
     Route::post('addLogistic', [GeneralController::class, 'addLogisticSupport']);
 
@@ -148,7 +143,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getNationality', [GeneralController::class, 'getNationality']);
     Route::get('getEthnics', [GeneralController::class, 'getEthnics']);
     Route::get('getPositions', [GeneralController::class, 'getPositions']);
-    Route::get('getIndicators', [GeneralController::class, 'getIndicators']);
     Route::get('getLogistic', [GeneralController::class, 'getLogistic']);
 
     Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
@@ -159,8 +153,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 
     Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
-
-    Route::get('/unified-poa-by-station', [PlannerController::class, 'getUnifiedPoaData']);
 
     Route::post('/conversations', [ConversationController::class, 'create']);
     Route::get('/conversations/{id}/messages', [MessageController::class, 'list']);
@@ -179,7 +171,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
 
     Route::get('/patch-notes/latest', [PatchNoteController::class, 'getLatest']);
 
-    Route::get('/station-needs/create', [StationNeedController::class, 'create']);
+    Route::get('/station-needs/create', [StationNeedController::class, 'store']);
 
     Route::apiResource('station-needs', StationNeedController::class);
 

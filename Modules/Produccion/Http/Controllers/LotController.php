@@ -10,7 +10,7 @@ class LotController extends Controller
 {
     public function index()
     {
-        return response()->json(Lot::all());
+        return response()->json(ProdLot::all());
     }
 
     public function store(Request $request)

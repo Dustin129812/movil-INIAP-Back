@@ -5,7 +5,8 @@ namespace Modules\Produccion\Http\Controllers;
 use Illuminate\Contracts\Support\Renderable;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-
+use App\Models\Productive_Rubro;
+use App\Models\Crops;
 class ProduccionController extends Controller
 {
     /**
@@ -75,5 +76,18 @@ class ProduccionController extends Controller
     public function destroy($id)
     {
         //
+    }
+
+    public function getRubros()
+    {
+        return Productive_Rubro::select('id', 'name')->orderBy('name')->get();
+    }
+
+    public function getCropsByRubro($rubroId)
+    {
+        return Crops::where('productive_rubro_id', $rubroId)
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get();
     }
 }
