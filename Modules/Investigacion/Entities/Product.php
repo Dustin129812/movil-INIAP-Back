@@ -22,6 +22,8 @@ class Product extends Model
         'budget_types_id',
         'crop_id',
         'funding_source_name',
+        'status',
+        'admin_observation'
     ];
 
     public function users()

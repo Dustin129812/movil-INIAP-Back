@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
+use Modules\Investigacion\Http\Controllers\PlannerController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,4 +25,6 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
 
     // Ver historial de reportados
     Route::get('monthly-progress/history', [MonthlyProgressController::class, 'getReported']);
+
+    Route::put('/planner/review-product/{id}', [PlannerController::class, 'reviewProduct']);
 });

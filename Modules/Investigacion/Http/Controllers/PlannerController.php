@@ -36,6 +36,7 @@ class PlannerController extends Controller
             $product->rubro_id = $request->input('rubro');
             $product->crop_id = $request->input('crops');
             $product->location_id = $userLocation->id;
+            $product->status = 'pending';
             $product->save();
 
             $userIds = $request->input('users', []);
@@ -166,6 +167,9 @@ class PlannerController extends Controller
                 $activity->start_date = $activityData['start_date'];
                 $activity->end_date = $activityData['end_date'];
                 $activity->product_id = $product->id;
+                if ($product->status !== 'pending') {
+                    $product->status = 'pending';
+                }
                 $activity->save();
 
                 $actUserIds = $activityData['users'] ?? $activityData['user'] ?? [];
@@ -337,13 +341,8 @@ class PlannerController extends Controller
             Carbon::setLocale('es');
             $user = $request->user();
 
-            // 1. Iniciamos el Query Builder
             $query = Product::query();
 
-            // 2. LOGICA DE PERMISOS:
-            // Si el usuario NO tiene el permiso de ver todo (ni es admin, ni dirección),
-            // entonces filtramos por su ubicación.
-            // Ajusta 'view-admin-panel' por tu permiso específico 'poa.view_all_locations' si ya lo creaste.
             $hasGlobalView = $user->can('view-admin-panel') ||
                 $user->hasRole('administrador') ||
                 $user->hasRole('research-direction');
@@ -352,7 +351,6 @@ class PlannerController extends Controller
                 $query->where('location_id', $user->location_id);
             }
 
-            // 3. Continuamos con los filtros y relaciones normales
             $products = $query->whereHas('rubro', function ($q) {
                 $q->where('name', '!=', 'OFICIAL');
             })
@@ -366,7 +364,6 @@ class PlannerController extends Controller
                     },
                 ])->get();
 
-            // Mapear los datos y añadir los cálculos de ponderación
             $formattedProducts = $products->map(function ($product) {
 
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
@@ -413,6 +410,8 @@ class PlannerController extends Controller
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
+                    'status' => $product->status,
+                    'admin_observation' => $product->admin_observation,
                     'budget'=>$product->budget,
                     'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                     'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
@@ -973,5 +972,70 @@ class PlannerController extends Controller
         }
         $allPlannableProducts = $officialProducts->merge($specificProducts)->unique('id');
         return response()->json(['data' => $allPlannableProducts->values()]);
+    }
+
+    /**
+     * Cambiar el estado de aprobación de un Producto (POA).
+     */
+    public function reviewProduct(Request $request, $productId)
+    {
+        // NOTA: Aquí agregaremos los permisos de Spatie más adelante.
+
+        $request->validate([
+            'status' => 'required|in:approved,rejected,pending',
+            'observation' => 'nullable|string'
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $product = Product::findOrFail($productId);
+
+            $oldStatus = $product->status;
+            $newStatus = $request->input('status');
+            $observation = $request->input('observation');
+
+            // Actualizamos el producto
+            $product->status = $newStatus;
+
+            // Si se rechaza, es obligatorio guardar la observación.
+            // Si se aprueba, podemos limpiar la observación anterior o dejarla como historial.
+            if ($newStatus === 'rejected') {
+                $product->admin_observation = $observation;
+            } elseif ($newStatus === 'approved') {
+                // Opcional: Limpiar observación al aprobar
+                $product->admin_observation = null;
+            }
+
+            $product->save();
+
+            // Aquí podrías notificar al dueño del producto
+            // $product->user->notify(new ProductStatusChanged($product));
+
+            DB::commit();
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Estado Actualizado',
+                    'detail' => "El producto ha sido marcado como " . ($newStatus === 'approved' ? 'Aprobado' : 'Rechazado'),
+                    'code' => 200,
+                ],
+                'data' => [
+                    'id' => $product->id,
+                    'status' => $product->status,
+                    'observation' => $product->admin_observation
+                ]
+            ], 200);
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error("Error reviewing product: " . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'No se pudo actualizar el estado del producto.',
+                    'code' => 500,
+                ],
+            ], 500);
+        }
     }
 }
