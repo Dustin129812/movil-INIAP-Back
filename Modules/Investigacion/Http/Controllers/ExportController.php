@@ -14,24 +14,65 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 class ExportController extends Controller
 {
     public function exportPlanificacion(Request $request)
-
-    {$response = app(PlannerController::class)->getProductsWithActivities($request)->getData(true);
-
+    {
+        // 1. OBTENER DATOS
+        $response = app(PlannerController::class)->getProductsWithActivities($request)->getData(true);
         $products = $response['data']['products'] ?? [];
 
-        $products = collect($products)->sortBy('rubro.id')->values()->all();
+        // 2. DEFINIR PRIORIDADES DE FUENTE
+        $prioridadFuentes = [
+            'INVERSIÓN EXTERNA' => 1,
+            'INVERSION EXTERNA' => 1,
+            'FIASA'             => 2,
+            'GASTO CORRIENTE'   => 3
+        ];
 
+        // 3. ORDENAR LA COLECCIÓN
+        $products = collect($products)->sort(function ($a, $b) use ($prioridadFuentes) {
+            // Criterio 1: Rubro ID (Para que no se rompan los bloques de rubros)
+            $rubroA = $a['rubro']['id'] ?? 0;
+            $rubroB = $b['rubro']['id'] ?? 0;
+
+            $rubroCompare = $rubroA <=> $rubroB;
+            if ($rubroCompare !== 0) {
+                return $rubroCompare;
+            }
+
+            // Criterio 2: Fuente de Financiamiento (CORREGIDO)
+            // Buscamos en fund_source Y en budget_type, igual que en el Excel
+            $valA = $a['fund_source'] ?? $a['budget_type'] ?? '';
+            $valB = $b['fund_source'] ?? $b['budget_type'] ?? '';
+
+            $fuenteA = mb_strtoupper(trim($valA));
+            $fuenteB = mb_strtoupper(trim($valB));
+
+            // Asignamos el peso
+            $pesoA = $prioridadFuentes[$fuenteA] ?? 99;
+            $pesoB = $prioridadFuentes[$fuenteB] ?? 99;
+
+            return $pesoA <=> $pesoB;
+        })->values()->all();
+
+        // 4. CALCULAR TOTALES POR RUBRO (Pre-cálculo)
+        $totalesPorRubro = collect($products)->groupBy('rubro.id')->map(function ($items) {
+            return $items->sum('budget');
+        });
+
+        // 5. INICIAR EXCEL
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        // Agrega título
+
+        // --- ENCABEZADOS DEL DOCUMENTO ---
+
+        // Título
         $sheet->setCellValue('A1', 'Reporte de Planificacion POA');
-        $sheet->mergeCells('A1:AI1'); // Unir columnas
+        $sheet->mergeCells('A1:AI1');
         $sheet->getStyle('A1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 16],
             'alignment' => ['horizontal' => 'center', 'vertical' => 'center']
         ]);
 
-        // Agrega fecha de generación
+        // Fecha
         $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
         $sheet->mergeCells('A2:AI2');
         $sheet->getStyle('A2')->applyFromArray([
@@ -39,39 +80,28 @@ class ExportController extends Controller
             'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
         ]);
 
-        //Agrega la locacion
-        $sheet->setCellValue('A3', 'Locación: ' . auth()->user()->location['name'] ?? 'Sistema');
+        // Locación
+        $sheet->setCellValue('A3', 'Locación: ' . (auth()->user()->location['name'] ?? 'Sistema'));
         $sheet->mergeCells('A3:AI3');
-        $sheet->getStyle('A3')->applyFromArray([
-            'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
-        ]);
-        // Agrega usuario que genera el reporte
-        $sheet->setCellValue('A4', 'Generado por: ' . auth()->user()->name ?? 'Sistema');
+        $sheet->getStyle('A3')->applyFromArray(['alignment' => ['horizontal' => 'left']]);
+
+        // Generado por
+        $sheet->setCellValue('A4', 'Generado por: ' . (auth()->user()->name ?? 'Sistema'));
         $sheet->mergeCells('A4:AI4');
-        $sheet->getStyle('A4')->applyFromArray([
-            'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
-        ]);
+        $sheet->getStyle('A4')->applyFromArray(['alignment' => ['horizontal' => 'left']]);
+
         $sheet->setCellValue('A5', 'Objetivo: ');
         $sheet->mergeCells('A5:AI5');
-        $sheet->getStyle('A5')->applyFromArray([
-            'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
-        ]);
+
         $sheet->setCellValue('A6', 'Director: ');
         $sheet->mergeCells('A6:AI6');
-        $sheet->getStyle('A6')->applyFromArray([
-            'alignment' => ['horizontal' => 'left', 'vertical' => 'center']
-        ]);
 
-
-        // ENCABEZADOS
-
+        // --- ENCABEZADOS DE TABLA (FILA 8) ---
         $headers = [
             "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
             "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
-            // 12 meses planificado
             "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
             "Plan Jul","Plan Ago","Plan Sep","Plan Oct","Plan Nov","Plan Dic",
-            // 12 meses avance
             "Avance Ene","Avance Feb","Avance Mar","Avance Abr","Avance May","Avance Jun",
             "Avance Jul","Avance Ago","Avance Sep","Avance Oct","Avance Nov","Avance Dic",
             "Observaciones"
@@ -79,143 +109,146 @@ class ExportController extends Controller
 
         $sheet->fromArray($headers, null, 'A8');
 
-        // Estilos del header
         $sheet->getStyle('A8:AF8')->applyFromArray([
-            'font' => [
-                'bold' => true,
-                'color' => ['rgb' => 'F2F3F2']
-            ],
-            'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'color' => ['rgb' => '008000']
-            ],
-            'alignment' => [
-                'horizontal' => 'center',
-                'vertical' => 'center',
-                'wrapText' => true
-            ],
-            'borders' => [
-                'allBorders' => ['borderStyle' => Border::BORDER_THIN]
-            ]
+            'font' => ['bold' => true, 'color' => ['rgb' => 'F2F3F2']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '008000']],
+            'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true],
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
         ]);
 
         $row = 9;
-        $lastRubroId = null; // Para saber cuándo cambia de rubro
+        $lastRubroId = null;
 
         foreach ($products as $product) {
-            // Verifica si cambiamos de rubro
-            if (!empty($product['rubro']) && $product['rubro']['id'] !== $lastRubroId) {
-                $sheet->setCellValue("A{$row}", "Rubro: " . $product['rubro']['name']);
-                $sheet->mergeCells("A{$row}:AF{$row}");
+            $currentRubroId = $product['rubro']['id'] ?? 0;
+
+            // --- A. IMPRIMIR CABECERA DE RUBRO (Si cambió) ---
+            if ($currentRubroId !== $lastRubroId) {
+
+                // 1. Nombre del Rubro
+                $sheet->setCellValue("A{$row}", "Rubro: " . ($product['rubro']['name'] ?? 'Sin Rubro'));
+                // Combinamos solo A hasta D para dejar E libre para el total
+                $sheet->mergeCells("A{$row}:D{$row}");
+
+                // 2. Total del Rubro (Columna E)
+                $totalRubro = $totalesPorRubro[$currentRubroId] ?? 0;
+                $sheet->setCellValue("E{$row}", $totalRubro);
+
+                // Estilos del Rubro
                 $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                     'font' => ['bold' => true],
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'color' => ['rgb' => '68A829']
-                    ],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '68A829']],
                     'alignment' => ['vertical' => 'center']
                 ]);
+
+                // Formato moneda para el total del rubro
+                $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+
                 $row++;
-                $lastRubroId = $product['rubro']['id'];
+                $lastRubroId = $currentRubroId;
             }
 
-            // FILA DEL PRODUCTO
+            // --- B. FILA DEL PRODUCTO ---
 
             $sheet->setCellValue("A{$row}", "Producto: " . $product['name']);
             $sheet->setCellValue("E{$row}", $product['budget']);
-            $sheet->setCellValue("F{$row}", $product['budget_type']);
+            $sheet->setCellValue("F{$row}", $product['fund_source'] ?? $product['budget_type'] ?? ''); // Asegurar campo correcto
 
-            // Estilos producto (azul claro)
+            // Estilos producto
             $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
-                'font' => ['bold' => true],
-                'fill' => [
-                    'fillType' => Fill::FILL_SOLID,
-                    'color' => ['rgb' => '949994']
+                'font' => [
+                    'bold' => true,
+                    'color' => ['rgb' => '1F497D'] // Azul oscuro (Arreglado el error setColor)
                 ],
-                'borders' => [
-                    'allBorders' => ['borderStyle' => Border::BORDER_THIN]
-                ],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'D9D9D9']], // Gris claro
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 'alignment' => ['vertical' => 'center']
             ]);
 
+            $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+
             $row++;
 
+            // --- C. ACTIVIDADES DE ESTE PRODUCTO ---
 
-            // ACTIVIDADES DE ESTE PRODUCTO
+            if (!empty($product['activities'])) {
+                foreach ($product['activities'] as $activity) {
 
-            foreach ($product['activities'] as $activity) {
+                    // Usamos validaciones ?? [] para evitar errores de array indefinido
+                    $usersList = $activity['users'] ?? [];
+                    $responsables = implode(", ", array_column($usersList, 'name'));
 
-                $responsables = implode(", ", array_column($activity['users'], 'name'));
-                $indicadores = implode(", ", array_column($activity['indicators'], 'name'));
+                    // IMPORTANTE: Verifica si tu API devuelve 'indicators' o 'performance_indicators'
+                    $indicatorsList = $activity['indicators'] ?? $activity['performance_indicators'] ?? [];
+                    $indicadores = implode(", ", array_column($indicatorsList, 'name'));
 
-                // Mapear planificado (12 meses)
-                $plan = array_fill(0, 12, "");
-                foreach ($activity['monthly_plannig'] as $p) {
-                    $m = Carbon::parse($p['month'])->month - 1;
-                    $plan[$m] = $p['percentage']."%";
+                    // Mapear planificación
+                    $plan = array_fill(0, 12, "");
+                    $planners = $activity['planners'] ?? $activity['monthly_plannig'] ?? []; // Soporte para ambos nombres
+                    foreach ($planners as $p) {
+                        if (isset($p['month'])) {
+                            $m = Carbon::parse($p['month'])->month - 1;
+                            $val = isset($p['planning']) ? $p['planning'] : ($p['percentage'] ?? 0);
+                            $plan[$m] = $val; // Asumimos que ya viene con % o es numero
+                        }
+                    }
+
+                    // Mapear avance
+                    $avance = array_fill(0, 12, "");
+                    $progress = $activity['execution_progress'] ?? [];
+                    foreach ($progress as $e) {
+                        if (isset($e['month'])) {
+                            $m = Carbon::parse($e['month'])->month - 1;
+                            $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
+                        }
+                    }
+
+                    $rowData = array_merge([
+                        "Actividad: ",
+                        $activity['description'] ?? '',
+                        $responsables,
+                        $indicadores,
+                        $activity['budget'] ?? 0,
+                        "", // Fuente vacía en actividad
+                        $activity['accrued_budget'] ?? 0,
+                    ], $plan, $avance, [""]);
+
+                    $sheet->fromArray($rowData, null, "A{$row}");
+
+                    // Estilos actividad
+                    $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
+                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                        'alignment' => ['vertical' => 'center', 'wrapText' => true]
+                    ]);
+
+                    $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+
+                    $row++;
                 }
-
-                // Mapear avance (12 meses)
-                $avance = array_fill(0, 12, "");
-                foreach ($activity['execution_progress'] as $e) {
-                    $m = Carbon::parse($e['month'])->month - 1;
-                    $avance[$m] = $e['reported_percentage']."%";
-                }
-
-                $rowData = array_merge([
-                    "Actividad: ",
-                    $activity['description'],
-                    $responsables,
-                    $indicadores,
-                    $activity['budget'], // presupuesto
-                    "", // fuente solo producto
-                    $activity['accrued_budget'], // presupuesto usado
-                ], $plan, $avance, [
-                    "" // observaciones
-                ]);
-
-                $sheet->fromArray($rowData, null, "A{$row}");
-
-                // Estilos fila actividad
-                $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
-                    'borders' => [
-                        'allBorders' => ['borderStyle' => Border::BORDER_THIN]
-                    ],
-                    'alignment' => [
-                        'vertical' => 'center',
-                        'wrapText' => true
-                    ]
-                ]);
-
-                $row++;
             }
         }
 
-        //Definimos el ancho de cada tambla
-        $sheet->getColumnDimension('A')->setWidth(40); // Producto / Actividad
-        $sheet->getColumnDimension('B')->setWidth(50); // Descripción
-        $sheet->getColumnDimension('C')->setWidth(25); // Responsable
-        $sheet->getColumnDimension('D')->setWidth(30); // Indicadores
-        $sheet->getColumnDimension('E')->setWidth(15); // Presupuesto
-        $sheet->getColumnDimension('F')->setWidth(20); // Fuente
-        $sheet->getColumnDimension('G')->setWidth(15); // Presupuesto Utilizado
+        // --- AJUSTES FINALES ---
 
-        //Se busca el rango de los meses de planificacion y avance
+        $sheet->getColumnDimension('A')->setWidth(40);
+        $sheet->getColumnDimension('B')->setWidth(50);
+        $sheet->getColumnDimension('C')->setWidth(25);
+        $sheet->getColumnDimension('D')->setWidth(30);
+        $sheet->getColumnDimension('E')->setWidth(18); // Presupuesto
+        $sheet->getColumnDimension('F')->setWidth(20);
+        $sheet->getColumnDimension('G')->setWidth(15);
+
         $highestColumn = $sheet->getHighestColumn();
         $highestColumnIndex = Coordinate::columnIndexFromString($highestColumn);
 
-        //Establecemos el ancho para todos los meses
         for ($col = 8; $col <= $highestColumnIndex; $col++) {
             $colString = Coordinate::stringFromColumnIndex($col);
-            $sheet->getColumnDimension($colString)->setWidth(12); // Ancho para números/porcentajes
+            $sheet->getColumnDimension($colString)->setWidth(12);
         }
 
-        //Asegura que TODAS las celdas tengan wrapText activado
         $lastRow = $row - 1;
-        $sheet->getStyle("A6:{$highestColumn}{$lastRow}")
-                ->getAlignment()->setWrapText(true);
+        $sheet->getStyle("A6:{$highestColumn}{$lastRow}")->getAlignment()->setWrapText(true);
 
-        // Descargar Excel
         $writer = new Xlsx($spreadsheet);
         $fileName = "reporte_productos_actividades.xlsx";
         $filePath = storage_path("app/public/{$fileName}");
@@ -225,124 +258,229 @@ class ExportController extends Controller
     }
 
     public function exportPlanificacionAllLocations(Request $request)
-{
-    $response = app(PlannerController::class)->getAllProductsWithActivities($request)->getData(true);
-    $productsRaw = $response['data']['products'] ?? [];
+    {
+        // 1. OBTENER DATOS
+        $response = app(PlannerController::class)->getAllProductsWithActivities($request)->getData(true);
+        $productsRaw = $response['data']['products'] ?? [];
 
-    $groupedProducts = collect($productsRaw)->groupBy(function ($item) {
-        return $item['location']['name'] ?? 'Sin Locación';
-    });
-
-    $spreadsheet = new Spreadsheet();
-    $spreadsheet->removeSheetByIndex(0); // Eliminamos la hoja en blanco inicial
-
-    foreach ($groupedProducts as $locationName => $products) {
-        //Crear una nueva hoja para cada locación
-        $sheet = $spreadsheet->createSheet();
-        $sheet->setTitle(substr($locationName, 0, 31)); // Excel limita nombres a 31 caracteres
-
-        $products = $products->sortBy('rubro.id')->values()->all();
-
-        // Título y Encabezados de información
-        $sheet->setCellValue('A1', 'Reporte de Planificación POA - ' . $locationName);
-        $sheet->mergeCells('A1:AI1');
-        $sheet->getStyle('A1')->applyFromArray([
-            'font' => ['bold' => true, 'size' => 16],
-            'alignment' => ['horizontal' => 'center']
-        ]);
-
-        $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
-        $sheet->setCellValue('A3', 'Locación: ' . $locationName);
-        $sheet->setCellValue('A4', 'Generado por: ' . (auth()->user()->name ?? 'Sistema'));
-
-
-        $headers = [
-            "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
-            "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
-            "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
-            "Plan Jul","Plan Ago","Plan Sep","Plan Oct","Plan Nov","Plan Dic",
-            "Avance Ene","Avance Feb","Avance Mar","Avance Abr","Avance May","Avance Jun",
-            "Avance Jul","Avance Ago","Avance Sep","Avance Oct","Avance Nov","Avance Dic",
-            "Observaciones"
+        // 2. DEFINIR PRIORIDADES (Igual que en la función individual)
+        $prioridadFuentes = [
+            'INVERSIÓN EXTERNA' => 1,
+            'INVERSION EXTERNA' => 1,
+            'FIASA'             => 2,
+            'GASTO CORRIENTE'   => 3
         ];
-        $sheet->fromArray($headers, null, 'A8');
 
-        // Estilos del header
-        $sheet->getStyle('A8:AF8')->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => 'F2F3F2']],
-            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => ['rgb' => '008000']],
-            'alignment' => ['horizontal' => 'center', 'wrapText' => true],
-            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]
-        ]);
+        // 3. AGRUPAR POR LOCACIÓN
+        $groupedProducts = collect($productsRaw)->groupBy(function ($item) {
+            return $item['location']['name'] ?? 'Sin Locación';
+        });
 
-        $row = 9;
-        $lastRubroId = null;
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->removeSheetByIndex(0); // Eliminamos la hoja en blanco inicial
 
-        foreach ($products as $product) {
-            // Lógica de Rubros
-            if (!empty($product['rubro']) && $product['rubro']['id'] !== $lastRubroId) {
-                $sheet->setCellValue("A{$row}", "Rubro: " . $product['rubro']['name']);
-                $sheet->mergeCells("A{$row}:AF{$row}");
+        // 4. ITERAR POR CADA LOCACIÓN (CADA UNA ES UNA HOJA)
+        foreach ($groupedProducts as $locationName => $productsList) {
+
+            // --- A. APLICAR LÓGICA DE ORDENAMIENTO (Por cada locación) ---
+            $products = collect($productsList)->sort(function ($a, $b) use ($prioridadFuentes) {
+                // Criterio 1: Rubro ID
+                $rubroA = $a['rubro']['id'] ?? 0;
+                $rubroB = $b['rubro']['id'] ?? 0;
+
+                $rubroCompare = $rubroA <=> $rubroB;
+                if ($rubroCompare !== 0) {
+                    return $rubroCompare;
+                }
+
+                // Criterio 2: Fuente de Financiamiento (Buscando en ambos campos)
+                $valA = $a['fund_source'] ?? $a['budget_type'] ?? '';
+                $valB = $b['fund_source'] ?? $b['budget_type'] ?? '';
+
+                $fuenteA = mb_strtoupper(trim($valA));
+                $fuenteB = mb_strtoupper(trim($valB));
+
+                $pesoA = $prioridadFuentes[$fuenteA] ?? 99;
+                $pesoB = $prioridadFuentes[$fuenteB] ?? 99;
+
+                return $pesoA <=> $pesoB;
+            })->values()->all();
+
+            // --- B. CALCULAR TOTALES POR RUBRO (Por cada locación) ---
+            $totalesPorRubro = collect($products)->groupBy('rubro.id')->map(function ($items) {
+                return $items->sum('budget');
+            });
+
+            // Creación de la hoja
+            $sheet = $spreadsheet->createSheet();
+            $sheet->setTitle(substr($locationName, 0, 31)); // Límite de Excel 31 chars
+
+            // Encabezados Generales
+            $sheet->setCellValue('A1', 'Reporte de Planificación POA - ' . $locationName);
+            $sheet->mergeCells('A1:AI1');
+            $sheet->getStyle('A1')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 16],
+                'alignment' => ['horizontal' => 'center', 'vertical' => 'center']
+            ]);
+
+            $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
+            $sheet->mergeCells('A2:AI2');
+
+            $sheet->setCellValue('A3', 'Locación: ' . $locationName);
+            $sheet->mergeCells('A3:AI3');
+
+            $sheet->setCellValue('A4', 'Generado por: ' . (auth()->user()->name ?? 'Sistema'));
+            $sheet->mergeCells('A4:AI4');
+
+            // Encabezados de Tabla
+            $headers = [
+                "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
+                "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
+                "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
+                "Plan Jul","Plan Ago","Plan Sep","Plan Oct","Plan Nov","Plan Dic",
+                "Avance Ene","Avance Feb","Avance Mar","Avance Abr","Avance May","Avance Jun",
+                "Avance Jul","Avance Ago","Avance Sep","Avance Oct","Avance Nov","Avance Dic",
+                "Observaciones"
+            ];
+            $sheet->fromArray($headers, null, 'A8');
+
+            // Estilos del header
+            $sheet->getStyle('A8:AF8')->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => 'F2F3F2']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '008000']],
+                'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+            ]);
+
+            $row = 9;
+            $lastRubroId = null;
+
+            foreach ($products as $product) {
+                $currentRubroId = $product['rubro']['id'] ?? 0;
+
+                // --- C. IMPRIMIR RUBRO CON TOTAL ---
+                if ($currentRubroId !== $lastRubroId) {
+                    // Nombre
+                    $sheet->setCellValue("A{$row}", "Rubro: " . ($product['rubro']['name'] ?? 'Sin Rubro'));
+                    // Combinar solo A-D
+                    $sheet->mergeCells("A{$row}:D{$row}");
+
+                    // Total en columna E
+                    $totalRubro = $totalesPorRubro[$currentRubroId] ?? 0;
+                    $sheet->setCellValue("E{$row}", $totalRubro);
+
+                    // Estilos Rubro
+                    $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
+                        'font' => ['bold' => true],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '68A829']],
+                        'alignment' => ['vertical' => 'center']
+                    ]);
+                    $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+
+                    $row++;
+                    $lastRubroId = $currentRubroId;
+                }
+
+                // --- D. FILA DE PRODUCTO ---
+                $sheet->setCellValue("A{$row}", "Producto: " . $product['name']);
+                $sheet->setCellValue("E{$row}", $product['budget']);
+                // Usamos la misma lógica visual de fuente
+                $sheet->setCellValue("F{$row}", $product['fund_source'] ?? $product['budget_type'] ?? '');
+
+                // Estilos Producto (Azul)
                 $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
-                    'font' => ['bold' => true],
-                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => ['rgb' => '68A829']]
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => '1F497D'] // Azul
+                    ],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'D9D9D9']], // Gris claro
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                    'alignment' => ['vertical' => 'center']
                 ]);
+                $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+
                 $row++;
-                $lastRubroId = $product['rubro']['id'];
+
+                // --- E. ACTIVIDADES ---
+                if (!empty($product['activities'])) {
+                    foreach ($product['activities'] as $activity) {
+                        $usersList = $activity['users'] ?? [];
+                        $responsables = implode(", ", array_column($usersList, 'name'));
+
+                        $indicatorsList = $activity['indicators'] ?? $activity['performance_indicators'] ?? [];
+                        $indicadores = implode(", ", array_column($indicatorsList, 'name'));
+
+                        // Mapeo Planificación
+                        $plan = array_fill(0, 12, "");
+                        $planners = $activity['planners'] ?? $activity['monthly_plannig'] ?? [];
+                        foreach ($planners as $p) {
+                            if (isset($p['month'])) {
+                                $m = Carbon::parse($p['month'])->month - 1;
+                                $val = isset($p['planning']) ? $p['planning'] : ($p['percentage'] ?? 0);
+                                $plan[$m] = $val;
+                            }
+                        }
+
+                        // Mapeo Avance
+                        $avance = array_fill(0, 12, "");
+                        $progress = $activity['execution_progress'] ?? [];
+                        foreach ($progress as $e) {
+                            if (isset($e['month'])) {
+                                $m = Carbon::parse($e['month'])->month - 1;
+                                $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
+                            }
+                        }
+
+                        $rowData = array_merge([
+                            "Actividad: ",
+                            $activity['description'] ?? '',
+                            $responsables,
+                            $indicadores,
+                            $activity['budget'] ?? 0,
+                            "",
+                            $activity['accrued_budget'] ?? 0
+                        ], $plan, $avance, [""]);
+
+                        $sheet->fromArray($rowData, null, "A{$row}");
+
+                        // Estilos Actividad
+                        $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
+                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                            'alignment' => ['vertical' => 'center', 'wrapText' => true]
+                        ]);
+                        $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+
+                        $row++;
+                    }
+                }
             }
 
-            // Fila de Producto
-            $sheet->setCellValue("A{$row}", "Producto: " . $product['name']);
-            $sheet->setCellValue("E{$row}", $product['budget']);
-            $sheet->setCellValue("F{$row}", $product['budget_type']);
-            $sheet->getStyle("A{$row}:AF{$row}")->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('949994');
-            $row++;
+            // Ajuste de anchos para esta hoja
+            $sheet->getColumnDimension('A')->setWidth(40);
+            $sheet->getColumnDimension('B')->setWidth(50);
+            $sheet->getColumnDimension('C')->setWidth(25);
+            $sheet->getColumnDimension('D')->setWidth(30);
+            $sheet->getColumnDimension('E')->setWidth(18);
+            $sheet->getColumnDimension('F')->setWidth(20);
+            $sheet->getColumnDimension('G')->setWidth(15);
 
-            // Actividades
-            foreach ($product['activities'] as $activity) {
-                $responsables = implode(", ", array_column($activity['users'], 'name'));
-                $indicadores = implode(", ", array_column($activity['indicators'], 'name'));
+            $highestColumn = $sheet->getHighestColumn();
+            $highestColumnIndex = Coordinate::columnIndexFromString($highestColumn);
 
-                // Mapeo de meses
-                $plan = array_fill(0, 12, "");
-                foreach ($activity['monthly_plannig'] as $p) {
-                    $m = Carbon::parse($p['month'])->month - 1;
-                    $plan[$m] = $p['percentage']."%";
-                }
-
-                $avance = array_fill(0, 12, "");
-                foreach ($activity['execution_progress'] as $e) {
-                    $m = Carbon::parse($e['month'])->month - 1;
-                    $avance[$m] = $e['reported_percentage']."%";
-                }
-
-                $rowData = array_merge([
-                    "Actividad: ", $activity['description'], $responsables, $indicadores,
-                    $activity['budget'], "", $activity['accrued_budget']
-                ], $plan, $avance, [""]);
-
-                $sheet->fromArray($rowData, null, "A{$row}");
-                $row++;
+            for ($col = 8; $col <= $highestColumnIndex; $col++) {
+                $colString = Coordinate::stringFromColumnIndex($col);
+                $sheet->getColumnDimension($colString)->setWidth(12);
             }
+
+            $lastRow = $row - 1;
+            $sheet->getStyle("A8:{$highestColumn}{$lastRow}")->getAlignment()->setWrapText(true);
         }
 
-        $sheet->getColumnDimension('A')->setWidth(40); // Producto / Actividad
-        $sheet->getColumnDimension('B')->setWidth(50); // Descripción
-        $sheet->getColumnDimension('C')->setWidth(25); // Responsable
-        $sheet->getColumnDimension('D')->setWidth(30); // Indicadores
-        $sheet->getColumnDimension('E')->setWidth(15); // Presupuesto
-        $sheet->getColumnDimension('F')->setWidth(20); // Fuente
-        $sheet->getColumnDimension('G')->setWidth(15); // Presupuesto Utilizado
+        $writer = new Xlsx($spreadsheet);
+        $fileName = "reporte_consolidado_locaciones.xlsx";
+        $filePath = storage_path("app/public/{$fileName}");
+        $writer->save($filePath);
 
-
-        $sheet->getStyle("A1:AF{$row}")->getAlignment()->setWrapText(true);
+        return response()->download($filePath)->deleteFileAfterSend(true);
     }
-
-    $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-    $fileName = "reporte_consolidado_locaciones.xlsx";
-    $filePath = storage_path("app/public/{$fileName}");
-    $writer->save($filePath);
-
-    return response()->download($filePath)->deleteFileAfterSend(true);
-}
 }

@@ -12,6 +12,7 @@ use Modules\Investigacion\Entities\Activity;
 use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Product;
 use Modules\Investigacion\Entities\Rubro;
+use Illuminate\Support\Facades\Auth;
 use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Notifications\CreateProduct;
 use Modules\Investigacion\Notifications\PlannerAccept;
@@ -337,124 +338,86 @@ class PlannerController extends Controller
 
     public function getProductsWithActivities(Request $request)
     {
-        try {
-            Carbon::setLocale('es');
-            $user = $request->user();
+        $user = Auth::user();
 
-            $query = Product::query();
+        $userUnit = $user->administrativeUnit;
+        if (!$userUnit && $user->th_administrative_unit_id) {
+            $userUnit = DB::table('th_administrative_units')->where('id', $user->th_administrative_unit_id)->first();
+        }
+        $userCode = $userUnit->poa_code ?? null;
 
-            $hasGlobalView = $user->can('view-admin-panel') ||
-                $user->hasRole('administrador') ||
-                $user->hasRole('research-direction');
+        $query = Product::with([
+            'rubro',
+            'activities.users',
+            'activities.monthlyProgress',
+            'activities.executionProgress',
+            'activities.indicators',
+            'location',
+            'user',
+            'crop',
+            'budget_type'
+        ]);
 
-            if (!$hasGlobalView) {
+        // --- 1. SUPER ADMIN (Pase VIP) ---
+        if ($user->hasRole('administrador')) {
+            if ($request->has('location_id') && $request->location_id != 'all') {
+                $query->where('location_id', $request->location_id);
+            }
+        }
+        else {
+            if ($user->can('poa.view_all_locations')) {
+                if ($request->has('location_id') && $request->location_id != 'all') {
+                    $query->where('location_id', $request->location_id);
+                }
+            } else {
                 $query->where('location_id', $user->location_id);
             }
 
-            $products = $query->whereHas('rubro', function ($q) {
-                $q->where('name', '!=', 'OFICIAL');
-            })
-                ->with([
-                    'location',
-                    'rubro',
-                    'users',
-                    'budget_type',
-                    'activities' => function ($q) {
-                        $q->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
-                    },
-                ])->get();
+            $ID_ADM_CENTRAL = 1;
 
-            $formattedProducts = $products->map(function ($product) {
+            $query->where(function($masterQuery) use ($userCode, $ID_ADM_CENTRAL) {
 
-                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+                $masterQuery->where('location_id', '!=', $ID_ADM_CENTRAL)
 
-                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+                    ->orWhere(function($centralQuery) use ($userCode, $ID_ADM_CENTRAL) {
+                        $centralQuery->where('location_id', $ID_ADM_CENTRAL);
 
-                    $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
-                    $activity->loadMissing('monthlyExecutionProgress');
-                    $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
-                    $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
-
-                    $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
-                        return [
-                            'month' => Carbon::parse($execProgress->month)->format('Y-m-d'),
-                            'reported_percentage' => (float) $execProgress->percentage,
-                        ];
-                    })->toArray();
-
-                    return [
-                        'id' => $activity->id,
-                        'description' => $activity->description,
-                        'absolute_weight' => $activityAbsoluteWeight,
-                        'budget'=>$activity->budget,
-                        'accrued_budget'=> $activity->accrued_budget,
-                        'total_progress' => $totalActivityProgress,
-                        'total_completion_percentage' => $totalExecutedPercentage,
-                        'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
-                        'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
-                        'users' => ($activity->users ?? collect([]))->map(function ($user) {
-                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre'];
-                        })->toArray(),
-                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
-                            return ['id' => $indicator->id, 'name' => $indicator->name];
-                        })->toArray(),
-                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
-                            return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
-                        })->toArray(),
-                        'execution_progress' => $executionProgress,
-                    ];
-                });
-
-                $totalProductProgress = $mappedActivities->sum('total_progress');
-
-                return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'status' => $product->status,
-                    'admin_observation' => $product->admin_observation,
-                    'budget'=>$product->budget,
-                    'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
-                    'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
-                    'budget_types_id' => $product->budget_types_id,
-                    'ponderacion' => $product->ponderacion,
-                    'absolute_weight' => $productAbsoluteWeight,
-                    'total_progress' => $totalProductProgress,
-                    'user' => $product->user ? [
-                        'id' => $product->user->id,
-                        'name' => $product->user->name ?? 'Sin nombre',
-                        'last_name' => $product->user->last_name ?? ''
-                    ] : null,
-                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
-                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
-                    'activities' => $mappedActivities->toArray(),
-                    'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
-                ];
+                        if (!empty($userCode)) {
+                            $centralQuery->whereHas('rubro', function($q) use ($userCode) {
+                                if (str_contains($userCode, '-ALL')) {
+                                    $prefix = explode('-', $userCode)[0];
+                                    $q->where('poa_code', 'LIKE', "{$prefix}-%");
+                                }
+                                else {
+                                    $q->where('poa_code', $userCode);
+                                }
+                            });
+                        } else {
+                            $centralQuery->whereRaw('1 = 0');
+                        }
+                    });
             });
-
-            $totalRubroProgress = $formattedProducts->sum('total_progress');
-
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Success',
-                    'detail' => 'Productos obtenidos correctamente',
-                    'code' => 200,
-                ],
-                'data' => [
-                    'total_rubro_progress' => $totalRubroProgress,
-                    'products' => $formattedProducts->values()->toArray(),
-                ]
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error al obtener los productos en getProductsWithActivities: ' . $e->getMessage());
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'Error al obtener los productos: ' . $e->getMessage(),
-                    'code' => 500,
-                ],
-            ], 500);
         }
+
+        // --- FILTROS COMUNES ---
+        if ($request->has('year')) {
+            $query->where('year', $request->input('year'));
+        }
+        if ($request->has('rubro_id') && $request->rubro_id != 'all') {
+            $query->where('rubro_id', $request->input('rubro_id'));
+        }
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->input('search');
+            $query->where('name', 'LIKE', "%{$search}%");
+        }
+
+        $query->orderBy('id', 'desc');
+
+        // Paginación alta para mantener estructura
+        $perPage = $request->input('per_page', 1000);
+        return $query->paginate($perPage);
     }
+
     public function getAllProductsWithActivities(Request $request)
     {
         try {

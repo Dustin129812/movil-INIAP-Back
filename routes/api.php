@@ -267,3 +267,5 @@ require_once base_path('Modules/Inventario/Routes/api.php');
 require_once base_path('Modules/Campo/Routes/api.php');
 require_once base_path('Modules/Produccion/Routes/api.php');
 require_once base_path('Modules/Investigacion/Routes/api.php');
+require_once base_path('Modules/PlanificacionEstrategica/Routes/api.php');
+require_once base_path('Modules/Administracion/Routes/api.php');

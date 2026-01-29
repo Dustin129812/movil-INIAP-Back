@@ -1,5 +1,7 @@
 {
     "TalentoHumano": true,
     "Produccion": true,
-    "Investigacion": true
+    "Investigacion": true,
+    "PlanificacionEstrategica": true,
+    "Administracion": true
 }

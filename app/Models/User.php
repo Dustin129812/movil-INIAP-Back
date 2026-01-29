@@ -18,6 +18,9 @@ use Modules\Investigacion\Entities\Position;
 use Modules\Investigacion\Entities\Product;
 use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Entities\WeeklyPulse;
+use Modules\TalentoHumano\Entities\AdministrativeUnit;
+use Modules\TalentoHumano\Entities\Management;
+use Modules\TalentoHumano\Entities\Process;
 use Spatie\Permission\Traits\HasRoles;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
@@ -130,29 +133,28 @@ User extends Authenticatable  implements JWTSubject
         return $this->hasMany(Document::class);
     }
 
-    // --- RELACIONES DEL MÓDULO DE TALENTO HUMANO ---
-
     /**
-     * Los vehículos (placas) que este usuario (conductor) tiene asignados.
+     * Relación con Proceso (TH)
      */
-    public function vehiculos()
+    public function process()
     {
-        return $this->belongsToMany(Vehiculo::class, 'conductor_vehiculo');
+        // 'th_process_id' es la columna que creamos en la migración
+        return $this->belongsTo(Process::class, 'th_process_id');
     }
 
     /**
-     * Todos los registros de horas que este usuario (conductor) ha creado.
+     * Relación con Unidad Administrativa (TH)
      */
-    public function registrosHoras()
+    public function administrativeUnit()
     {
-        return $this->hasMany(RegistroHora::class, 'user_id');
+        return $this->belongsTo(AdministrativeUnit::class, 'th_administrative_unit_id');
     }
 
     /**
-     * Todos los reportes mensuales generados para este usuario (conductor).
+     * Relación con Gestión (TH)
      */
-    public function reportesMensualesHE()
+    public function management()
     {
-        return $this->hasMany(ReporteMensualHE::class, 'user_id');
+        return $this->belongsTo(Management::class, 'th_management_id');
     }
 }

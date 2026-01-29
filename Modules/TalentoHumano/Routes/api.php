@@ -1,23 +1,21 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\TalentoHumano\Http\Controllers\Api\V1\AdminReportController;
+use Modules\TalentoHumano\Http\Controllers\Api\V1\ApprovalDafController;
+use Modules\TalentoHumano\Http\Controllers\Api\V1\ConfigController;
+use Modules\TalentoHumano\Http\Controllers\Api\V1\DriverReportController;
+use Modules\TalentoHumano\Http\Controllers\EmployeeImportController;
+use Modules\TalentoHumano\Http\Controllers\PersonnelController;
 
 // --- Importar todos los Controladores ---
-use Modules\TalentoHumano\Http\Controllers\Api\V1\DriverReportController;
-use Modules\TalentoHumano\Http\Controllers\Api\V1\ApprovalDafController;
-use Modules\TalentoHumano\Http\Controllers\Api\V1\AdminReportController;
-use Modules\TalentoHumano\Http\Controllers\Api\V1\ConfigController;
 
 /*
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
-| Rutas para el módulo TalentoHumano (v1)
-| Autenticación: 'auth:api' (JWT)
-| Autorización: Spatie forzando el guard 'api' (ej. permission:permiso,api)
 */
 
-// Usamos 'auth:api' (tu JWT) para autenticar
 Route::middleware('auth:api')->prefix('v1/talento-humano')->name('api.th.v1.')->group(function () {
 
     // --- Rutas del Conductor (Rol: TH Conductor) ---
@@ -29,7 +27,7 @@ Route::middleware('auth:api')->prefix('v1/talento-humano')->name('api.th.v1.')->
         // Obtener lista de versiones (V1, V2...)
         Route::get('/reports/history', [DriverReportController::class, 'getMonthHistory'])->name('reports.history');
 
-        // Reporte del mes actual (o lo crea si no existe)
+        // Reporte del mes actual
         Route::get('/reports/current', [DriverReportController::class, 'getCurrentReport'])->name('reports.current');
 
 
@@ -103,7 +101,18 @@ Route::middleware('auth:api')->prefix('v1/talento-humano')->name('api.th.v1.')->
 
         // --- Utilidades ---
         Route::get('/all-users', [ConfigController::class, 'getAllUsers'])->name('config.all-users');
-
+        Route::post('/employees/import-structure', [EmployeeImportController::class, 'updateOrganizationalStructure']);
     });
-    Route::get('reports/{report}/debug', [DriverReportController::class, 'debugReport']);
+
+    Route::middleware('permission:th.configuracion.gestionar,api')->prefix('personnel')->name('personnel.')->group(function () {
+
+        // CRUD Personal
+        Route::get('/', [PersonnelController::class, 'index']);
+        Route::post('/', [PersonnelController::class, 'store']);
+        Route::put('/{id}', [PersonnelController::class, 'update']);
+        Route::patch('/{id}/status', [PersonnelController::class, 'toggleStatus']);
+
+        // Catálogos para el formulario
+        Route::get('/catalogs', [PersonnelController::class, 'getCatalogs']);
+    });
 });
