@@ -16,8 +16,15 @@ class ExportController extends Controller
     public function exportPlanificacion(Request $request)
     {
         // 1. OBTENER DATOS
-        $response = app(PlannerController::class)->getProductsWithActivities($request)->getData(true);
-        $products = $response['data']['products'] ?? [];
+        $productsRaw = app(PlannerController::class)->getProductsWithActivities($request);
+
+        if ($productsRaw instanceof \Illuminate\Http\JsonResponse) {
+            $products = $productsRaw->getData(true)['data']['products'] ?? [];
+        } else {
+            // If it's a Collection or Array, convert to array
+            $data = $productsRaw instanceof \Illuminate\Support\Collection ? $productsRaw->toArray() : $productsRaw;
+            $products = $data['products'] ?? $data;
+        }
 
         // 2. DEFINIR PRIORIDADES DE FUENTE
         $prioridadFuentes = [
@@ -174,32 +181,39 @@ class ExportController extends Controller
             if (!empty($product['activities'])) {
                 foreach ($product['activities'] as $activity) {
 
-                    // Usamos validaciones ?? [] para evitar errores de array indefinido
                     $usersList = $activity['users'] ?? [];
                     $responsables = implode(", ", array_column($usersList, 'name'));
 
-                    // IMPORTANTE: Verifica si tu API devuelve 'indicators' o 'performance_indicators'
                     $indicatorsList = $activity['indicators'] ?? $activity['performance_indicators'] ?? [];
                     $indicadores = implode(", ", array_column($indicatorsList, 'name'));
 
-                    // Mapear planificación
+                    // 1. MAPEO DE PLANIFICACIÓN (CORREGIDO)
                     $plan = array_fill(0, 12, "");
-                    $planners = $activity['planners'] ?? $activity['monthly_plannig'] ?? []; // Soporte para ambos nombres
+                    $planners = (array) ($activity['planners'] ?? $activity['monthly_plannig'] ?? []);
+
                     foreach ($planners as $p) {
-                        if (isset($p['month'])) {
-                            $m = Carbon::parse($p['month'])->month - 1;
-                            $val = isset($p['planning']) ? $p['planning'] : ($p['percentage'] ?? 0);
-                            $plan[$m] = $val; // Asumimos que ya viene con % o es numero
+                        if (is_array($p) && isset($p['month'])) {
+                            try {
+                                $m = Carbon::parse($p['month'])->month - 1;
+                                $val = isset($p['planning']) ? $p['planning'] : ($p['percentage'] ?? 0);
+                                $plan[$m] = $val;
+                            } catch (\Exception $e) {
+                                continue;
+                            }
                         }
                     }
 
-                    // Mapear avance
+                    // 2. MAPEO DE AVANCE (AQUÍ TAMBIÉN DABA ERROR)
                     $avance = array_fill(0, 12, "");
                     $progress = $activity['execution_progress'] ?? [];
-                    foreach ($progress as $e) {
-                        if (isset($e['month'])) {
-                            $m = Carbon::parse($e['month'])->month - 1;
-                            $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
+
+                    if (is_array($progress)) {
+                        foreach ($progress as $e) {
+                            // Aplicamos la misma lógica de seguridad para el avance
+                            if (is_array($e) && isset($e['month'])) {
+                                $m = Carbon::parse($e['month'])->month - 1;
+                                $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
+                            }
                         }
                     }
 
@@ -209,7 +223,7 @@ class ExportController extends Controller
                         $responsables,
                         $indicadores,
                         $activity['budget'] ?? 0,
-                        "", // Fuente vacía en actividad
+                        "",
                         $activity['accrued_budget'] ?? 0,
                     ], $plan, $avance, [""]);
 
@@ -222,7 +236,6 @@ class ExportController extends Controller
                     ]);
 
                     $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
-
                     $row++;
                 }
             }
@@ -260,8 +273,14 @@ class ExportController extends Controller
     public function exportPlanificacionAllLocations(Request $request)
     {
         // 1. OBTENER DATOS
-        $response = app(PlannerController::class)->getAllProductsWithActivities($request)->getData(true);
-        $productsRaw = $response['data']['products'] ?? [];
+        $response = app(PlannerController::class)->getAllProductsWithActivities($request);
+
+        if ($response instanceof \Illuminate\Http\JsonResponse) {
+            $productsRaw = $response->getData(true)['data']['products'] ?? [];
+        } else {
+            $data = $response instanceof \Illuminate\Support\Collection ? $response->toArray() : $response;
+            $productsRaw = $data['products'] ?? $data;
+        }
 
         // 2. DEFINIR PRIORIDADES (Igual que en la función individual)
         $prioridadFuentes = [
@@ -413,22 +432,25 @@ class ExportController extends Controller
                         // Mapeo Planificación
                         $plan = array_fill(0, 12, "");
                         $planners = $activity['planners'] ?? $activity['monthly_plannig'] ?? [];
-                        foreach ($planners as $p) {
-                            if (isset($p['month'])) {
-                                $m = Carbon::parse($p['month'])->month - 1;
-                                $val = isset($p['planning']) ? $p['planning'] : ($p['percentage'] ?? 0);
-                                $plan[$m] = $val;
+
+                        foreach ((array) $planners as $p) {
+                            if (!is_array($p) || !isset($p['month'])) {
+                                continue;
                             }
+                            $m = Carbon::parse($p['month'])->month - 1;
+                            $val = $p['planning'] ?? ($p['percentage'] ?? 0);
+                            $plan[$m] = $val;
                         }
 
                         // Mapeo Avance
                         $avance = array_fill(0, 12, "");
                         $progress = $activity['execution_progress'] ?? [];
-                        foreach ($progress as $e) {
-                            if (isset($e['month'])) {
-                                $m = Carbon::parse($e['month'])->month - 1;
-                                $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
+                        foreach ((array) $progress as $e) {
+                            if (!is_array($e) || !isset($e['month'])) {
+                                continue;
                             }
+                            $m = Carbon::parse($e['month'])->month - 1;
+                            $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
                         }
 
                         $rowData = array_merge([

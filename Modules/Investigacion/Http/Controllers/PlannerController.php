@@ -188,13 +188,24 @@ class PlannerController extends Controller
 
                 $activity->monthlyProgress()->delete();
 
-                $monthlyData = $activityData['monthly_planning'] ?? $activityData['monthly_distribution'] ?? [];
+                $monthlyData = $activityData['monthly_progress']
+                    ?? $activityData['monthly_distribution']
+                    ?? $activityData['monthly_planning']
+                    ?? null;
 
                 if (!empty($monthlyData)) {
-                    foreach ($monthlyData as $monthData) {
+                    // 2. Eliminamos registros previos para evitar duplicados al editar
+                    $activity->monthlyProgress()->forceDelete();
+
+                    foreach ($monthlyData as $plan) {
+                        // Validar que el mes no sea nulo
+                        if (empty($plan['month'])) continue;
+
                         $activity->monthlyProgress()->create([
-                            'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
-                            'percentage' => $monthData['percentage'],
+                            // Usamos Carbon para asegurar el formato Y-m-d, ya que en tu JSON
+                            // viene con formato ISO (2026-02-01T05:00:00.000000Z)
+                            'month' => \Carbon\Carbon::parse($plan['month'])->startOfMonth()->format('Y-m-d'),
+                            'percentage' => $plan['percentage']
                         ]);
                     }
                 }
@@ -339,12 +350,6 @@ class PlannerController extends Controller
     public function getProductsWithActivities(Request $request)
     {
         $user = Auth::user();
-
-        // 🔍 DEBUG: Iniciar traza
-        Log::info("--- DEBUG PLANNER (getProductsWithActivities) ---");
-        Log::info("Usuario: {$user->id} ({$user->name}) | Rol SuperAdmin: " . ($user->hasRole('Super Admin') ? 'SI' : 'NO'));
-        Log::info("Location ID Usuario: {$user->location_id} | Unidad Admin ID: {$user->th_administrative_unit_id}");
-
         $query = Product::with([
             'rubro',
             'activities.users',
@@ -352,48 +357,33 @@ class PlannerController extends Controller
             'activities.executionProgress',
             'activities.indicators',
             'location',
-            'user',  // <--- AGREGAR
-            'crop',  // <--- AGREGAR
+            'user',
+            'crop',
             'budget_type'
         ]);
 
-        if ($user->hasRole('Super Admin')) {
-            Log::info("-> Rama: Super Admin");
+        if ($user->hasRole('administrador')) {
             if ($request->has('location_id') && $request->location_id != 'all') {
                 $query->where('location_id', $request->location_id);
             }
         } else {
-            Log::info("-> Rama: Usuario Normal");
 
-            // 1. Filtro de Locación
             if ($user->can('poa.view_all_locations')) {
-                Log::info("--> Tiene permiso ver todas las locaciones");
                 if ($request->has('location_id') && $request->location_id != 'all') {
                     $query->where('location_id', $request->location_id);
                 }
             } else {
-                Log::info("--> Restringido a su location_id: {$user->location_id}");
                 $query->where('location_id', $user->location_id);
             }
 
-            // 2. Filtro de Visibilidad por Unidad (ACL)
             if (!empty($user->th_administrative_unit_id)) {
                 $allowedRubroIds = DB::table('admin_poa_visibility')
                     ->where('th_administrative_unit_id', $user->th_administrative_unit_id)
                     ->pluck('rubro_id')
                     ->toArray();
-
-                Log::info("--> IDs de Rubros permitidos por ACL: " . implode(',', $allowedRubroIds));
-
                 if (!empty($allowedRubroIds)) {
                     $query->whereIn('rubro_id', $allowedRubroIds);
-                } else {
-                    Log::warning("--> ¡ALERTA! El usuario tiene Unidad Administrativa, pero NO tiene rubros asignados en 'admin_poa_visibility'. Esto podría ocultar todo.");
-                    // Opcional: Si quieres que si no hay configuración no vea nada, descomenta esto:
-                    // $query->whereRaw('1 = 0');
                 }
-            } else {
-                Log::info("--> Usuario sin Unidad Administrativa asignada. Ve todos los rubros de su locación.");
             }
         }
 
@@ -472,7 +462,7 @@ class PlannerController extends Controller
                         'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
                             return ['id' => $indicator->id, 'name' => $indicator->name];
                         })->toArray(),
-                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                        'monthly_planning' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
                             return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
                         })->toArray(),
                         'execution_progress' => $executionProgress,
@@ -830,7 +820,7 @@ class PlannerController extends Controller
                         'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
                             return ['id' => $indicator->id, 'name' => $indicator->name];
                         })->toArray(),
-                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                        'monthly_planning' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
                             return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
                         })->toArray(),
 
