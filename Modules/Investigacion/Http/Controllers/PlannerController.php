@@ -12,7 +12,6 @@ use Modules\Investigacion\Entities\Activity;
 use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Product;
 use Modules\Investigacion\Entities\Rubro;
-use Illuminate\Support\Facades\Auth;
 use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Notifications\CreateProduct;
 use Modules\Investigacion\Notifications\PlannerAccept;
@@ -336,193 +335,126 @@ class PlannerController extends Controller
         }
     }
 
-    private function transformProductCollection($products)
-    {
-        return $products->map(function ($product) {
-            $productAbsoluteWeight = (float) $product->ponderacion / 100;
-
-            $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
-                $activityWeight = (float) $activity->ponderacion;
-                $activityAbsoluteWeight = $productAbsoluteWeight * ($activityWeight / 100);
-
-                // Lógica crítica: Determinar si usamos progreso mensual o semanal
-                // Nota: Asegúrate de cargar 'monthlyExecutionProgress' y 'weeklyActivities' en la consulta
-                $useMonthly = $activity->monthlyExecutionProgress->isNotEmpty();
-
-                $sourceCollection = $useMonthly
-                    ? $activity->monthlyExecutionProgress
-                    : ($activity->weeklyActivities ?? collect([]));
-
-                $totalRealProgress = $sourceCollection->sum('percentage');
-                $totalWeightedProgress = $activityAbsoluteWeight * ($totalRealProgress / 100);
-
-                // Mapeo unificado para 'execution_progress' que espera el React
-                $executionProgress = $sourceCollection->map(function ($item) use ($useMonthly) {
-                    $dateValue = $useMonthly ? $item->month : $item->date;
-                    return [
-                        'id' => $item->id,
-                        'week_id' => $useMonthly ? null : $item->id,
-                        'month' => Carbon::parse($dateValue)->format('Y-m-d'),
-                        'date' => Carbon::parse($dateValue)->format('Y-m-d'),
-                        'percentage' => (float) $item->percentage, // Importante para el JS
-                        'reported_percentage' => (float) $item->percentage,
-                        'observations' => $item->observations ?? '',
-                    ];
-                })->toArray();
-
-                return [
-                    'id' => $activity->id,
-                    'description' => $activity->description,
-                    'accrued_budget' => $activity->accrued_budget,
-                    'budget' => $activity->budget,
-                    'ponderacion' => $activity->ponderacion,
-                    'relative_weight' => $activityWeight,
-                    'absolute_weight' => $activityAbsoluteWeight,
-                    'total_progress' => $totalWeightedProgress,
-                    'progreso_real' => $totalRealProgress,
-                    'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
-                    'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
-                    'users' => ($activity->users ?? collect([]))->map(function ($u) {
-                        return [
-                            'id' => $u->id,
-                            'name' => $u->name ?? 'Sin nombre',
-                            'last_name' => $u->last_name ?? ''
-                        ];
-                    })->toArray(),
-                    'indicators' => ($activity->indicators ?? collect([]))->map(function ($i) {
-                        return ['id' => $i->id, 'name' => $i->name];
-                    })->toArray(),
-                    'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($p) {
-                        return ['month' => Carbon::parse($p->month)->format('Y-m-d'), 'percentage' => $p->percentage];
-                    })->toArray(),
-                    // Campo CLAVE que tu frontend busca:
-                    'execution_progress' => $executionProgress,
-                ];
-            });
-
-            $totalProductProgress = $mappedActivities->sum('total_progress');
-
-            return [
-                'id' => $product->id,
-                'name' => $product->name,
-                'description' => $product->description, // A veces útil
-                'ponderacion' => $product->ponderacion,
-                'crop' => $product->crop ? [
-                    'id' => $product->crop->id,
-                    'name' => $product->crop->name,
-                    'productive_rubro_id' => $product->crop->productive_rubro_id
-                ] : null,
-                'created_at' => $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
-                'budget_type' => $product->budget_type ? $product->budget_type->name : 'Sin definir',
-                'budget_types_id' => $product->budget_types_id,
-                'budget' => $product->budget,
-                'absolute_weight' => $productAbsoluteWeight,
-                'total_progress' => $totalProductProgress,
-                'user' => $product->user ? [
-                    'id' => $product->user->id,
-                    'name' => $product->user->name ?? 'Sin nombre',
-                    'last_name' => $product->user->last_name ?? ''
-                ] : null,
-                'location' => $product->location ? [
-                    'id' => $product->location->id,
-                    'name' => $product->location->name
-                ] : null,
-                'rubro' => $product->rubro ? [
-                    'id' => $product->rubro->id,
-                    'name' => $product->rubro->name
-                ] : null,
-                'activities' => $mappedActivities->toArray(),
-            ];
-        });
-    }
-
-    // --- REEMPLAZA TU getProductsWithActivities CON ESTO ---
     public function getProductsWithActivities(Request $request)
     {
-        $user = Auth::user();
+        try {
+            Carbon::setLocale('es');
+            $user = $request->user();
 
-        $userUnit = $user->administrativeUnit;
-        if (!$userUnit && $user->th_administrative_unit_id) {
-            $userUnit = DB::table('th_administrative_units')->where('id', $user->th_administrative_unit_id)->first();
-        }
-        $userCode = $userUnit->poa_code ?? null;
+            $query = Product::query();
 
-        // IMPORTANTE: Agregué 'monthlyExecutionProgress' y 'weeklyActivities' que faltaban
-        $query = Product::with([
-            'rubro',
-            'activities.users',
-            'activities.monthlyProgress',
-            'activities.executionProgress',
-            'activities.monthlyExecutionProgress', // Faltaba
-            'activities.weeklyActivities',         // Faltaba
-            'activities.indicators',
-            'location',
-            'user',
-            'crop',
-            'budget_type'
-        ]);
+            $hasGlobalView = $user->can('view-admin-panel') ||
+                $user->hasRole('administrador') ||
+                $user->hasRole('research-direction');
 
-        // --- Lógica de Permisos (Se mantiene igual a tu original) ---
-        if ($user->hasRole('administrador')) {
-            if ($request->has('location_id') && $request->location_id != 'all') {
-                $query->where('location_id', $request->location_id);
-            }
-        }
-        else {
-            if ($user->can('poa.view_all_locations')) {
-                if ($request->has('location_id') && $request->location_id != 'all') {
-                    $query->where('location_id', $request->location_id);
-                }
-            } else {
+            if (!$hasGlobalView) {
                 $query->where('location_id', $user->location_id);
             }
 
-            $ID_ADM_CENTRAL = 1;
-            $query->where(function($masterQuery) use ($userCode, $ID_ADM_CENTRAL) {
-                $masterQuery->where('location_id', '!=', $ID_ADM_CENTRAL)
-                    ->orWhere(function($centralQuery) use ($userCode, $ID_ADM_CENTRAL) {
-                        $centralQuery->where('location_id', $ID_ADM_CENTRAL);
-                        if (!empty($userCode)) {
-                            $centralQuery->whereHas('rubro', function($q) use ($userCode) {
-                                if (str_contains($userCode, '-ALL')) {
-                                    $prefix = explode('-', $userCode)[0];
-                                    $q->where('poa_code', 'LIKE', "{$prefix}-%");
-                                } else {
-                                    $q->where('poa_code', $userCode);
-                                }
-                            });
-                        } else {
-                            $centralQuery->whereRaw('1 = 0');
-                        }
-                    });
+            $products = $query->whereHas('rubro', function ($q) {
+                $q->where('name', '!=', 'OFICIAL');
+            })
+                ->with([
+                    'location',
+                    'rubro',
+                    'users',
+                    'budget_type',
+                    'activities' => function ($q) {
+                        $q->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
+                    },
+                ])->get();
+
+            $formattedProducts = $products->map(function ($product) {
+
+                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+
+                    $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
+                    $activity->loadMissing('monthlyExecutionProgress');
+                    $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
+                    $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
+
+                    $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
+                        return [
+                            'month' => Carbon::parse($execProgress->month)->format('Y-m-d'),
+                            'reported_percentage' => (float) $execProgress->percentage,
+                        ];
+                    })->toArray();
+
+                    return [
+                        'id' => $activity->id,
+                        'description' => $activity->description,
+                        'absolute_weight' => $activityAbsoluteWeight,
+                        'budget'=>$activity->budget,
+                        'accrued_budget'=> $activity->accrued_budget,
+                        'total_progress' => $totalActivityProgress,
+                        'total_completion_percentage' => $totalExecutedPercentage,
+                        'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                        'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                        'users' => ($activity->users ?? collect([]))->map(function ($user) {
+                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre'];
+                        })->toArray(),
+                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
+                            return ['id' => $indicator->id, 'name' => $indicator->name];
+                        })->toArray(),
+                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                            return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
+                        })->toArray(),
+                        'execution_progress' => $executionProgress,
+                    ];
+                });
+
+                $totalProductProgress = $mappedActivities->sum('total_progress');
+
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'status' => $product->status,
+                    'admin_observation' => $product->admin_observation,
+                    'budget'=>$product->budget,
+                    'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
+                    'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
+                    'budget_types_id' => $product->budget_types_id,
+                    'ponderacion' => $product->ponderacion,
+                    'absolute_weight' => $productAbsoluteWeight,
+                    'total_progress' => $totalProductProgress,
+                    'user' => $product->user ? [
+                        'id' => $product->user->id,
+                        'name' => $product->user->name ?? 'Sin nombre',
+                        'last_name' => $product->user->last_name ?? ''
+                    ] : null,
+                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
+                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                    'activities' => $mappedActivities->toArray(),
+                    'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
+                ];
             });
+
+            $totalRubroProgress = $formattedProducts->sum('total_progress');
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Productos obtenidos correctamente',
+                    'code' => 200,
+                ],
+                'data' => [
+                    'total_rubro_progress' => $totalRubroProgress,
+                    'products' => $formattedProducts->values()->toArray(),
+                ]
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error al obtener los productos en getProductsWithActivities: ' . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'Error al obtener los productos: ' . $e->getMessage(),
+                    'code' => 500,
+                ],
+            ], 500);
         }
-
-        // --- Filtros ---
-        if ($request->has('year')) {
-            $query->where('year', $request->input('year'));
-        }
-        if ($request->has('rubro_id') && $request->rubro_id != 'all') {
-            $query->where('rubro_id', $request->input('rubro_id'));
-        }
-        if ($request->has('search') && !empty($request->search)) {
-            $search = $request->input('search');
-            $query->where('name', 'LIKE', "%{$search}%");
-        }
-
-        $query->orderBy('id', 'desc');
-
-        $perPage = $request->input('per_page', 1000);
-
-        // Obtenemos el paginador
-        $paginator = $query->paginate($perPage);
-
-        // Transformamos la colección dentro del paginador usando la función auxiliar
-        $paginator->setCollection($this->transformProductCollection($paginator->getCollection()));
-
-        return $paginator;
     }
-
     public function getAllProductsWithActivities(Request $request)
     {
         try {
@@ -881,12 +813,90 @@ class PlannerController extends Controller
                     'budget_type',
                     'crop',
                     'activities' => function ($query) {
+                        // 1. IMPORTANTE: Agregamos 'monthlyExecutionProgress' a la consulta
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
                     },
                 ])->get();
 
-            // Usamos la misma función de transformación para mantener consistencia
-            $formattedProducts = $this->transformProductCollection($products);
+            $formattedProducts = $products->map(function ($product) {
+
+                $productAbsoluteWeight = (float) $product->ponderacion / 100;
+
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+
+                    $activityWeight = (float) $activity->ponderacion;
+                    $activityAbsoluteWeight = $productAbsoluteWeight * ($activityWeight / 100);
+
+                    $useMonthly = $activity->monthlyExecutionProgress->isNotEmpty();
+
+                    $sourceCollection = $useMonthly
+                        ? $activity->monthlyExecutionProgress
+                        : ($activity->weeklyActivities ?? collect([]));
+
+                    $totalRealProgress = $sourceCollection->sum('percentage'); // Suma directa (0-100)
+                    $totalWeightedProgress = $activityAbsoluteWeight * ($totalRealProgress / 100); // Contribución al proyecto
+
+                    $executionProgress = $sourceCollection->map(function ($item) use ($useMonthly) {
+                        $dateValue = $useMonthly ? $item->month : $item->date;
+
+                        return [
+                            'id' => $item->id,
+                            'week_id' => $useMonthly ? null : $item->id, // Mantener compatibilidad si algo viejo lo usa
+                            'month' => Carbon::parse($dateValue)->format('Y-m-d'),
+                            'date' => Carbon::parse($dateValue)->format('Y-m-d'),
+                            'reported_percentage' => (float) $item->percentage,
+                            'observations' => $item->observations ?? '',
+                        ];
+                    })->toArray();
+
+                    return [
+                        'id' => $activity->id,
+                        'description' => $activity->description,
+                        'accrued_budget'=> $activity->accrued_budget,
+                        'budget' => $activity->budget,
+                        'ponderacion' => $activity->ponderacion,
+                        'relative_weight' => $activityWeight,
+                        'absolute_weight' => $activityAbsoluteWeight,
+                        'total_progress' => $totalWeightedProgress,
+                        'progreso_real' => $totalRealProgress,
+                        'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
+                        'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+                        'user' => $product->user ? [
+                            'id' => $product->user->id,
+                            'name' => $product->user->name ?? 'Sin nombre',
+                            'last_name' => $product->user->last_name ?? '' // <--- AGREGAR ESTO
+                        ] : null,
+                        'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
+                            return ['id' => $indicator->id, 'name' => $indicator->name];
+                        })->toArray(),
+                        'monthly_plannig' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
+                            return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
+                        })->toArray(),
+
+                        // Aquí va el array lleno
+                        'execution_progress' => $executionProgress,
+                    ];
+                });
+
+                $totalProductProgress = $mappedActivities->sum('total_progress');
+
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'ponderacion' => $product->ponderacion,
+                    'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
+                    'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
+                    'budget_type' => $product->budget_type ? $product->budget_type->name : 'Sin definir',
+                    'budget_types_id' => $product->budget_types_id, // <--- CORRECCIÓN IMPORTANTE
+                    'budget' => $product->budget,
+                    'absolute_weight' => $productAbsoluteWeight,
+                    'total_progress' => $totalProductProgress,
+                    'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
+                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
+                    'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                    'activities' => $mappedActivities->toArray(),
+                ];
+            });
 
             $totalRubroProgress = $formattedProducts->sum('total_progress');
 
