@@ -753,7 +753,8 @@ class PlannerController extends Controller
     public function getProductsByLocationId(Request $request, $locationId)
     {
         try {
-            $products = Product::where('location_id', $locationId)
+            // 1. Construcción de la consulta base (sin ejecutar ->get() aún)
+            $query = Product::where('location_id', $locationId)
                 ->whereHas('rubro', function ($query) {
                     $query->where('name', '!=', 'OFICIAL');
                 })
@@ -764,11 +765,47 @@ class PlannerController extends Controller
                     'budget_type',
                     'crop',
                     'activities' => function ($query) {
-                        // 1. IMPORTANTE: Agregamos 'monthlyExecutionProgress' a la consulta
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
                     },
-                ])->get();
+                ]);
 
+            // ---------------------------------------------------------------------
+            // 2. LÓGICA DE VISIBILIDAD (Solo para ADM. CENTRAL)
+            // ---------------------------------------------------------------------
+            $location = Location::find($locationId);
+            $user = $request->user();
+
+            // Aplicar filtro SI:
+            // - La ubicación existe y es 'ADM. CENTRAL'
+            // - El usuario NO es administrador (los admin ven todo)
+            if ($location && trim($location->name) === 'ADM. CENTRAL' && !$user->hasRole('administrador')) {
+
+                // Verificamos si el usuario pertenece a una Unidad Administrativa
+                if (!empty($user->th_administrative_unit_id)) {
+
+                    // Obtenemos los IDs de rubros permitidos para su unidad
+                    $allowedRubroIds = DB::table('admin_poa_visibility')
+                        ->where('th_administrative_unit_id', $user->th_administrative_unit_id)
+                        ->pluck('rubro_id')
+                        ->toArray();
+
+                    if (!empty($allowedRubroIds)) {
+                        // CASO A: Tiene permisos explícitos -> Filtramos por esos rubros
+                        $query->whereIn('rubro_id', $allowedRubroIds);
+                    } else {
+                        // CASO B: Pertenece a una unidad pero no le han asignado rubros -> No ve nada
+                        $query->whereNull('id');
+                    }
+                }
+                // Nota: Si el usuario no tiene unidad administrativa (th_administrative_unit_id null),
+                // verá todo lo de ADM. CENTRAL por defecto (o puedes cambiar esto a que no vea nada).
+            }
+            // ---------------------------------------------------------------------
+
+            // 3. Ejecutar la consulta
+            $products = $query->get();
+
+            // 4. Mapeo y Cálculos (Lógica original)
             $formattedProducts = $products->map(function ($product) {
 
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
@@ -792,7 +829,7 @@ class PlannerController extends Controller
 
                         return [
                             'id' => $item->id,
-                            'week_id' => $useMonthly ? null : $item->id, // Mantener compatibilidad si algo viejo lo usa
+                            'week_id' => $useMonthly ? null : $item->id,
                             'month' => Carbon::parse($dateValue)->format('Y-m-d'),
                             'date' => Carbon::parse($dateValue)->format('Y-m-d'),
                             'reported_percentage' => (float) $item->percentage,
@@ -815,7 +852,7 @@ class PlannerController extends Controller
                         'user' => $product->user ? [
                             'id' => $product->user->id,
                             'name' => $product->user->name ?? 'Sin nombre',
-                            'last_name' => $product->user->last_name ?? '' // <--- AGREGAR ESTO
+                            'last_name' => $product->user->last_name ?? ''
                         ] : null,
                         'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
                             return ['id' => $indicator->id, 'name' => $indicator->name];
@@ -824,7 +861,6 @@ class PlannerController extends Controller
                             return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
                         })->toArray(),
 
-                        // Aquí va el array lleno
                         'execution_progress' => $executionProgress,
                     ];
                 });
@@ -838,7 +874,7 @@ class PlannerController extends Controller
                     'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                     'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                     'budget_type' => $product->budget_type ? $product->budget_type->name : 'Sin definir',
-                    'budget_types_id' => $product->budget_types_id, // <--- CORRECCIÓN IMPORTANTE
+                    'budget_types_id' => $product->budget_types_id,
                     'budget' => $product->budget,
                     'absolute_weight' => $productAbsoluteWeight,
                     'total_progress' => $totalProductProgress,
@@ -873,6 +909,7 @@ class PlannerController extends Controller
             ], 500);
         }
     }
+
     public function getPlannableProductsForCurrentUser(Request $request)
     {
         $user = $request->user();
@@ -930,7 +967,15 @@ class PlannerController extends Controller
      */
     public function reviewProduct(Request $request, $productId)
     {
-        // NOTA: Aquí agregaremos los permisos de Spatie más adelante.
+        if (!auth()->user()->can('poa.review')) {
+            return response()->json([
+                'msg' => [
+                    'summary' => 'No autorizado',
+                    'detail' => 'No tienes permisos para revisar o aprobar productos.',
+                    'code' => 403,
+                ],
+            ], 403);
+        }
 
         $request->validate([
             'status' => 'required|in:approved,rejected,pending',
