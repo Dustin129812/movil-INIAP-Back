@@ -753,10 +753,10 @@ class PlannerController extends Controller
     public function getProductsByLocationId(Request $request, $locationId)
     {
         try {
-            $products = Product::where('location_id', $locationId)
-                ->whereHas('rubro', function ($query) {
-                    $query->where('name', '!=', 'OFICIAL');
-                })
+            $user = $request->user();
+
+            // 1. Consulta Base
+            $query = Product::where('location_id', $locationId)
                 ->with([
                     'location',
                     'rubro',
@@ -764,16 +764,29 @@ class PlannerController extends Controller
                     'budget_type',
                     'crop',
                     'activities' => function ($query) {
-                        // 1. IMPORTANTE: Agregamos 'monthlyExecutionProgress' a la consulta
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
                     },
                 ]);
 
+            // 2. Filtro Lógico: Si NO es admin, ocultamos el OFICIAL.
+            // (Si es admin, no entra al if, por lo que ve todo)
+            if (!$user->hasRole('administrador')) {
+                $query->whereHas('rubro', function ($q) {
+                    $q->where('name', '!=', 'OFICIAL');
+                });
+            }
+
+            // 3. Ejecutar consulta
+            $products = $query->get();
+
+            // 4. Mapeo de datos
             $formattedProducts = $products->map(function ($product) {
 
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
 
-                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
+                // --- AQUÍ ESTABA EL ERROR ---
+                // Agregamos "$product" al use() para que el closure lo conozca
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight, $product) {
 
                     $activityWeight = (float) $activity->ponderacion;
                     $activityAbsoluteWeight = $productAbsoluteWeight * ($activityWeight / 100);
@@ -784,15 +797,15 @@ class PlannerController extends Controller
                         ? $activity->monthlyExecutionProgress
                         : ($activity->weeklyActivities ?? collect([]));
 
-                    $totalRealProgress = $sourceCollection->sum('percentage'); // Suma directa (0-100)
-                    $totalWeightedProgress = $activityAbsoluteWeight * ($totalRealProgress / 100); // Contribución al proyecto
+                    $totalRealProgress = $sourceCollection->sum('percentage');
+                    $totalWeightedProgress = $activityAbsoluteWeight * ($totalRealProgress / 100);
 
                     $executionProgress = $sourceCollection->map(function ($item) use ($useMonthly) {
                         $dateValue = $useMonthly ? $item->month : $item->date;
 
                         return [
                             'id' => $item->id,
-                            'week_id' => $useMonthly ? null : $item->id, // Mantener compatibilidad si algo viejo lo usa
+                            'week_id' => $useMonthly ? null : $item->id,
                             'month' => Carbon::parse($dateValue)->format('Y-m-d'),
                             'date' => Carbon::parse($dateValue)->format('Y-m-d'),
                             'reported_percentage' => (float) $item->percentage,
@@ -812,19 +825,20 @@ class PlannerController extends Controller
                         'progreso_real' => $totalRealProgress,
                         'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
                         'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
+
+                        // AHORA SÍ FUNCIONARÁ ESTO PORQUE $product YA EXISTE EN ESTE SCOPE
                         'user' => $product->user ? [
                             'id' => $product->user->id,
                             'name' => $product->user->name ?? 'Sin nombre',
-                            'last_name' => $product->user->last_name ?? '' // <--- AGREGAR ESTO
+                            'last_name' => $product->user->last_name ?? ''
                         ] : null,
+
                         'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
                             return ['id' => $indicator->id, 'name' => $indicator->name];
                         })->toArray(),
                         'monthly_planning' => ($activity->monthlyProgress ?? collect([]))->map(function ($progress) {
                             return ['month' => Carbon::parse($progress->month)->format('Y-m-d'), 'percentage' => $progress->percentage];
                         })->toArray(),
-
-                        // Aquí va el array lleno
                         'execution_progress' => $executionProgress,
                     ];
                 });
@@ -838,7 +852,7 @@ class PlannerController extends Controller
                     'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                     'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                     'budget_type' => $product->budget_type ? $product->budget_type->name : 'Sin definir',
-                    'budget_types_id' => $product->budget_types_id, // <--- CORRECCIÓN IMPORTANTE
+                    'budget_types_id' => $product->budget_types_id,
                     'budget' => $product->budget,
                     'absolute_weight' => $productAbsoluteWeight,
                     'total_progress' => $totalProductProgress,
@@ -877,21 +891,40 @@ class PlannerController extends Controller
     {
         $user = $request->user();
         $user->load('groups');
-        $officialRubro = Rubro::whereRaw('LOWER(name) = ?', ['oficial'])->first();
+
+        // 1. Identificar ID del Rubro 'OFICIAL'
+        // Usamos 'LIKE' para mayor seguridad por si está escrito "Oficial" o "OFICIAL"
+        $officialRubro = Rubro::where('name', 'LIKE', '%OFICIAL%')->first();
         $officialRubroId = $officialRubro ? $officialRubro->id : null;
+
         $officialProducts = collect();
+
+        // =========================================================================
+        // PASO 1: OBTENER EXTRA POA (OFICIAL) - ¡SIN CONDICIONES DE EQUIPO!
+        // =========================================================================
+        // Esta consulta corre SIEMPRE, tenga o no tenga equipo el usuario.
+        // La única condición es que el producto sea del rubro OFICIAL y de su misma ubicación.
         if ($officialRubroId) {
             $officialProducts = Product::where('rubro_id', $officialRubroId)
+                ->where('location_id', $user->location_id)
                 ->with(['activities.users', 'rubro', 'user', 'location'])
                 ->get();
         }
+
+        // =========================================================================
+        // PASO 2: OBTENER PRODUCTOS ESPECÍFICOS (Proyectos de Investigación/Inversión)
+        // =========================================================================
         $specificProducts = collect();
+
         if ($user->groups->isNotEmpty()) {
+            // CASO A: TIENE GRUPO DE TRABAJO
+            // Buscamos productos según los rubros/ubicaciones que su grupo tiene permitidos
             $groupPermissions = $user->groups->map(function ($group) {
                 return ['rubro_id' => $group->rubro_id, 'location_id' => $group->location_id];
             })->unique(function ($item) {
                 return $item['rubro_id'] . '-' . $item['location_id'];
             });
+
             if ($groupPermissions->isNotEmpty()) {
                 $query = Product::query();
                 $query->where(function ($q) use ($groupPermissions) {
@@ -902,26 +935,44 @@ class PlannerController extends Controller
                         });
                     }
                 });
+
+                // Excluimos el oficial aquí para no duplicar la consulta (ya lo trajimos arriba)
                 if ($officialRubroId) {
                     $query->where('rubro_id', '!=', $officialRubroId);
                 }
+
                 $specificProducts = $query->with(['activities.users', 'rubro', 'user', 'location'])->get();
             }
-        }
-        else {
+
+        } else {
+            // CASO B: NO TIENE GRUPO (Usuario Individual)
+            // Aquí estaba el problema antes: si entraba aquí, solo buscaba asignaciones directas.
+            // Ahora, como el Extra POA ya se cargó arriba, aquí solo nos preocupamos por
+            // lo que sea "propiedad" del usuario.
+
             $query = Product::query();
             $query->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                    ->orWhereHas('activities.users', function($subQ) use ($user) {
-                        $subQ->where('users.id', $user->id);
-                    });
+                $q->where('user_id', $user->id) // Es el responsable del producto
+                ->orWhereHas('activities.users', function($subQ) use ($user) {
+                    $subQ->where('users.id', $user->id); // Es responsable de una actividad
+                });
             });
+
             if ($officialRubroId) {
                 $query->where('rubro_id', '!=', $officialRubroId);
             }
+
             $specificProducts = $query->with(['activities.users', 'rubro', 'user', 'location'])->get();
         }
+
+        // =========================================================================
+        // PASO 3: UNIR RESULTADOS
+        // =========================================================================
+        // Combinamos la lista OFICIAL (que ve todo mundo en la estación)
+        // con la lista ESPECÍFICA (que ve solo el responsable/grupo).
+
         $allPlannableProducts = $officialProducts->merge($specificProducts)->unique('id');
+
         return response()->json(['data' => $allPlannableProducts->values()]);
     }
 
