@@ -574,7 +574,6 @@ class PlannerController extends Controller
                                 ];
                             })->toArray(),
 
-                            // Se mapea la colección de indicadores, igual que se hace con los usuarios.
                             'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicators) {
                                 return [
                                     'id' => $indicators->id,
@@ -588,14 +587,10 @@ class PlannerController extends Controller
                                     'percentage' => $progress->percentage,
                                 ];
                             })->toArray(),
-                            // Mapea las weeklyActivities para formar el array execution_progress
-                            // Lógica de cálculo basada en la ponderación de la actividad
                             'execution_progress' => ($activity->weeklyActivities ?? collect([]))->map(function ($weekActivity) use ($activity) {
                                 $activityPonderacion = (float) $activity->ponderacion;
                                 $weekActivityPercentage = (float) $weekActivity->percentage;
 
-                                // Cálculo: (Ponderación de la Actividad / 100) * Porcentaje de Avance Semanal
-                                // Ejemplo: (25 / 100) * 50 = 12.5
                                 $effectivePercentage = ($activityPonderacion / 100) * $weekActivityPercentage;
 
                                 return [
@@ -607,7 +602,7 @@ class PlannerController extends Controller
                         ];
                     })->toArray(),
                 ];
-            })->values()->toArray(); // Usamos values() para re-indexar el array después de filter()
+            })->values()->toArray();
 
             return response()->json([
                 'msg' => [
@@ -633,36 +628,30 @@ class PlannerController extends Controller
         try {
             $userId = $request->user()->id;
 
-            // Conteo de productos asociados (ya existente)
             $totalAssociatedProducts = Product::whereUserRelated($userId)->count();
 
-            // Conteo de actividades donde el usuario es responsable (ya existente)
             $activitiesAsResearcherCount = Activity::whereHas('users', function ($query) use ($userId) {
                 $query->where('users.id', $userId);
             })->count();
 
-            // --- Nuevas métricas ---
-
-            // 1. Conteo de actividades completadas (con 100% de progreso en el último registro de ejecución)
             $completedActivitiesCount = 0;
             $userActivitiesWithProgress = Activity::whereHas('users', function ($query) use ($userId) {
                 $query->where('users.id', $userId);
             })->with(['executionProgress' => function ($query) {
-                $query->orderBy('month', 'desc'); // Asegura que el progreso más reciente esté al principio
+                $query->orderBy('month', 'desc');
             }])->get();
 
             foreach ($userActivitiesWithProgress as $activity) {
-                $latestExecution = $activity->executionProgress->first(); // Obtiene el último registro
+                $latestExecution = $activity->executionProgress->first();
                 if ($latestExecution && $latestExecution->percentage === 100) {
                     $completedActivitiesCount++;
                 }
             }
 
-            // 2. Meta de progreso mensual y progreso actual para el mes en curso
             $currentMonth = Carbon::now()->startOfMonth();
             $totalPlannedPercentage = 0;
             $totalExecutedPercentage = 0;
-            $activitiesCountForMonthlyMetrics = 0; // Para calcular el promedio
+            $activitiesCountForMonthlyMetrics = 0;
 
             $userActivitiesForMonthlyProgress = Activity::whereHas('users', function ($query) use ($userId) {
                 $query->where('users.id', $userId);
@@ -680,21 +669,18 @@ class PlannerController extends Controller
                 $planned = $activity->monthlyProgress->first();
                 $executed = $activity->executionProgress->first();
 
-                // Suma el porcentaje si existe un registro para el mes actual
                 if ($planned) {
                     $totalPlannedPercentage += $planned->percentage;
-                    $activitiesCountForMonthlyMetrics++; // Cuenta solo las actividades que tienen un plan para el mes
+                    $activitiesCountForMonthlyMetrics++;
                 }
                 if ($executed) {
                     $totalExecutedPercentage += $executed->percentage;
-                    // Si una actividad tiene ejecución pero no planificado para el mes, también la contamos para el promedio
-                    if (!$planned) { // Evita duplicar el conteo si ya se sumó por 'planned'
+                    if (!$planned) {
                         $activitiesCountForMonthlyMetrics++;
                     }
                 }
             }
 
-            // Calcula los promedios, evitando división por cero
             $userPlannedMonthlyAverageProgress = $activitiesCountForMonthlyMetrics > 0 ?
                 round($totalPlannedPercentage / $activitiesCountForMonthlyMetrics, 2) : 0;
             $userActualMonthlyAverageProgress = $activitiesCountForMonthlyMetrics > 0 ?
@@ -755,7 +741,6 @@ class PlannerController extends Controller
         try {
             $user = $request->user();
 
-            // 1. Consulta Base
             $query = Product::where('location_id', $locationId)
                 ->with([
                     'location',
@@ -767,25 +752,17 @@ class PlannerController extends Controller
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
                     },
                 ]);
-
-            // 2. Filtro Lógico: Si NO es admin, ocultamos el OFICIAL.
-            // (Si es admin, no entra al if, por lo que ve todo)
             if (!$user->hasRole('administrador')) {
                 $query->whereHas('rubro', function ($q) {
                     $q->where('name', '!=', 'OFICIAL');
                 });
             }
 
-            // 3. Ejecutar consulta
             $products = $query->get();
 
-            // 4. Mapeo de datos
             $formattedProducts = $products->map(function ($product) {
 
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
-
-                // --- AQUÍ ESTABA EL ERROR ---
-                // Agregamos "$product" al use() para que el closure lo conozca
                 $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight, $product) {
 
                     $activityWeight = (float) $activity->ponderacion;
@@ -892,33 +869,19 @@ class PlannerController extends Controller
         $user = $request->user();
         $user->load('groups');
 
-        // 1. Identificar ID del Rubro 'OFICIAL'
-        // Usamos 'LIKE' para mayor seguridad por si está escrito "Oficial" o "OFICIAL"
         $officialRubro = Rubro::where('name', 'LIKE', '%OFICIAL%')->first();
         $officialRubroId = $officialRubro ? $officialRubro->id : null;
 
         $officialProducts = collect();
-
-        // =========================================================================
-        // PASO 1: OBTENER EXTRA POA (OFICIAL) - ¡SIN CONDICIONES DE EQUIPO!
-        // =========================================================================
-        // Esta consulta corre SIEMPRE, tenga o no tenga equipo el usuario.
-        // La única condición es que el producto sea del rubro OFICIAL y de su misma ubicación.
         if ($officialRubroId) {
             $officialProducts = Product::where('rubro_id', $officialRubroId)
                 ->where('location_id', $user->location_id)
                 ->with(['activities.users', 'rubro', 'user', 'location'])
                 ->get();
         }
-
-        // =========================================================================
-        // PASO 2: OBTENER PRODUCTOS ESPECÍFICOS (Proyectos de Investigación/Inversión)
-        // =========================================================================
         $specificProducts = collect();
 
         if ($user->groups->isNotEmpty()) {
-            // CASO A: TIENE GRUPO DE TRABAJO
-            // Buscamos productos según los rubros/ubicaciones que su grupo tiene permitidos
             $groupPermissions = $user->groups->map(function ($group) {
                 return ['rubro_id' => $group->rubro_id, 'location_id' => $group->location_id];
             })->unique(function ($item) {
@@ -936,7 +899,6 @@ class PlannerController extends Controller
                     }
                 });
 
-                // Excluimos el oficial aquí para no duplicar la consulta (ya lo trajimos arriba)
                 if ($officialRubroId) {
                     $query->where('rubro_id', '!=', $officialRubroId);
                 }
@@ -945,16 +907,11 @@ class PlannerController extends Controller
             }
 
         } else {
-            // CASO B: NO TIENE GRUPO (Usuario Individual)
-            // Aquí estaba el problema antes: si entraba aquí, solo buscaba asignaciones directas.
-            // Ahora, como el Extra POA ya se cargó arriba, aquí solo nos preocupamos por
-            // lo que sea "propiedad" del usuario.
-
             $query = Product::query();
             $query->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id) // Es el responsable del producto
+                $q->where('user_id', $user->id)
                 ->orWhereHas('activities.users', function($subQ) use ($user) {
-                    $subQ->where('users.id', $user->id); // Es responsable de una actividad
+                    $subQ->where('users.id', $user->id);
                 });
             });
 
@@ -964,13 +921,6 @@ class PlannerController extends Controller
 
             $specificProducts = $query->with(['activities.users', 'rubro', 'user', 'location'])->get();
         }
-
-        // =========================================================================
-        // PASO 3: UNIR RESULTADOS
-        // =========================================================================
-        // Combinamos la lista OFICIAL (que ve todo mundo en la estación)
-        // con la lista ESPECÍFICA (que ve solo el responsable/grupo).
-
         $allPlannableProducts = $officialProducts->merge($specificProducts)->unique('id');
 
         return response()->json(['data' => $allPlannableProducts->values()]);
