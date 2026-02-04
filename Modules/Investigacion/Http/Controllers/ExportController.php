@@ -47,7 +47,7 @@ class ExportController extends Controller
             'GASTO CORRIENTE'   => 3
         ];
 
-        // 3. ORDENAR LA COLECCIÓN (CORREGIDO EL ERROR DE TRIM)
+        // 3. ORDENAR LA COLECCIÓN
         $products = collect($products)->sort(function ($a, $b) use ($prioridadFuentes) {
             // Criterio 1: Rubro ID
             $rubroA = $a['rubro']['id'] ?? 0;
@@ -59,15 +59,12 @@ class ExportController extends Controller
             }
 
             // Criterio 2: Fuente
-            // Obtenemos el valor crudo
             $rawA = $a['fund_source'] ?? $a['budget_type'] ?? '';
             $rawB = $b['fund_source'] ?? $b['budget_type'] ?? '';
 
-            // --- CORRECCIÓN: Si es array, buscamos 'name', si no, lo usamos tal cual ---
             $valA = is_array($rawA) ? ($rawA['name'] ?? '') : $rawA;
             $valB = is_array($rawB) ? ($rawB['name'] ?? '') : $rawB;
 
-            // Aseguramos que sea string antes de hacer trim
             $fuenteA = mb_strtoupper(trim((string)$valA));
             $fuenteB = mb_strtoupper(trim((string)$valB));
 
@@ -88,6 +85,16 @@ class ExportController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
+        // --- LÓGICA DE ETIQUETAS DINÁMICAS (SINGLE LOCATION) ---
+        $userLocationName = auth()->user()->location['name'] ?? 'Sistema';
+        $isAdmCentral = ($userLocationName === 'ADM. CENTRAL');
+
+        // Definimos los textos basados en la ubicación
+        $labelRubro     = $isAdmCentral ? "Dirección/ Unidad: "      : "Rubro: ";
+        $labelProducto  = $isAdmCentral ? "Gestión: "       : "Producto: ";
+        $labelActividad = $isAdmCentral ? "Entregable: "    : "Actividad: ";
+        // -------------------------------------------------------
+
         // --- ENCABEZADOS ---
         $sheet->setCellValue('A1', 'Reporte de Planificacion POA');
         $sheet->mergeCells('A1:AI1');
@@ -99,7 +106,7 @@ class ExportController extends Controller
         $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
         $sheet->mergeCells('A2:AI2');
 
-        $sheet->setCellValue('A3', 'Locación: ' . (auth()->user()->location['name'] ?? 'Sistema'));
+        $sheet->setCellValue('A3', 'Locación: ' . $userLocationName);
         $sheet->mergeCells('A3:AI3');
 
         $sheet->setCellValue('A4', 'Generado por: ' . (auth()->user()->name ?? 'Sistema'));
@@ -107,7 +114,8 @@ class ExportController extends Controller
 
         // Tabla Header
         $headers = [
-            "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
+            $isAdmCentral ? "Entregable" : "Producto / Actividad",
+            "Descripción", "Responsable", "Indicadores",
             "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
             "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
             "Plan Jul","Plan Ago","Plan Sep","Plan Oct","Plan Nov","Plan Dic",
@@ -131,9 +139,10 @@ class ExportController extends Controller
             $rubro = $product['rubro'] ?? [];
             $currentRubroId = $rubro['id'] ?? 0;
 
-            // --- A. RUBRO ---
+            // --- A. RUBRO (O ESTATUTO) ---
             if ($currentRubroId !== $lastRubroId) {
-                $sheet->setCellValue("A{$row}", "Rubro: " . ($rubro['name'] ?? 'Sin Rubro'));
+                // Usamos la variable $labelRubro
+                $sheet->setCellValue("A{$row}", $labelRubro . ($rubro['name'] ?? 'Sin Clasificación'));
                 $sheet->mergeCells("A{$row}:D{$row}");
 
                 $totalRubro = $totalesPorRubro[$currentRubroId] ?? 0;
@@ -150,13 +159,12 @@ class ExportController extends Controller
                 $lastRubroId = $currentRubroId;
             }
 
-            // --- B. PRODUCTO ---
-            $sheet->setCellValue("A{$row}", "Producto: " . ($product['name'] ?? ''));
+            // --- B. PRODUCTO (O GESTIÓN) ---
+            // Usamos la variable $labelProducto
+            $sheet->setCellValue("A{$row}", $labelProducto . ($product['name'] ?? ''));
             $sheet->setCellValue("E{$row}", $product['budget'] ?? 0);
 
-            // --- CORRECCIÓN EN IMPRESIÓN TAMBIÉN ---
             $rawSource = $product['fund_source'] ?? $product['budget_type'] ?? '';
-            // Si es array extraemos el nombre, si es string lo dejamos
             $sourceText = is_array($rawSource) ? ($rawSource['name'] ?? '') : $rawSource;
 
             $sheet->setCellValue("F{$row}", $sourceText);
@@ -171,7 +179,7 @@ class ExportController extends Controller
 
             $row++;
 
-            // --- C. ACTIVIDADES ---
+            // --- C. ACTIVIDADES (O ENTREGABLES) ---
             $activities = $product['activities'] ?? [];
 
             if (!empty($activities) && is_array($activities)) {
@@ -210,8 +218,9 @@ class ExportController extends Controller
                         }
                     }
 
+                    // Usamos la variable $labelActividad
                     $rowData = array_merge([
-                        "Actividad: ",
+                        $labelActividad, // <-- AQUÍ CAMBIA EL PREFIJO
                         $activity['description'] ?? '',
                         $responsables,
                         $indicadores,
@@ -298,6 +307,15 @@ class ExportController extends Controller
 
         foreach ($groupedProducts as $locationName => $productsList) {
 
+            // --- LÓGICA DE ETIQUETAS DINÁMICAS (MULTI LOCATION) ---
+            // Aquí determinamos etiquetas POR CADA HOJA según el nombre de la locación
+            $isAdmCentral = ($locationName === 'ADM. CENTRAL');
+
+            $labelRubro     = $isAdmCentral ? "Dirección/Unidad: "      : "Rubro: ";
+            $labelProducto  = $isAdmCentral ? "Gestión: "       : "Producto: ";
+            $labelActividad = $isAdmCentral ? "Entregable: "    : "Actividad: ";
+            // ------------------------------------------------------
+
             $products = collect($productsList)->sort(function ($a, $b) use ($prioridadFuentes) {
                 $rubroA = (isset($a['rubro']) && is_array($a['rubro'])) ? ($a['rubro']['id'] ?? 0) : 0;
                 $rubroB = (isset($b['rubro']) && is_array($b['rubro'])) ? ($b['rubro']['id'] ?? 0) : 0;
@@ -343,7 +361,8 @@ class ExportController extends Controller
             $sheet->mergeCells('A4:AI4');
 
             $headers = [
-                "Producto / Actividad", "Descripción", "Responsable", "Indicadores",
+                $isAdmCentral ? "Gestión / Entregable" : "Producto / Actividad", // Header dinámico
+                "Descripción", "Responsable", "Indicadores",
                 "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
                 "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
                 "Plan Jul","Plan Ago","Plan Sep","Plan Oct","Plan Nov","Plan Dic",
@@ -368,7 +387,8 @@ class ExportController extends Controller
                 $currentRubroId = $rubro['id'] ?? 0;
 
                 if ($currentRubroId !== $lastRubroId) {
-                    $sheet->setCellValue("A{$row}", "Rubro: " . ($rubro['name'] ?? 'Sin Rubro'));
+                    // Usamos variable $labelRubro
+                    $sheet->setCellValue("A{$row}", $labelRubro . ($rubro['name'] ?? 'Sin Rubro'));
                     $sheet->mergeCells("A{$row}:D{$row}");
                     $sheet->setCellValue("E{$row}", $totalesPorRubro[$currentRubroId] ?? 0);
 
@@ -382,7 +402,8 @@ class ExportController extends Controller
                     $lastRubroId = $currentRubroId;
                 }
 
-                $sheet->setCellValue("A{$row}", "Producto: " . ($product['name'] ?? ''));
+                // Usamos variable $labelProducto
+                $sheet->setCellValue("A{$row}", $labelProducto . ($product['name'] ?? ''));
                 $sheet->setCellValue("E{$row}", $product['budget'] ?? 0);
                 $sheet->setCellValue("F{$row}", $product['fund_source'] ?? $product['budget_type'] ?? '');
 
@@ -431,8 +452,9 @@ class ExportController extends Controller
                             }
                         }
 
+                        // Usamos variable $labelActividad
                         $rowData = array_merge([
-                            "Actividad: ",
+                            $labelActividad, // <-- CAMBIO AQUÍ
                             $activity['description'] ?? '',
                             $responsables,
                             $indicadores,
