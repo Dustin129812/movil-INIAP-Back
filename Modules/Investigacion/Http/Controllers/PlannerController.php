@@ -745,13 +745,15 @@ class PlannerController extends Controller
                 ->with([
                     'location',
                     'rubro',
-                    'user',
+                    'users', // <--- CAMBIO 1: Cargamos la relación 'users' (pivote), no solo 'user'
+                    'user',  // Mantenemos 'user' por si acaso tienes datos legacy en la columna user_id
                     'budget_type',
                     'crop',
                     'activities' => function ($query) {
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities', 'monthlyExecutionProgress']);
                     },
                 ]);
+
             if (!$user->hasRole('administrador')) {
                 $query->whereHas('rubro', function ($q) {
                     $q->where('name', '!=', 'OFICIAL');
@@ -763,23 +765,19 @@ class PlannerController extends Controller
             $formattedProducts = $products->map(function ($product) {
 
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
-                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight, $product) {
 
+                // --- Mapeo de Actividades (Ya corregido anteriormente) ---
+                $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
                     $activityWeight = (float) $activity->ponderacion;
                     $activityAbsoluteWeight = $productAbsoluteWeight * ($activityWeight / 100);
 
                     $useMonthly = $activity->monthlyExecutionProgress->isNotEmpty();
-
-                    $sourceCollection = $useMonthly
-                        ? $activity->monthlyExecutionProgress
-                        : ($activity->weeklyActivities ?? collect([]));
-
+                    $sourceCollection = $useMonthly ? $activity->monthlyExecutionProgress : ($activity->weeklyActivities ?? collect([]));
                     $totalRealProgress = $sourceCollection->sum('percentage');
                     $totalWeightedProgress = $activityAbsoluteWeight * ($totalRealProgress / 100);
 
                     $executionProgress = $sourceCollection->map(function ($item) use ($useMonthly) {
                         $dateValue = $useMonthly ? $item->month : $item->date;
-
                         return [
                             'id' => $item->id,
                             'week_id' => $useMonthly ? null : $item->id,
@@ -802,14 +800,12 @@ class PlannerController extends Controller
                         'progreso_real' => $totalRealProgress,
                         'start_date' => $activity->start_date ? Carbon::parse($activity->start_date)->format('Y-m-d') : null,
                         'end_date'   => $activity->end_date ? Carbon::parse($activity->end_date)->format('Y-m-d') : null,
-
-                        // AHORA SÍ FUNCIONARÁ ESTO PORQUE $product YA EXISTE EN ESTE SCOPE
-                        'user' => $product->user ? [
-                            'id' => $product->user->id,
-                            'name' => $product->user->name ?? 'Sin nombre',
-                            'last_name' => $product->user->last_name ?? ''
-                        ] : null,
-
+                        'users' => ($activity->users ?? collect([]))->map(function ($user) {
+                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre', 'last_name' => $user->last_name ?? ''];
+                        })->toArray(),
+                        'user' => ($activity->users ?? collect([]))->map(function ($user) { // Compatibilidad
+                            return ['id' => $user->id, 'name' => $user->name ?? 'Sin nombre', 'last_name' => $user->last_name ?? ''];
+                        })->toArray(),
                         'indicators' => ($activity->indicators ?? collect([]))->map(function ($indicator) {
                             return ['id' => $indicator->id, 'name' => $indicator->name];
                         })->toArray(),
@@ -822,20 +818,36 @@ class PlannerController extends Controller
 
                 $totalProductProgress = $mappedActivities->sum('total_progress');
 
+                // --- CAMBIO 2: Determinación Correcta del Usuario Responsable ---
+                // Prioridad 1: Relación 'users' (pivote que usa el sync)
+                // Prioridad 2: Relación 'user' (legacy user_id column)
+                $responsibleUser = $product->users->first() ?? $product->user;
+
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
                     'ponderacion' => $product->ponderacion,
                     'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
+                    // Enviamos IDs crudos para mayor seguridad en el frontend
+                    'crop_id' => $product->crop_id,
                     'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                     'budget_type' => $product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'budget_types_id' => $product->budget_types_id,
                     'budget' => $product->budget,
                     'absolute_weight' => $productAbsoluteWeight,
                     'total_progress' => $totalProductProgress,
-                    'user' => $product->user ? ['id' => $product->user->id, 'name' => $product->user->name ?? 'Sin nombre'] : null,
+
+                    // Objeto de Usuario Corregido
+                    'user' => $responsibleUser ? [
+                        'id' => $responsibleUser->id,
+                        'name' => $responsibleUser->name ?? 'Sin nombre',
+                        'last_name' => $responsibleUser->last_name ?? ''
+                    ] : null,
+                    'user_id' => $responsibleUser ? $responsibleUser->id : null, // ID directo para facilitar binding
+
                     'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
+                    'rubro_id' => $product->rubro_id, // ID directo
                     'activities' => $mappedActivities->toArray(),
                 ];
             });
