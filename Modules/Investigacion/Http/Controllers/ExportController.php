@@ -10,15 +10,86 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Illuminate\Support\Str;
 
 class ExportController extends Controller
 {
+    /**
+     * Función auxiliar para filtrar productos
+     */
+    private function applyFilters($products, Request $request)
+    {
+        return collect($products)->filter(function ($product) use ($request) {
+
+            // 1. Filtro Global
+            if ($search = $request->get('global')) {
+                $search = mb_strtolower($search);
+                $found = false;
+
+                if (str_contains(mb_strtolower($product['name'] ?? ''), $search)) $found = true;
+                if (str_contains(mb_strtolower($product['description'] ?? ''), $search)) $found = true;
+                if (str_contains(mb_strtolower($product['rubro']['name'] ?? ''), $search)) $found = true;
+
+                $activities = $product['activities'] ?? [];
+                foreach ($activities as $act) {
+                    if (str_contains(mb_strtolower($act['description'] ?? ''), $search)) $found = true;
+                    $inds = $act['indicators'] ?? $act['performance_indicators'] ?? [];
+                    foreach ($inds as $ind) {
+                        if (str_contains(mb_strtolower($ind['name'] ?? ''), $search)) $found = true;
+                    }
+                }
+                if (!$found) return false;
+            }
+
+            // 2. Filtro Año
+            if ($year = $request->get('year')) {
+                $pYear = isset($product['create_at']) ? substr($product['create_at'], 0, 4) : null;
+                if (!$pYear && !empty($product['activities'][0]['start_date'])) {
+                    $pYear = substr($product['activities'][0]['start_date'], 0, 4);
+                }
+                if ($pYear != $year) return false;
+            }
+
+            // 3. Filtro Rubro
+            if ($rubro = $request->get('rubro')) {
+                if (($product['rubro']['name'] ?? '') !== $rubro) return false;
+            }
+
+            // 4. Filtro Responsable
+            if ($responsible = $request->get('responsible')) {
+                $searchRes = mb_strtolower($responsible);
+                $foundRes = false;
+                $pUser = ($product['user']['name'] ?? '') . ' ' . ($product['user']['last_name'] ?? '');
+                if (str_contains(mb_strtolower($pUser), $searchRes)) $foundRes = true;
+
+                if (!$foundRes) {
+                    $activities = $product['activities'] ?? [];
+                    foreach ($activities as $act) {
+                        $users = $act['users'] ?? [];
+                        foreach ($users as $u) {
+                            $uName = ($u['name'] ?? '') . ' ' . ($u['last_name'] ?? '');
+                            if (str_contains(mb_strtolower($uName), $searchRes)) $foundRes = true;
+                        }
+                    }
+                }
+                if (!$foundRes) return false;
+            }
+
+            // 5. Filtro Tipo Presupuesto
+            if ($budgetType = $request->get('budgetType')) {
+                $pType = $product['budget_type']['name'] ?? $product['budget_type'] ?? '';
+                if ($pType !== $budgetType) return false;
+            }
+
+            return true;
+        })->values()->all();
+    }
+
     public function exportPlanificacion(Request $request)
     {
-        // 1. OBTENER DATOS Y NORMALIZAR
+        // 1. OBTENER DATOS
         $response = app(PlannerController::class)->getProductsWithActivities($request);
 
-        // --- NORMALIZACIÓN PROFUNDA ---
         if ($response instanceof \Illuminate\Http\JsonResponse) {
             $dataRaw = $response->getData(true);
         } elseif ($response instanceof \Illuminate\Contracts\Support\Arrayable) {
@@ -32,36 +103,37 @@ class ExportController extends Controller
             ?? $dataRaw['data']
             ?? $dataRaw;
 
-        // Convertimos todo a array puro
         $products = json_decode(json_encode($productsSource), true);
 
         if (!is_array($products)) {
             $products = [];
         }
 
-        // 2. DEFINIR PRIORIDADES DE FUENTE
+        // 2. APLICAR FILTROS
+        $products = $this->applyFilters($products, $request);
+
+        // 3. DEFINIR PRIORIDADES
         $prioridadFuentes = [
-            'INVERSIÓN EXTERNA' => 1,
-            'INVERSION EXTERNA' => 1,
-            'FIASA'             => 2,
-            'GASTO CORRIENTE'   => 3
+            'INVERSIÓN EXTERNA' => 1, 'INVERSION EXTERNA' => 1,
+            'FIASA' => 2,
+            'GASTO CORRIENTE' => 3
         ];
 
-        // 3. ORDENAR LA COLECCIÓN
+        // 4. ORDENAR LA COLECCIÓN (AQUÍ ESTABA EL ERROR)
         $products = collect($products)->sort(function ($a, $b) use ($prioridadFuentes) {
             // Criterio 1: Rubro ID
             $rubroA = $a['rubro']['id'] ?? 0;
             $rubroB = $b['rubro']['id'] ?? 0;
 
-            $rubroCompare = $rubroA <=> $rubroB;
-            if ($rubroCompare !== 0) {
-                return $rubroCompare;
+            // CORRECCIÓN: Guardamos el resultado en una variable
+            $cmpRubro = $rubroA <=> $rubroB;
+            if ($cmpRubro !== 0) {
+                return $cmpRubro;
             }
 
             // Criterio 2: Fuente
             $rawA = $a['fund_source'] ?? $a['budget_type'] ?? '';
             $rawB = $b['fund_source'] ?? $b['budget_type'] ?? '';
-
             $valA = is_array($rawA) ? ($rawA['name'] ?? '') : $rawA;
             $valB = is_array($rawB) ? ($rawB['name'] ?? '') : $rawB;
 
@@ -74,45 +146,36 @@ class ExportController extends Controller
             return $pesoA <=> $pesoB;
         })->values()->all();
 
-        // 4. CALCULAR TOTALES POR RUBRO
+        // 5. CALCULAR TOTALES
         $totalesPorRubro = collect($products)->groupBy(function ($item) {
             return $item['rubro']['id'] ?? 0;
         })->map(function ($items) {
             return $items->sum('budget');
         });
 
-        // 5. INICIAR EXCEL
+        // 6. EXCEL
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // --- LÓGICA DE ETIQUETAS DINÁMICAS (SINGLE LOCATION) ---
         $userLocationName = auth()->user()->location['name'] ?? 'Sistema';
-        $isAdmCentral = ($userLocationName === 'ADM. CENTRAL');
+        $isAdmCentral = ($userLocationName === 'ADM. CENTRAL' || $userLocationName === 'ADM CENTRAL');
 
-        // Definimos los textos basados en la ubicación
-        $labelRubro     = $isAdmCentral ? "Dirección/ Unidad: "      : "Rubro: ";
-        $labelProducto  = $isAdmCentral ? "Gestión: "       : "Producto: ";
-        $labelActividad = $isAdmCentral ? "Entregable: "    : "Actividad: ";
-        // -------------------------------------------------------
+        $labelRubro     = $isAdmCentral ? "Dirección/Unidad: " : "Rubro: ";
+        $labelProducto  = $isAdmCentral ? "Gestión: "          : "Producto: ";
+        $labelActividad = $isAdmCentral ? "Entregable: "       : "Actividad: ";
 
-        // --- ENCABEZADOS ---
+        // HEADERS
         $sheet->setCellValue('A1', 'Reporte de Planificacion POA');
         $sheet->mergeCells('A1:AI1');
-        $sheet->getStyle('A1')->applyFromArray([
-            'font' => ['bold' => true, 'size' => 16],
-            'alignment' => ['horizontal' => 'center', 'vertical' => 'center']
-        ]);
+        $sheet->getStyle('A1')->applyFromArray(['font' => ['bold' => true, 'size' => 16], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']]);
 
         $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
         $sheet->mergeCells('A2:AI2');
-
         $sheet->setCellValue('A3', 'Locación: ' . $userLocationName);
         $sheet->mergeCells('A3:AI3');
-
         $sheet->setCellValue('A4', 'Generado por: ' . (auth()->user()->name ?? 'Sistema'));
         $sheet->mergeCells('A4:AI4');
 
-        // Tabla Header
         $headers = [
             $isAdmCentral ? "Entregable" : "Producto / Actividad",
             "Descripción", "Responsable", "Indicadores",
@@ -139,35 +202,24 @@ class ExportController extends Controller
             $rubro = $product['rubro'] ?? [];
             $currentRubroId = $rubro['id'] ?? 0;
 
-            // --- A. RUBRO (O ESTATUTO) ---
             if ($currentRubroId !== $lastRubroId) {
-                // Usamos la variable $labelRubro
                 $sheet->setCellValue("A{$row}", $labelRubro . ($rubro['name'] ?? 'Sin Clasificación'));
                 $sheet->mergeCells("A{$row}:D{$row}");
-
-                $totalRubro = $totalesPorRubro[$currentRubroId] ?? 0;
-                $sheet->setCellValue("E{$row}", $totalRubro);
-
+                $sheet->setCellValue("E{$row}", $totalesPorRubro[$currentRubroId] ?? 0);
                 $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                     'font' => ['bold' => true],
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '68A829']],
                     'alignment' => ['vertical' => 'center']
                 ]);
                 $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
-
                 $row++;
                 $lastRubroId = $currentRubroId;
             }
 
-            // --- B. PRODUCTO (O GESTIÓN) ---
-            // Usamos la variable $labelProducto
             $sheet->setCellValue("A{$row}", $labelProducto . ($product['name'] ?? ''));
             $sheet->setCellValue("E{$row}", $product['budget'] ?? 0);
-
             $rawSource = $product['fund_source'] ?? $product['budget_type'] ?? '';
-            $sourceText = is_array($rawSource) ? ($rawSource['name'] ?? '') : $rawSource;
-
-            $sheet->setCellValue("F{$row}", $sourceText);
+            $sheet->setCellValue("F{$row}", is_array($rawSource) ? ($rawSource['name'] ?? '') : $rawSource);
 
             $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => '1F497D']],
@@ -176,51 +228,64 @@ class ExportController extends Controller
                 'alignment' => ['vertical' => 'center']
             ]);
             $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
-
             $row++;
 
-            // --- C. ACTIVIDADES (O ENTREGABLES) ---
             $activities = $product['activities'] ?? [];
-
             if (!empty($activities) && is_array($activities)) {
                 foreach ($activities as $activity) {
-                    if (!is_array($activity)) { continue; }
+                    if (!is_array($activity)) continue;
 
                     $usersList = $activity['users'] ?? [];
                     $responsables = implode(", ", array_column($usersList, 'name'));
-
                     $indicatorsList = $activity['indicators'] ?? $activity['performance_indicators'] ?? [];
                     $indicadores = implode(", ", array_column($indicatorsList, 'name'));
 
-                    // Planificación
+                    // --- CORRECCIÓN PLANIFICACIÓN ---
                     $plan = array_fill(0, 12, "");
-                    $planners = (array) ($activity['planners'] ?? $activity['monthly_plannig'] ?? []);
+
+                    // Agregamos 'monthly_planning' (con n) y 'monthly_progress' para cubrir ambos casos
+                    $planners = (array) ($activity['planners']
+                        ?? $activity['monthly_planning']
+                        ?? $activity['monthly_progress']
+                        ?? []);
+
                     foreach ($planners as $p) {
                         if (isset($p['month'])) {
                             try {
                                 $m = Carbon::parse($p['month'])->month - 1;
-                                $plan[$m] = $p['planning'] ?? ($p['percentage'] ?? 0);
+                                // Buscamos 'planning' O 'percentage'
+                                $val = $p['planning'] ?? $p['percentage'] ?? 0;
+                                $plan[$m] = (is_numeric($val) && $val > 0) ? ($val . '%') : '';
                             } catch (\Exception $e) {}
                         }
                     }
 
-                    // Avance
+                    // --- CORRECCIÓN EJECUCIÓN (AVANCE) ---
                     $avance = array_fill(0, 12, "");
-                    $progress = $activity['execution_progress'] ?? [];
+
+                    // Cubrimos 'execution_progress' (camelCase o snake_case)
+                    $progress = $activity['execution_progress']
+                        ?? $activity['executionProgress']
+                        ?? [];
+
                     if (is_array($progress)) {
                         foreach ($progress as $e) {
-                            if (isset($e['month'])) {
+                            // Algunos arrays traen 'date' y otros 'month'
+                            $dateRef = $e['month'] ?? $e['date'] ?? null;
+
+                            if ($dateRef) {
                                 try {
-                                    $m = Carbon::parse($e['month'])->month - 1;
-                                    $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
+                                    $m = Carbon::parse($dateRef)->month - 1;
+                                    // Buscamos 'reported_percentage' O 'percentage' simple
+                                    $val = $e['reported_percentage'] ?? $e['percentage'] ?? 0;
+                                    $avance[$m] = (is_numeric($val) && $val > 0) ? ($val . '%') : '';
                                 } catch (\Exception $e) {}
                             }
                         }
                     }
 
-                    // Usamos la variable $labelActividad
                     $rowData = array_merge([
-                        $labelActividad, // <-- AQUÍ CAMBIA EL PREFIJO
+                        $labelActividad,
                         $activity['description'] ?? '',
                         $responsables,
                         $indicadores,
@@ -235,19 +300,18 @@ class ExportController extends Controller
                         'alignment' => ['vertical' => 'center', 'wrapText' => true]
                     ]);
                     $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+                    $sheet->getStyle("H{$row}:AE{$row}")->getAlignment()->setHorizontal('center');
                     $row++;
                 }
             }
         }
 
-        // Finales
         $sheet->getColumnDimension('A')->setWidth(40);
         $sheet->getColumnDimension('B')->setWidth(50);
         $sheet->getColumnDimension('C')->setWidth(25);
         $sheet->getColumnDimension('D')->setWidth(30);
         $sheet->getColumnDimension('E')->setWidth(18);
         $sheet->getColumnDimension('F')->setWidth(20);
-        $sheet->getColumnDimension('G')->setWidth(15);
 
         $highestColumn = $sheet->getHighestColumn();
         $highestColumnIndex = Coordinate::columnIndexFromString($highestColumn);
@@ -291,11 +355,13 @@ class ExportController extends Controller
             $productsRaw = [];
         }
 
+        // 1. FILTRAR
+        $productsRaw = $this->applyFilters($productsRaw, $request);
+
         $prioridadFuentes = [
-            'INVERSIÓN EXTERNA' => 1,
-            'INVERSION EXTERNA' => 1,
-            'FIASA'             => 2,
-            'GASTO CORRIENTE'   => 3
+            'INVERSIÓN EXTERNA' => 1, 'INVERSION EXTERNA' => 1,
+            'FIASA' => 2,
+            'GASTO CORRIENTE' => 3
         ];
 
         $groupedProducts = collect($productsRaw)->groupBy(function ($item) {
@@ -306,30 +372,27 @@ class ExportController extends Controller
         $spreadsheet->removeSheetByIndex(0);
 
         foreach ($groupedProducts as $locationName => $productsList) {
+            $isAdmCentral = ($locationName === 'ADM. CENTRAL' || $locationName === 'ADM CENTRAL');
 
-            // --- LÓGICA DE ETIQUETAS DINÁMICAS (MULTI LOCATION) ---
-            // Aquí determinamos etiquetas POR CADA HOJA según el nombre de la locación
-            $isAdmCentral = ($locationName === 'ADM. CENTRAL');
+            $labelRubro     = $isAdmCentral ? "Dirección/Unidad: " : "Rubro: ";
+            $labelProducto  = $isAdmCentral ? "Gestión: "          : "Producto: ";
+            $labelActividad = $isAdmCentral ? "Entregable: "       : "Actividad: ";
 
-            $labelRubro     = $isAdmCentral ? "Dirección/Unidad: "      : "Rubro: ";
-            $labelProducto  = $isAdmCentral ? "Gestión: "       : "Producto: ";
-            $labelActividad = $isAdmCentral ? "Entregable: "    : "Actividad: ";
-            // ------------------------------------------------------
-
+            // CORRECCIÓN TAMBIÉN AQUÍ
             $products = collect($productsList)->sort(function ($a, $b) use ($prioridadFuentes) {
                 $rubroA = (isset($a['rubro']) && is_array($a['rubro'])) ? ($a['rubro']['id'] ?? 0) : 0;
                 $rubroB = (isset($b['rubro']) && is_array($b['rubro'])) ? ($b['rubro']['id'] ?? 0) : 0;
 
-                $rubroCompare = $rubroA <=> $rubroB;
-                if ($rubroCompare !== 0) {
-                    return $rubroCompare;
+                $cmpRubro = $rubroA <=> $rubroB;
+                if ($cmpRubro !== 0) {
+                    return $cmpRubro;
                 }
 
                 $valA = $a['fund_source'] ?? $a['budget_type'] ?? '';
                 $valB = $b['fund_source'] ?? $b['budget_type'] ?? '';
 
-                $fuenteA = mb_strtoupper(trim($valA));
-                $fuenteB = mb_strtoupper(trim($valB));
+                $fuenteA = mb_strtoupper(trim(is_array($valA)?($valA['name']??''):$valA));
+                $fuenteB = mb_strtoupper(trim(is_array($valB)?($valB['name']??''):$valB));
 
                 $pesoA = $prioridadFuentes[$fuenteA] ?? 99;
                 $pesoB = $prioridadFuentes[$fuenteB] ?? 99;
@@ -348,20 +411,12 @@ class ExportController extends Controller
 
             $sheet->setCellValue('A1', 'Reporte de Planificación POA - ' . $locationName);
             $sheet->mergeCells('A1:AI1');
-            $sheet->getStyle('A1')->applyFromArray([
-                'font' => ['bold' => true, 'size' => 16],
-                'alignment' => ['horizontal' => 'center', 'vertical' => 'center']
-            ]);
-
+            $sheet->getStyle('A1')->applyFromArray(['font' => ['bold' => true, 'size' => 16], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']]);
             $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
             $sheet->mergeCells('A2:AI2');
-            $sheet->setCellValue('A3', 'Locación: ' . $locationName);
-            $sheet->mergeCells('A3:AI3');
-            $sheet->setCellValue('A4', 'Generado por: ' . (auth()->user()->name ?? 'Sistema'));
-            $sheet->mergeCells('A4:AI4');
 
             $headers = [
-                $isAdmCentral ? "Gestión / Entregable" : "Producto / Actividad", // Header dinámico
+                $isAdmCentral ? "Gestión / Entregable" : "Producto / Actividad",
                 "Descripción", "Responsable", "Indicadores",
                 "Presupuesto", "Fuente Financiamiento", "Presupuesto Ejecutado",
                 "Plan Ene","Plan Feb","Plan Mar","Plan Abr","Plan May","Plan Jun",
@@ -387,11 +442,9 @@ class ExportController extends Controller
                 $currentRubroId = $rubro['id'] ?? 0;
 
                 if ($currentRubroId !== $lastRubroId) {
-                    // Usamos variable $labelRubro
                     $sheet->setCellValue("A{$row}", $labelRubro . ($rubro['name'] ?? 'Sin Rubro'));
                     $sheet->mergeCells("A{$row}:D{$row}");
                     $sheet->setCellValue("E{$row}", $totalesPorRubro[$currentRubroId] ?? 0);
-
                     $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                         'font' => ['bold' => true],
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '68A829']],
@@ -402,10 +455,10 @@ class ExportController extends Controller
                     $lastRubroId = $currentRubroId;
                 }
 
-                // Usamos variable $labelProducto
                 $sheet->setCellValue("A{$row}", $labelProducto . ($product['name'] ?? ''));
                 $sheet->setCellValue("E{$row}", $product['budget'] ?? 0);
-                $sheet->setCellValue("F{$row}", $product['fund_source'] ?? $product['budget_type'] ?? '');
+                $rawSource = $product['fund_source'] ?? $product['budget_type'] ?? '';
+                $sheet->setCellValue("F{$row}", is_array($rawSource) ? ($rawSource['name'] ?? '') : $rawSource);
 
                 $sheet->getStyle("A{$row}:AF{$row}")->applyFromArray([
                     'font' => ['bold' => true, 'color' => ['rgb' => '1F497D']],
@@ -419,22 +472,20 @@ class ExportController extends Controller
                 $activities = $product['activities'] ?? [];
                 if (!empty($activities) && is_array($activities)) {
                     foreach ($activities as $activity) {
-
-                        if (!is_array($activity)) { continue; }
+                        if (!is_array($activity)) continue;
 
                         $usersList = $activity['users'] ?? [];
                         $responsables = implode(", ", array_column($usersList, 'name'));
-
                         $indicatorsList = $activity['indicators'] ?? $activity['performance_indicators'] ?? [];
                         $indicadores = implode(", ", array_column($indicatorsList, 'name'));
-
                         $plan = array_fill(0, 12, "");
                         $planners = (array) ($activity['planners'] ?? $activity['monthly_plannig'] ?? []);
                         foreach ($planners as $p) {
                             if (isset($p['month'])) {
                                 try {
                                     $m = Carbon::parse($p['month'])->month - 1;
-                                    $plan[$m] = $p['planning'] ?? ($p['percentage'] ?? 0);
+                                    $val = $p['planning'] ?? $p['percentage'] ?? 0;
+                                    $plan[$m] = (is_numeric($val) && $val > 0) ? ($val . '%') : '';
                                 } catch (\Exception $e) {}
                             }
                         }
@@ -446,15 +497,15 @@ class ExportController extends Controller
                                 if (isset($e['month'])) {
                                     try {
                                         $m = Carbon::parse($e['month'])->month - 1;
-                                        $avance[$m] = ($e['reported_percentage'] ?? 0) . "%";
+                                        $val = $e['reported_percentage'] ?? 0;
+                                        $avance[$m] = (is_numeric($val) && $val > 0) ? ($val . '%') : '';
                                     } catch (\Exception $e) {}
                                 }
                             }
                         }
 
-                        // Usamos variable $labelActividad
                         $rowData = array_merge([
-                            $labelActividad, // <-- CAMBIO AQUÍ
+                            $labelActividad,
                             $activity['description'] ?? '',
                             $responsables,
                             $indicadores,
@@ -469,6 +520,7 @@ class ExportController extends Controller
                             'alignment' => ['vertical' => 'center', 'wrapText' => true]
                         ]);
                         $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
+                        $sheet->getStyle("H{$row}:AE{$row}")->getAlignment()->setHorizontal('center');
                         $row++;
                     }
                 }
@@ -476,11 +528,9 @@ class ExportController extends Controller
 
             $sheet->getColumnDimension('A')->setWidth(40);
             $sheet->getColumnDimension('B')->setWidth(50);
-            $sheet->getColumnDimension('C')->setWidth(25);
-            $sheet->getColumnDimension('D')->setWidth(30);
             $sheet->getColumnDimension('E')->setWidth(18);
             $sheet->getColumnDimension('F')->setWidth(20);
-            $sheet->getColumnDimension('G')->setWidth(15);
+
             $highestColumn = $sheet->getHighestColumn();
             $highestColumnIndex = Coordinate::columnIndexFromString($highestColumn);
             for ($col = 8; $col <= $highestColumnIndex; $col++) {
