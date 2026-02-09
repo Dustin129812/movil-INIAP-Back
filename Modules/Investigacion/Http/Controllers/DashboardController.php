@@ -13,8 +13,6 @@ use Modules\Investigacion\Entities\WeeklyPulse;
 
 class DashboardController extends Controller
 {
-
-
     /**
      * Obtiene los datos para el dashboard del rol 'researcher'.
      */
@@ -22,7 +20,6 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        // Widget "Mi Semana": Contar actividades planificadas para la semana actual
         $currentWeekStart = Carbon::now()->startOfWeek()->toDateString();
         $currentWeekEnd = Carbon::now()->endOfWeek()->toDateString();
 
@@ -30,12 +27,18 @@ class DashboardController extends Controller
             ->whereBetween('date', [$currentWeekStart, $currentWeekEnd])
             ->count();
 
-        // Widget "Mis Proyectos": Obtener los 3 proyectos más relevantes
-        $myProjects = Product::where('user_id', $user->id)
-            ->orWhereHas('activities.users', function ($query) use ($user) {
-                $query->where('users.id', $user->id);
+        $myProjects = Product::query()
+            ->where(function ($query) use ($user) {
+                // 1. El usuario está asignado directamente al producto (Tabla pivote product_user)
+                $query->whereHas('users', function ($q) use ($user) {
+                    $q->where('users.id', $user->id);
+                })
+                    // 2. O el usuario está en alguna actividad del producto
+                    ->orWhereHas('activities.users', function ($q) use ($user) {
+                        $q->where('users.id', $user->id);
+                    });
             })
-            ->with('activities.weeklyActivities') // Cargar para calcular progreso
+            ->with('activities.weeklyActivities')
             ->orderBy('updated_at', 'desc')
             ->limit(3)
             ->get();
@@ -112,7 +115,10 @@ class DashboardController extends Controller
 
         // Widget "Métricas Clave"
         $stats = [
-            'activeProjects' => Product::whereIn('user_id', $teamMemberIds)->count(),
+            'activeProjects' => Product::whereHas('users', function ($query) use ($teamMemberIds) {
+                $query->whereIn('users.id', $teamMemberIds);
+            })->count(),
+
             'pendingActivities' => $pendingReviews->count(),
             'overdueActivities' => 0,
             'teamMembers' => $teamMemberIds->count(),
