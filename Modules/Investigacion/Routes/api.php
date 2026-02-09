@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Modules\Investigacion\Http\Controllers\IdiProtocolController;
 use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
 
@@ -16,6 +17,14 @@ use Modules\Investigacion\Http\Controllers\PlannerController;
 */
 
 Route::middleware('auth:api')->prefix('investigacion')->group(function () {
+
+    Route::resource('protocols', IdiProtocolController::class);
+
+    // Rutas personalizadas PRIMERO
+    Route::get('catalogs/all', [IdiProtocolController::class, 'catalogs']);
+
+    // Rutas estándar CRUD (index, store, show, update, destroy)
+    Route::apiResource('protocols', IdiProtocolController::class);
 
     // Obtener actividades pendientes de reporte (filtradas por plan > 0)
     Route::get('monthly-progress/pending', [MonthlyProgressController::class, 'index']);

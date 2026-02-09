@@ -12,6 +12,7 @@ use Modules\Investigacion\Entities\Conversation;
 use Modules\Investigacion\Entities\Document;
 use Modules\Investigacion\Entities\Ethnic_Group;
 use Modules\Investigacion\Entities\Group;
+use Modules\Investigacion\Entities\IdiProtocol;
 use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Nationality;
 use Modules\Investigacion\Entities\Position;
@@ -156,5 +157,15 @@ User extends Authenticatable  implements JWTSubject
     public function management()
     {
         return $this->belongsTo(Management::class, 'th_management_id');
+    }
+
+    public function protocolsAsResponsible()
+    {
+        return $this->hasMany(IdiProtocol::class, 'responsible_id');
+    }
+
+    public function protocolsAsCollaborator()
+    {
+        return $this->belongsToMany(IdiProtocol::class, 'user_protocol', 'user_id', 'idi_protocol_id');
     }
 }
