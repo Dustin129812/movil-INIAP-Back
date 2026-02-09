@@ -38,6 +38,7 @@ use Modules\Investigacion\Http\Controllers\NoveltyController;
 use Modules\Investigacion\Http\Controllers\PatchNoteController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
 use Modules\Investigacion\Http\Controllers\ProductiveRubroController;
+use Modules\Investigacion\Http\Controllers\PulseController;
 use Modules\Investigacion\Http\Controllers\ReportController;
 use Modules\Investigacion\Http\Controllers\ResponseController;
 use Modules\Investigacion\Http\Controllers\ReusableActivityController;
@@ -168,6 +169,7 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/dashboard/product-manager', [DashboardController::class, 'getProductManagerDashboardData']);
 
     Route::get('team-pulse-report', [ReportController::class, 'generateTeamPulseReport']);
+    Route::post('weekly-pulse', [PulseController::class, 'store']);
 
     Route::get('/patch-notes/latest', [PatchNoteController::class, 'getLatest']);
 
