@@ -424,7 +424,6 @@ class PlannerController extends Controller
                     },
                 ])->get();
 
-            // Mapear los datos y añadir los cálculos de ponderación
             $formattedProducts = $products->map(function ($product) {
 
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
@@ -432,11 +431,8 @@ class PlannerController extends Controller
                 $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
 
                     $activityAbsoluteWeight = $productAbsoluteWeight * ((float) $activity->ponderacion / 100);
-
                     $activity->loadMissing('monthlyExecutionProgress');
-
                     $totalExecutedPercentage = $activity->monthlyExecutionProgress->sum('percentage');
-
                     $totalActivityProgress = $activityAbsoluteWeight * ($totalExecutedPercentage / 100);
 
                     $executionProgress = ($activity->monthlyExecutionProgress ?? collect([]))->map(function ($execProgress) {
@@ -469,7 +465,6 @@ class PlannerController extends Controller
                     ];
                 });
 
-                // Calculamos el progreso total del producto sumando el progreso de sus actividades
                 $totalProductProgress = $mappedActivities->sum('total_progress');
 
                 return [
@@ -479,6 +474,7 @@ class PlannerController extends Controller
                     'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                     'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'budget_types_id' => $product->budget_types_id,
+                    'funding_source_name' => $product->funding_source_name,
                     'ponderacion' => $product->ponderacion,
                     'absolute_weight' => $productAbsoluteWeight,
                     'total_progress' => $totalProductProgress,
@@ -531,15 +527,12 @@ class PlannerController extends Controller
                 ->with([
                     'location',
                     'rubro',
-                    'user', // Responsable del producto
+                    'user',
                     'activities' => function ($query) {
-                        // Carga la relación 'users' (responsables de la actividad), 'indicators',
-                        // 'monthlyProgress' y 'weeklyActivities' (para el progreso de ejecución)
                         $query->with(['users', 'indicators', 'monthlyProgress', 'weeklyActivities']);
                     },
                 ])->get();
 
-            // Mapear los datos
             $formattedProducts = $products->map(function ($product) {
                 return [
                     'id' => $product->id,
@@ -766,7 +759,6 @@ class PlannerController extends Controller
 
                 $productAbsoluteWeight = (float) $product->ponderacion / 100;
 
-                // --- Mapeo de Actividades (Ya corregido anteriormente) ---
                 $mappedActivities = ($product->activities ?? collect([]))->map(function ($activity) use ($productAbsoluteWeight) {
                     $activityWeight = (float) $activity->ponderacion;
                     $activityAbsoluteWeight = $productAbsoluteWeight * ($activityWeight / 100);
@@ -817,10 +809,6 @@ class PlannerController extends Controller
                 });
 
                 $totalProductProgress = $mappedActivities->sum('total_progress');
-
-                // --- CAMBIO 2: Determinación Correcta del Usuario Responsable ---
-                // Prioridad 1: Relación 'users' (pivote que usa el sync)
-                // Prioridad 2: Relación 'user' (legacy user_id column)
                 $responsibleUser = $product->users->first() ?? $product->user;
 
                 return [
@@ -828,16 +816,15 @@ class PlannerController extends Controller
                     'name' => $product->name,
                     'ponderacion' => $product->ponderacion,
                     'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
-                    // Enviamos IDs crudos para mayor seguridad en el frontend
                     'crop_id' => $product->crop_id,
                     'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                     'budget_type' => $product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'budget_types_id' => $product->budget_types_id,
+                    'funding_source_name' => $product->funding_source_name,
                     'budget' => $product->budget,
                     'absolute_weight' => $productAbsoluteWeight,
                     'total_progress' => $totalProductProgress,
 
-                    // Objeto de Usuario Corregido
                     'user' => $responsibleUser ? [
                         'id' => $responsibleUser->id,
                         'name' => $responsibleUser->name ?? 'Sin nombre',
