@@ -469,6 +469,7 @@ class PlannerController extends Controller
 
                 return [
                     'id' => $product->id,
+                    'status' => $product->status,
                     'name' => $product->name,
                     'budget'=>$product->budget,
                     'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
@@ -481,7 +482,7 @@ class PlannerController extends Controller
                     'user' => $product->user ? [
                         'id' => $product->user->id,
                         'name' => $product->user->name ?? 'Sin nombre',
-                        'last_name' => $product->user->last_name ?? '' // <--- AGREGAR ESTO
+                        'last_name' => $product->user->last_name ?? ''
                     ] : null,                    'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
                     'activities' => $mappedActivities->toArray(),
@@ -489,7 +490,6 @@ class PlannerController extends Controller
                 ];
             });
 
-            // Opcional: Calcular el avance total de todo el rubro
             $totalRubroProgress = $formattedProducts->sum('total_progress');
 
             return response()->json([
@@ -536,6 +536,7 @@ class PlannerController extends Controller
             $formattedProducts = $products->map(function ($product) {
                 return [
                     'id' => $product->id,
+                    'status' => $product->status,
                     'name' => $product->name,
                     'budget' => $product->budget,
                     'ponderacion' => $product->ponderacion,
@@ -738,8 +739,8 @@ class PlannerController extends Controller
                 ->with([
                     'location',
                     'rubro',
-                    'users', // <--- CAMBIO 1: Cargamos la relación 'users' (pivote), no solo 'user'
-                    'user',  // Mantenemos 'user' por si acaso tienes datos legacy en la columna user_id
+                    'users',
+                    'user',
                     'budget_type',
                     'crop',
                     'activities' => function ($query) {
@@ -813,6 +814,7 @@ class PlannerController extends Controller
 
                 return [
                     'id' => $product->id,
+                    'status' => $product->status,
                     'name' => $product->name,
                     'ponderacion' => $product->ponderacion,
                     'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
