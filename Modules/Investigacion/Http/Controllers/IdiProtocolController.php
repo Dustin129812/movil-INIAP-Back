@@ -5,9 +5,12 @@ namespace Modules\Investigacion\Http\Controllers;
 use App\Models\Crops;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Modules\Investigacion\Entities\Canton;
 use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\ResearchArea;
+use Modules\Investigacion\Entities\ProtocolAnnex;
 use Modules\Investigacion\Http\Requests\StoreIdiProtocolRequest;
 use Modules\Investigacion\Entities\IdiProtocol;
 use App\Models\User;
@@ -60,35 +63,55 @@ class IdiProtocolController extends Controller
             return response()->json(['error' => 'Error al cargar catálogos: ' . $e->getMessage()], 500);
         }
     }
+
     /**
      * POST /investigacion/protocols
-     * Guarda el nuevo protocolo
      */
     public function store(StoreIdiProtocolRequest $request)
     {
         try {
-            // Usamos transacción por si falla el guardado de colaboradores, no quede el protocolo huérfano
             $protocol = DB::transaction(function () use ($request) {
 
-                // 1. Crear el registro principal
-                $newProtocol = IdiProtocol::create($request->validated());
+                $data = $request->except(['annexes', 'canton_ids', 'collaborator_ids']);
+                $newProtocol = IdiProtocol::create($data);
 
-                // 2. Guardar relaciones Many-to-Many (Pivotes)
                 if ($request->has('collaborator_ids')) {
                     $newProtocol->collaborators()->sync($request->collaborator_ids);
                 }
-
                 if ($request->has('canton_ids')) {
                     $newProtocol->influenceCantons()->sync($request->canton_ids);
+                }
+
+                if ($request->hasFile('annexes')) {
+                    foreach ($request->file('annexes') as $file) {
+
+                        $uuid = Str::uuid();
+                        $extension = $file->getClientOriginalExtension();
+                        $storedName = "{$newProtocol->id}/{$uuid}.{$extension}";
+
+                        $path = $file->storeAs(
+                            '',
+                            $storedName,
+                            'protocol_evidences'
+                        );
+
+                        ProtocolAnnex::create([
+                            'protocol_id' => $newProtocol->id,
+                            'file_name'   => $file->getClientOriginalName(),
+                            'file_path'   => $storedName,
+                            'file_type'   => $file->getMimeType(),
+                            'file_size'   => $file->getSize(),
+                        ]);
+                    }
                 }
 
                 return $newProtocol;
             });
 
             return response()->json([
-                'message' => 'Protocolo creado exitosamente',
+                'message' => 'Protocolo creado exitosamente con anexos',
                 'data' => $protocol
-            ], 201); // 201 = Created
+            ], 201);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -100,30 +123,46 @@ class IdiProtocolController extends Controller
 
     /**
      * GET /investigacion/protocols/{id}
-     * Para ver el detalle o editar (carga relaciones completas)
      */
     public function show($id)
     {
         $protocol = IdiProtocol::with([
             'responsible',
             'station',
-            'researchLine.area', // Para saber el área al editar
+            'researchLine.area',
             'crop',
             'collaborators',
-            'influenceCantons'
+            'influenceCantons',
+            'annexes' // <--- AHORA INCLUIMOS LOS ANEXOS
         ])->findOrFail($id);
 
         return response()->json($protocol);
     }
 
     /**
-     * DELETE /investigacion/protocols/{id}
+     * GET /investigacion/protocols/download/{annexId}
+     * Nueva función para descargar archivos seguros
      */
+    public function downloadAnnex($annexId)
+    {
+        try {
+            $annex = ProtocolAnnex::findOrFail($annexId);
+
+            if (!Storage::disk('protocol_evidences')->exists($annex->file_path)) {
+                return response()->json(['message' => 'El archivo físico no se encuentra'], 404);
+            }
+
+            return Storage::disk('protocol_evidences')->download($annex->file_path, $annex->file_name);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error al descargar: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function destroy($id)
     {
         $protocol = IdiProtocol::findOrFail($id);
-        $protocol->delete(); // Soft delete
-
+        $protocol->delete();
         return response()->json(['message' => 'Protocolo eliminado correctamente']);
     }
 }

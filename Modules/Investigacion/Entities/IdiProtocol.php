@@ -79,4 +79,9 @@ class IdiProtocol extends Model
         return $this->belongsToMany(Canton::class, 'canton_protocol', 'idi_protocol_id', 'canton_id')
             ->withTimestamps();
     }
+
+    public function annexes()
+    {
+        return $this->hasMany(ProtocolAnnex::class, 'protocol_id');
+    }
 }

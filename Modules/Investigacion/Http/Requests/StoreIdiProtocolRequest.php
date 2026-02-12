@@ -43,6 +43,10 @@ class StoreIdiProtocolRequest extends FormRequest
             'funding_source'    => 'required|string',
             'budget_total'      => 'required|numeric|min:0',
             'external_amount'   => 'nullable|numeric|min:0',
+
+            // 6. Anexo
+            'annexes' => 'nullable|array',
+            'annexes.*' => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:10240',
         ];
     }
 

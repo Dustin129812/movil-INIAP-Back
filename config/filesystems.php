@@ -56,6 +56,14 @@ return [
             'throw' => false,
         ],
 
+        'protocol_evidences' => [
+            'driver' => 'local',
+            'root' => env('PATH_ANEXOS', storage_path('app/protocolos_anexos')),
+            'url' => env('APP_URL').'/anexos',
+            'visibility' => 'public',
+            'throw' => false,
+        ],
+
     ],
 
     /*
