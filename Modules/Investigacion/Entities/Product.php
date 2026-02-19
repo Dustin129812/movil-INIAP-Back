@@ -4,6 +4,7 @@ namespace Modules\Investigacion\Entities;
 
 use App\Models\Budget_Type;
 use App\Models\Crops;
+use App\Models\Productive_Rubro;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,7 @@ class Product extends Model
         'location_id',
         'budget_types_id',
         'crop_id',
+        'productive_rubro_id',
         'funding_source_name',
         'status',
         'admin_observation'
@@ -69,6 +71,11 @@ class Product extends Model
     public function crop()
     {
         return $this->belongsTo(Crops::class,'crop_id');
+    }
+
+    public function productive_rubro()
+    {
+        return $this->belongsTo(Productive_Rubro::class, 'productive_rubro_id');
     }
 
     public function scopeWhereUserRelated($query, $userId)

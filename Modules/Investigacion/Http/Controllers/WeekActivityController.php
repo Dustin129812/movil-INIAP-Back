@@ -272,6 +272,9 @@ class WeekActivityController extends Controller
                 $weekActivity = WeekActivity::with(['activity.product.user'])
                     ->findOrFail($progressItem['week_activity_id']);
 
+                // 1. Guardamos el estado anterior para validaciones
+                $oldStatus = $weekActivity->status;
+
                 $updatedStatus = $progressItem['status'];
                 $observations = $progressItem['observations'] ?? null;
 
@@ -298,7 +301,12 @@ class WeekActivityController extends Controller
                     'status' => $dbStatus,
                     'percentage' => $numericPercentage
                 ]);
-                if ($numericPercentage >= 0 && $numericPercentage < 100) {
+
+                // 2. OPTIMIZACIÓN UX: Solo notificar si NO estaba previamente en estado negativo
+                // Esto evita el spam de correos si el usuario se equivocó y corrige la calificación al instante.
+                $wasAlreadyNegative = in_array($oldStatus, ['not completed', 'partial']);
+
+                if ($numericPercentage >= 0 && $numericPercentage < 100 && !$wasAlreadyNegative) {
                     $responsable = $weekActivity->activity?->product?->user;
 
                     if ($responsable && $responsable->id !== $investigador->id) {
@@ -313,7 +321,6 @@ class WeekActivityController extends Controller
                     }
                 }
             }
-
 
             DB::commit();
 
