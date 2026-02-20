@@ -183,6 +183,11 @@
                 @if($activity->is_novelty)
                     <span class="novelty-tag">NOVEDAD</span><br>
                 @endif
+
+                @if(isset($activity->is_owner) && !$activity->is_owner)
+                    <span style="color: #1d4ed8; font-weight: bold; font-size: 7px; background-color: #dbeafe; border: 1px solid #bfdbfe; padding: 1px 3px; border-radius: 2px; margin-right: 4px; display: inline-block; margin-bottom: 2px;">APOYO</span><br>
+                @endif
+
                 {{ $activity->formatted_description }}
             </td>
 

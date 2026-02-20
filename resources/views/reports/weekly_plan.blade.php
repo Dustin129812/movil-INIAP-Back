@@ -150,7 +150,12 @@
                 <td>{{ $activity->activity->product->name ?? '--' }}</td>
                 <td>{{ $activity->activity->product->rubro->name ?? '--' }}</td>
                 <td>{{ $activity->activity->description ?? '--' }}</td>
-                <td>{{ $activity->description ?? '--' }}</td>
+                    <td>
+                        @if(isset($activity->is_owner) && !$activity->is_owner)
+                            <span style="color: #1d4ed8; font-weight: bold; font-size: 8px; background-color: #dbeafe; border: 1px solid #bfdbfe; padding: 2px 4px; border-radius: 3px; display: inline-block; margin-bottom: 2px;">APOYO</span><br>
+                        @endif
+                        {{ $activity->description ?? '--' }}
+                    </td>
 
                 {{-- Solo mostramos la celda si la columna es visible --}}
                 @if($visibility['support'])

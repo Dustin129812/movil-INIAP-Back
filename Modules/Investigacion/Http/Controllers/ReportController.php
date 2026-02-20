@@ -23,6 +23,33 @@ class ReportController extends Controller
 {
 
     use CalculatesProgress;
+
+    // ===================================================================
+    // === MÉTODO AUXILIAR PARA FORMATEAR NOMBRES EN LOS REPORTES PDF ===
+    // ===================================================================
+    private function formatActivityDescription($item)
+    {
+        $productInitialCode = '';
+        $activityInitialCode = '';
+        $combinedCodePrefix = '';
+
+        if (optional(optional($item->activity)->product)->name) {
+            $productInitialCode = strtoupper(substr($item->activity->product->name, 0, 2));
+        }
+        if (optional($item->activity)->description) {
+            $activityInitialCode = strtoupper(substr($item->activity->description, 0, 2));
+        }
+
+        if ($productInitialCode && $activityInitialCode) {
+            $combinedCodePrefix = "{$productInitialCode}{$activityInitialCode}: ";
+        } elseif ($productInitialCode) {
+            $combinedCodePrefix = "{$productInitialCode}: ";
+        } elseif ($activityInitialCode) {
+            $combinedCodePrefix = "{$activityInitialCode}: ";
+        }
+
+        $item->formatted_description = $combinedCodePrefix . ($item->description ?? '');
+    }
     public function generateWeeklyPlanReport(Request $request)
     {
         Carbon::setLocale('es');
@@ -47,9 +74,16 @@ class ReportController extends Controller
 
         $ratedStatuses = ['approved', 'completed', 'partial', 'not completed', 'rated'];
 
-        $weekActivities = WeekActivity::where('user_id', $userId)
-            ->whereBetween('date', [$startDate, $endDate])
+        // --- CAMBIO: Incluimos tareas propias Y las de apoyo logístico ---
+        $weekActivities = WeekActivity::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', $ratedStatuses)
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhereHas('logisticSupportUsers', function ($q) use ($userId) {
+                        $q->where('users.id', $userId)
+                            ->where('week_activity_logistic_support_user.status', '!=', 'rejected');
+                    });
+            })
             ->with([
                 'activity.product.rubro',
                 'activity.users',
@@ -58,57 +92,32 @@ class ReportController extends Controller
                 'logisticSupportUsers'
             ])
             ->orderBy('date')
-            ->get()
-            ->groupBy(function ($item) {
-                return Carbon::parse($item->date)->format('Y-m-d');
-            });
+            ->get();
 
-        $weekActivities->each(function ($dayActivities) {
-            $dayActivities->each(function ($weekActivity) {
-                $productInitialCode = '';
-                $activityInitialCode = '';
-                $combinedCodePrefix = '';
-
-                if ($weekActivity->activity && $weekActivity->activity->product && !empty($weekActivity->activity->product->name)) {
-                    $productInitialCode = strtoupper(substr($weekActivity->activity->product->name, 0, 2));
-                }
-
-                if ($weekActivity->activity && !empty($weekActivity->activity->description)) {
-                    $activityInitialCode = strtoupper(substr($weekActivity->activity->description, 0, 2));
-                }
-
-                if (!empty($productInitialCode) && !empty($activityInitialCode)) {
-                    $combinedCodePrefix = $productInitialCode . $activityInitialCode . ': ';
-                } elseif (!empty($productInitialCode)) { // Si solo hay código de producto
-                    $combinedCodePrefix = $productInitialCode . ': ';
-                } elseif (!empty($activityInitialCode)) { // Si solo hay código de actividad
-                    $combinedCodePrefix = $activityInitialCode . ': ';
-                }
-                $weekActivity->formatted_description = $combinedCodePrefix . ($weekActivity->description ?? '');
-            });
+        // Aplicamos la lógica de formato y detectamos si es de apoyo
+        $weekActivities->each(function ($weekActivity) use ($userId) {
+            $weekActivity->is_owner = ($weekActivity->user_id == $userId);
+            $this->formatActivityDescription($weekActivity); // Usamos el helper unificado
         });
 
         $totalActivities = $weekActivities->count();
 
-        $allActivitiesFlat = $weekActivities->flatten();
-
-        // 2. DETECTAR SI EXISTEN DATOS
-        $hasSupport = $allActivitiesFlat->contains(function ($a) {
+        // DETECTAR SI EXISTEN DATOS
+        $hasSupport = $weekActivities->contains(function ($a) {
             return $a->logisticSupportUsers && $a->logisticSupportUsers->isNotEmpty();
         });
 
-        $hasIndicators = $allActivitiesFlat->contains(function ($a) {
+        $hasIndicators = $weekActivities->contains(function ($a) {
             return $a->performanceIndicators && $a->performanceIndicators->isNotEmpty();
         });
 
-        // 3. DEFINIR ANCHOS BASE (Suman 100%)
-        // Ajustamos ligeramente para que cuadre perfecto
+        // DEFINIR ANCHOS BASE (Suman 100%)
         $widths = [
             'date' => 7,
             'product' => 12,
             'rubro' => 12,
             'activity' => 15,
-            'description' => 16, // Esta es la que crecerá
+            'description' => 16,
             'support' => 10,
             'indicator' => 10,
             'observations' => 18
@@ -116,7 +125,6 @@ class ReportController extends Controller
 
         $hiddenMessages = [];
 
-        // 4. REDISTRIBUIR ESPACIO
         if (!$hasSupport) {
             $widths['description'] += $widths['support'];
             $widths['support'] = 0;
@@ -142,7 +150,7 @@ class ReportController extends Controller
 
         $mainRubro = 'Varios Rubros';
         if ($weekActivities->isNotEmpty()) {
-            $rubros = $weekActivities->flatten()->map(function ($item) {
+            $rubros = $weekActivities->map(function ($item) {
                 return $item->activity->product->rubro->name ?? null;
             })->filter()->unique();
 
@@ -153,6 +161,11 @@ class ReportController extends Controller
             }
         }
 
+        // Agrupamos finalmente para pasarlo a la vista Blade
+        $groupedActivities = $weekActivities->groupBy(function ($item) {
+            return Carbon::parse($item->date)->format('Y-m-d');
+        });
+
         $reportData = [
             'iniap_logo_path' => $iniap_logo_path,
             'ecuador_shield_path' => $ecuador_shield_path,
@@ -161,8 +174,7 @@ class ReportController extends Controller
             'program_rubro' => $mainRubro,
             'presentation_date' => Carbon::now()->translatedFormat('d \d\e F \d\e Y'),
             'week_range' => 'Del ' . $startDate->translatedFormat('d \d\e F \d\e Y') . ' al ' . $endDate->translatedFormat('d \d\e F \d\e Y'),
-            'weekActivities' => $weekActivities,
-            'days_of_week' => ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'], // Esto parece que no se usa en el blade actual, pero lo dejamos por si acaso
+            'weekActivities' => $groupedActivities, // Datos Agrupados
             'start_date_obj' => $startDate,
             'visibility' => [
                 'support' => $hasSupport,
@@ -484,11 +496,18 @@ class ReportController extends Controller
             return response()->json(['error' => 'Técnico no encontrado.'], 404);
         }
 
-        // 1. OBTENER ACTIVIDADES PLANIFICADAS
         $ratedStatuses = ['completed', 'partial', 'rated', 'not completed'];
-        $plannedActivities = WeekActivity::where('user_id', $userId)
-            ->whereBetween('date', [$startDate, $endDate])
+
+        // --- CAMBIO: Incluimos tareas propias Y las de apoyo logístico ---
+        $plannedActivities = WeekActivity::whereBetween('date', [$startDate, $endDate])
             ->whereIn('status', $ratedStatuses)
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhereHas('logisticSupportUsers', function ($q) use ($userId) {
+                        $q->where('users.id', $userId)
+                            ->where('week_activity_logistic_support_user.status', '!=', 'rejected');
+                    });
+            })
             ->with([
                 'activity.product.rubro',
                 'activity.users',
@@ -497,13 +516,20 @@ class ReportController extends Controller
                 'logisticSupportUsers'
             ])
             ->get()
-            ->each(function ($item) {
-                $item->is_novelty = false; // <--- MARCA DE PLANIFICADO
+            ->each(function ($item) use ($userId) {
+                $item->is_novelty = false;
+                $item->is_owner = ($item->user_id == $userId);
                 $this->formatActivityDescription($item);
             });
 
-        $noveltyActivities = NoveltyActivity::where('user_id', $userId)
-            ->whereBetween('date', [$startDate, $endDate])
+        // --- CAMBIO: Hacemos lo mismo para Novedades Compartidas (si aplican) ---
+        $noveltyActivities = NoveltyActivity::whereBetween('date', [$startDate, $endDate])
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhereHas('logisticSupport', function ($q) use ($userId) {
+                        $q->where('users.id', $userId);
+                    });
+            })
             ->with([
                 'activity.product.rubro',
                 'materials',
@@ -511,14 +537,14 @@ class ReportController extends Controller
                 'logisticSupport'
             ])
             ->get()
-            ->each(function ($item) {
-                $item->is_novelty = true; // <--- MARCA DE NOVEDAD
+            ->each(function ($item) use ($userId) {
+                $item->is_novelty = true;
+                $item->is_owner = ($item->user_id == $userId);
                 $this->formatActivityDescription($item);
             });
 
         $allActivities = $plannedActivities->concat($noveltyActivities)->sortBy('date')->values();
 
-        // --- NUEVA LÓGICA: DETECCIÓN DE COLUMNAS VACÍAS ---
         $hasMaterials = $allActivities->contains(function ($a) {
             return $a->materials && $a->materials->isNotEmpty();
         });
@@ -533,11 +559,9 @@ class ReportController extends Controller
             return $logs && $logs->isNotEmpty();
         });
 
-        // --- CÁLCULO DE ANCHOS DE COLUMNA (Total 100%) ---
-        // Configuración base original
         $widths = [
             'date' => 7,
-            'activity' => 33, // Esta absorberá el espacio extra
+            'activity' => 33,
             'verification' => 15,
             'materials' => 15,
             'logistics' => 10,
@@ -572,12 +596,10 @@ class ReportController extends Controller
             'completed' => $plannedActivities->where('percentage', 100)->count(),
             'partial' => $plannedActivities->where('percentage', '>', 0)->where('percentage', '<', 100)->count(),
             'not_done' => $plannedActivities->where('percentage', 0)->count(),
-            // Evitar división por cero
             'overall_compliance' => ($totalPlanned > 0) ? ($plannedActivities->sum('percentage') / $totalPlanned) : 0,
-            'total_novelties' => $noveltyActivities->count(), // Nuevo dato para el resumen
+            'total_novelties' => $noveltyActivities->count(),
         ];
 
-        // 5. DETERMINAR RUBRO PRINCIPAL (Puede incluir novedades si quieres, aquí solo uso planificado para consistencia)
         $mainRubro = 'Varios Rubros';
         if ($plannedActivities->isNotEmpty()) {
             $rubros = $plannedActivities->map(function ($item) {
@@ -614,36 +636,6 @@ class ReportController extends Controller
 
         $fileName = 'Informe_Monitoreo_' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf';
         return $pdf->download($fileName);
-    }
-
-    // MÉTODO AUXILIAR PARA FORMATEAR (SÁCALO DEL MÉTODO PRINCIPAL PARA REUTILIZAR)
-    private function formatActivityDescription($item)
-    {
-        $productInitialCode = '';
-        $activityInitialCode = '';
-        $combinedCodePrefix = '';
-
-        // Usamos optional() para evitar errores si activity o product son nulos (común en novedades)
-        if (optional(optional($item->activity)->product)->name) {
-            $productInitialCode = strtoupper(substr($item->activity->product->name, 0, 2));
-        }
-        if (optional($item->activity)->description) {
-            $activityInitialCode = strtoupper(substr($item->activity->description, 0, 2));
-        }
-
-        if ($productInitialCode && $activityInitialCode) {
-            $combinedCodePrefix = "{$productInitialCode}{$activityInitialCode}: ";
-        } elseif ($productInitialCode) {
-            $combinedCodePrefix = "{$productInitialCode}: ";
-        } elseif ($activityInitialCode) {
-            $combinedCodePrefix = "{$activityInitialCode}: ";
-        }
-
-        // Si es novedad, podríamos añadir un prefijo extra si quieres forzarlo en texto,
-        // aunque es mejor hacerlo visualmente en el Blade con la bandera is_novelty.
-        // $prefix = $item->is_novelty ? '[NOVEDAD] ' : '';
-
-        $item->formatted_description = $combinedCodePrefix . ($item->description ?? '');
     }
 
     public function generateUserDeepDivePdf(Request $request, User $user)

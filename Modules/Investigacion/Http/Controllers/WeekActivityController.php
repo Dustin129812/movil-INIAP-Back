@@ -128,7 +128,11 @@ class WeekActivityController extends Controller
 
                 $validUserIds = array_filter($selectedLogisticSupportUserIds);
                 if (!empty($validUserIds)) {
-                    $weekActivity->logisticSupportUsers()->sync($validUserIds);
+                    $syncData = [];
+                    foreach ($validUserIds as $supportId) {
+                        $syncData[$supportId] = ['status' => 'pending'];
+                    }
+                    $weekActivity->logisticSupportUsers()->sync($syncData);
                 } else {
                     $weekActivity->logisticSupportUsers()->detach();
                 }
@@ -167,50 +171,56 @@ class WeekActivityController extends Controller
                 return response()->json(['error' => 'Usuario no autenticado'], 401);
             }
 
-            // 1. AGREGA ESTA LÓGICA AQUÍ
-            $today = Carbon::now();
-            $targetMonday = null;
-            $targetSunday = null;
+            // Obtenemos el parámetro offset de la URL (si existe)
+            $offset = $request->query('offset');
 
-            // Si es viernes, sábado o domingo
-            if ($today->dayOfWeek >= Carbon::FRIDAY || $today->dayOfWeek == Carbon::SUNDAY) {
-                // Cargamos la semana ACTUAL para calificar
-                $targetMonday = Carbon::now()->startOfWeek(Carbon::MONDAY);
-                $targetSunday = $targetMonday->copy()->endOfWeek(Carbon::SUNDAY);
-            } else {
-                // Si es de lunes a jueves, cargamos la semana ANTERIOR
-                // (Esta era tu lógica original)
-                $targetMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
-                $targetSunday = $targetMonday->copy()->endOfWeek(Carbon::SUNDAY);
-            }
-
-            //$lastMonday = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
-            //$lastSunday = $lastMonday->copy()->endOfWeek(Carbon::SUNDAY);
-
-            $ratedStatuses = ['not completed', 'completed', 'partial', 'rated'];
-
-            $activities = WeekActivity::with([
+            // Construimos la consulta base que usan ambos modos
+            $query = WeekActivity::with([
+                'user',
                 'activity.product',
                 'activity.monthlyProgress',
                 'activity.weeklyActivities',
                 'logisticSupportUsers'
-            ])
-                ->whereBetween('date', [$targetMonday, $targetSunday])
-                ->where('user_id', $user->id)
-                ->whereNotIn('status', $ratedStatuses)
-                ->get();
+            ])->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhereHas('logisticSupportUsers', function ($q2) use ($user) {
+                        $q2->where('users.id', $user->id)
+                            ->where('week_activity_logistic_support_user.status', '!=', 'rejected');
+                    });
+            });
+
+            if ($offset !== null) {
+                // 🟢 MODO: VISUALIZACIÓN DE SEMANA (Solo Lectura)
+                $targetDate = Carbon::now()->addWeeks((int)$offset);
+                $startOfWeek = $targetDate->copy()->startOfWeek(Carbon::MONDAY);
+                $endOfWeek = $targetDate->copy()->endOfWeek(Carbon::SUNDAY);
+
+                // Aquí NO filtramos por estado, queremos ver TODO lo planificado esa semana
+                $activities = $query->whereBetween('date', [$startOfWeek, $endOfWeek])
+                    ->orderBy('date', 'asc')
+                    ->get();
+            } else {
+                // 🟠 MODO: INBOX ZERO (Calificación día a día)
+                $targetSunday = Carbon::now()->endOfWeek(Carbon::SUNDAY);
+                $ratedStatuses = ['not completed', 'completed', 'partial', 'rated'];
+
+                // Traemos pendientes desde el inicio de los tiempos hasta este domingo
+                $activities = $query->where('date', '<=', $targetSunday)
+                    ->whereNotIn('status', $ratedStatuses)
+                    ->orderBy('date', 'asc')
+                    ->get();
+            }
 
             return response()->json([
                 'msg' => [
                     'summary' => 'Success',
-                    'detail' => 'Actividades de la semana anterior obtenidas correctamente',
+                    'detail' => 'Actividades obtenidas correctamente',
                     'code' => 200,
                 ],
-                'data' => $activities->map(function ($weekActivity) {
+                'data' => $activities->map(function ($weekActivity) use ($user) {
                     if (!$weekActivity->activity || !$weekActivity->activity->product) {
                         return null;
                     }
-
                     return [
                         'id' => $weekActivity->id,
                         'activity_id' => $weekActivity->activity->id,
@@ -221,8 +231,17 @@ class WeekActivityController extends Controller
                         'status' => $weekActivity->status,
                         'percentage' => $weekActivity->percentage,
                         'observations' => $weekActivity->observations,
-                        'logistic_supports' => $weekActivity->logisticSupportUsers->map(function ($user) {
-                            return ['id' => $user->id, 'name' => $user->name];
+
+                        // Ahora $user sí existe aquí dentro
+                        'is_owner' => $weekActivity->user_id === $user->id,
+                        'owner_name' => $weekActivity->user ? $weekActivity->user->name : 'Compañero',
+                        'my_support_status' => $weekActivity->user_id !== $user->id
+                            ? $weekActivity->logisticSupportUsers->where('id', $user->id)->first()->pivot->status ?? 'pending'
+                            : null,
+
+                        // ✅ Cambiamos el nombre de la variable interna a $supportUser para evitar conflictos con $user
+                        'logistic_supports' => $weekActivity->logisticSupportUsers->map(function ($supportUser) {
+                            return ['id' => $supportUser->id, 'name' => $supportUser->name];
                         })->toArray(),
 
                         'monthly_plannig' => $weekActivity->activity->monthlyProgress->map(function ($progress) {
@@ -495,5 +514,21 @@ class WeekActivityController extends Controller
             }
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    public function respondToSupport(Request $request, $activityId)
+    {
+        $request->validate([
+            'status' => 'required|in:accepted,rejected'
+        ]);
+
+        $user = Auth::user();
+        $activity = WeekActivity::findOrFail($activityId);
+
+        $activity->logisticSupportUsers()->updateExistingPivot($user->id, [
+            'status' => $request->status
+        ]);
+
+        return response()->json(['message' => 'Respuesta registrada correctamente.']);
     }
 }

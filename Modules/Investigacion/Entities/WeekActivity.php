@@ -64,8 +64,15 @@ class WeekActivity extends Model
         return $this->belongsTo(User::class);
     }
 
-     public function logisticSupportUsers()
+    public function logisticSupportUsers()
     {
-        return $this->belongsToMany(User::class, 'week_activity_logistic_support_user', 'weekly_activity_id', 'user_id');
+        return $this->belongsToMany(
+            User::class,
+            'week_activity_logistic_support_user',
+            'weekly_activity_id',
+            'user_id'
+        )
+            ->withPivot('status')
+            ->withTimestamps();
     }
 }

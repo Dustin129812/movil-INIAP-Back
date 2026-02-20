@@ -15,6 +15,7 @@ return new class extends Migration
             $table->foreignId('weekly_activity_id')->constrained('weekly_activities')->onDelete('cascade');
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->primary(['weekly_activity_id', 'user_id'], 'week_activity_user_logistic_support_primary');
+            $table->string('status')->default('pending')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
