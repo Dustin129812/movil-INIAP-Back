@@ -190,21 +190,17 @@ class WeekActivityController extends Controller
             });
 
             if ($offset !== null) {
-                // 🟢 MODO: VISUALIZACIÓN DE SEMANA (Solo Lectura)
                 $targetDate = Carbon::now()->addWeeks((int)$offset);
                 $startOfWeek = $targetDate->copy()->startOfWeek(Carbon::MONDAY);
                 $endOfWeek = $targetDate->copy()->endOfWeek(Carbon::SUNDAY);
 
-                // Aquí NO filtramos por estado, queremos ver TODO lo planificado esa semana
                 $activities = $query->whereBetween('date', [$startOfWeek, $endOfWeek])
                     ->orderBy('date', 'asc')
                     ->get();
             } else {
-                // 🟠 MODO: INBOX ZERO (Calificación día a día)
                 $targetSunday = Carbon::now()->endOfWeek(Carbon::SUNDAY);
                 $ratedStatuses = ['not completed', 'completed', 'partial', 'rated'];
 
-                // Traemos pendientes desde el inicio de los tiempos hasta este domingo
                 $activities = $query->where('date', '<=', $targetSunday)
                     ->whereNotIn('status', $ratedStatuses)
                     ->orderBy('date', 'asc')

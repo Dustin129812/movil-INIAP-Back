@@ -36,7 +36,6 @@ class PlannerController extends Controller
 
             $product->rubro_id = $request->input('rubro');
             $product->crop_id = $request->input('crops');
-            $product->productive_rubro_id = $request->input('productive_rubro_id');
             $product->location_id = $userLocation->id;
             $product->status = 'pending';
             $product->save();
@@ -134,10 +133,6 @@ class PlannerController extends Controller
 
             if ($request->has('crops')) {
                 $product->crop_id = $request->input('crops');
-            }
-
-            if ($request->has('productive_rubro_id')) {
-                $product->productive_rubro_id = $request->input('productive_rubro_id');
             }
 
             $product->funding_source_name = $request->input('funding_source_name');
@@ -478,7 +473,6 @@ class PlannerController extends Controller
                     'name' => $product->name,
                     'budget'=>$product->budget,
                     'crop'=>$product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
-                    'productive_rubro_id' => $product->productive_rubro_id,
                     'budget_type'=>$product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'budget_types_id' => $product->budget_types_id,
                     'funding_source_name' => $product->funding_source_name,
@@ -825,7 +819,6 @@ class PlannerController extends Controller
                     'ponderacion' => $product->ponderacion,
                     'crop' => $product->crop ? ['id' => $product->crop->id, 'name' => $product->crop->name , 'productive_rubro_id' => $product->crop->productive_rubro_id] : null,
                     'crop_id' => $product->crop_id,
-                    'productive_rubro_id' => $product->productive_rubro_id,
                     'create_at'=> $product->created_at ? Carbon::parse($product->created_at)->format('Y-m-d') : null,
                     'budget_type' => $product->budget_type ? $product->budget_type->name : 'Sin definir',
                     'budget_types_id' => $product->budget_types_id,
