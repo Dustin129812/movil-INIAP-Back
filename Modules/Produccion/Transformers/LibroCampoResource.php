@@ -14,7 +14,9 @@ class LibroCampoResource extends JsonResource
 
         return [
             'id'             => $this->id,
+            'historial_climatico' => $this->whenLoaded('registrosClimaticos'),
             'codigo'         => $this->codigo,
+            'qr_token'       => $this->qr_token,
             'nombre'         => $this->nombre,
             'estado'         => $this->estado,
             'fecha_inicio'   => $this->fecha_inicio,

@@ -32,7 +32,6 @@ class ProduccionDatabaseSeeder extends Seeder
 
         // 3. Crear Lote y Libro de Campo
         // 3. Crear Estructura Jerárquica de Lotes
-        // Lote Padre (El terreno físico total)
         $lotePadre = Lote::create([
             'location_id' => 1,
             'codigo' => 'L-CAT-2026-MAIN',
@@ -71,7 +70,7 @@ class ProduccionDatabaseSeeder extends Seeder
 
         // B. Personal (Asumiendo que el usuario ID 5 existe, si no, pon el 1)
         $produccionService->registrarTrabajoPersonal([
-            'libro_campo_id' => $libro->id, 'user_id' => 5,
+            'libro_id' => $libro->id, 'user_id' => 5,
             'fecha' => '2026-02-25', 'labor' => 'Control de malezas', 'horas_trabajadas' => 4, 'costo_hora' => 3.50
         ]);
 

@@ -11,6 +11,7 @@ class LibroCampo extends Model
         [
             'lote_id',
             'codigo',
+            'qr_token',
             'nombre',
             'fecha_inicio',
             'fecha_fin',
@@ -38,5 +39,10 @@ class LibroCampo extends Model
     public function actividadesMaquinaria()
     {
         return $this->hasMany(ActividadMaquinaria::class, 'libro_campo_id');
+    }
+
+    public function registrosClimaticos()
+    {
+        return $this->hasMany(RegistroClimatico::class);
     }
 }

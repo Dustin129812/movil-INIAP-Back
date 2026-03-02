@@ -8,12 +8,15 @@ use Modules\Produccion\Http\Controllers\LibroCampoController;
 
 Route::prefix('produccion')->group(function() {
 
+
     // --- LIBROS DE CAMPO ---
     Route::prefix('libros-campo')->group(function() {
         Route::get('/', [LibroCampoController::class, 'index']);
         Route::post('/', [LibroCampoController::class, 'store']);
         Route::get('/{id}', [LibroCampoController::class, 'show'])->where('id', '[0-9]+');
         Route::post('/{id}/cosechar', [LibroCampoController::class, 'cosechar'])->where('id', '[0-9]+');
+        Route::get('/qr/{token}', [LibroCampoController::class, 'buscarPorQr']);
+        Route::post('/{id}/regenerar-qr', [LibroCampoController::class, 'regenerarQr'])->where('id', '[0-9]+');
     });
 
     // --- GESTIÓN DE LOTES ---
@@ -46,5 +49,6 @@ Route::prefix('produccion')->group(function() {
         Route::post('/registrar-labor', [LibroCampoController::class, 'registrarLabor']);
         Route::post('/registrar-personal', [LibroCampoController::class, 'registrarPersonal']);
         Route::post('/registrar-maquinaria', [LibroCampoController::class, 'registrarMaquinaria']);
+        Route::post('/registrar-clima', [LibroCampoController::class, 'registrarClima']);
     });
 });

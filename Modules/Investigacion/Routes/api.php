@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Modules\Investigacion\Http\Controllers\IdiProtocolController;
 use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
+use Modules\Investigacion\Http\Controllers\WeekActivityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,4 +39,5 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
 
     Route::put('/planner/review-product/{id}', [PlannerController::class, 'reviewProduct']);
 
+    Route::put('/week-activities/{activityId}/respond-support', [WeekActivityController::class, 'respondToSupport']);
 });

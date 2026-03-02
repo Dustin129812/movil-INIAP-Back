@@ -171,41 +171,50 @@ class WeekActivityController extends Controller
                 return response()->json(['error' => 'Usuario no autenticado'], 401);
             }
 
-            // Obtenemos el parámetro offset de la URL (si existe)
             $offset = $request->query('offset');
 
-            // Construimos la consulta base que usan ambos modos
+            // 1. Quitamos el 'where' genérico de la consulta base
             $query = WeekActivity::with([
                 'user',
                 'activity.product',
                 'activity.monthlyProgress',
                 'activity.weeklyActivities',
                 'logisticSupportUsers'
-            ])->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                    ->orWhereHas('logisticSupportUsers', function ($q2) use ($user) {
-                        $q2->where('users.id', $user->id)
-                            ->where('week_activity_logistic_support_user.status', '!=', 'rejected');
-                    });
-            });
+            ]);
 
             if ($offset !== null) {
+                // MODO VISUALIZACIÓN (Historial/Futuro): Trae MIS tareas Y los APOYOS
                 $targetDate = Carbon::now()->addWeeks((int)$offset);
                 $startOfWeek = $targetDate->copy()->startOfWeek(Carbon::MONDAY);
                 $endOfWeek = $targetDate->copy()->endOfWeek(Carbon::SUNDAY);
 
-                $activities = $query->whereBetween('date', [$startOfWeek, $endOfWeek])
-                    ->orderBy('date', 'asc')
-                    ->get();
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                        ->orWhereHas('logisticSupportUsers', function ($q2) use ($user) {
+                            $q2->where('users.id', $user->id)
+                                ->where('week_activity_logistic_support_user.status', '!=', 'rejected');
+                        });
+                })->whereBetween('date', [$startOfWeek, $endOfWeek]);
             } else {
+                // MODO CALIFICACIÓN Y RESPUESTAS:
                 $targetSunday = Carbon::now()->endOfWeek(Carbon::SUNDAY);
                 $ratedStatuses = ['not completed', 'completed', 'partial', 'rated'];
 
-                $activities = $query->where('date', '<=', $targetSunday)
-                    ->whereNotIn('status', $ratedStatuses)
-                    ->orderBy('date', 'asc')
-                    ->get();
+                $query->where(function ($q) use ($user, $ratedStatuses) {
+                    // 1. Tareas de las que SOY DUEÑO y me falta calificar
+                    $q->where(function ($q1) use ($user, $ratedStatuses) {
+                        $q1->where('user_id', $user->id)
+                            ->whereNotIn('status', $ratedStatuses);
+                    })
+                        // 2. Tareas donde SOY APOYO y no he respondido a la invitación (pending)
+                        ->orWhereHas('logisticSupportUsers', function ($q2) use ($user) {
+                            $q2->where('users.id', $user->id)
+                                ->where('week_activity_logistic_support_user.status', 'pending');
+                        });
+                })->where('date', '<=', $targetSunday);
             }
+
+            $activities = $query->orderBy('date', 'asc')->get();
 
             return response()->json([
                 'msg' => [
@@ -522,9 +531,13 @@ class WeekActivityController extends Controller
         $activity = WeekActivity::findOrFail($activityId);
 
         $activity->logisticSupportUsers()->updateExistingPivot($user->id, [
-            'status' => $request->status
+            'status' => $request->status,
+            'updated_at' => now()
         ]);
 
-        return response()->json(['message' => 'Respuesta registrada correctamente.']);
+        return response()->json([
+            'message' => 'Respuesta de apoyo registrada. El estado de la planificación no ha cambiado.',
+            'new_support_status' => $request->status
+        ]);
     }
 }

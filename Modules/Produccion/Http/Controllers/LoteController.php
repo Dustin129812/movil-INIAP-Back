@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Modules\Produccion\Entities\Lote;
 use Modules\Produccion\Http\Requests\Lote\SegmentarLoteRequest;
+use Modules\Produccion\Http\Requests\Lote\UpdateLoteRequest;
 use Modules\Produccion\Services\LoteService;
 use Modules\Produccion\Traits\ApiResponse;
 use Modules\Produccion\Transformers\LoteResource;
@@ -22,11 +23,8 @@ class LoteController extends Controller
 
     public function index(): JsonResponse
     {
-        // LA MAGIA ESTÁ AQUÍ: whereNull('parent_id')
-        // Esto asegura que solo enviemos Lotes Maestros al Dashboard
         $lotes = Lote::whereNull('parent_id')
             ->with(['hijos' => function($query) {
-                // Cargamos a los hijos y les extraemos la geometría para el mapa
                 $query->select('*', DB::raw('ST_AsGeoJSON(poligono) as poligono_geojson'));
             }])
             ->select('*', DB::raw('ST_AsGeoJSON(poligono) as poligono_geojson'))

@@ -4,6 +4,7 @@ namespace Modules\Produccion\Services;
 
 use Modules\Produccion\Entities\Lote;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str; // <-- IMPORTACIÓN NECESARIA PARA LOS UUIDs
 use Carbon\Carbon;
 
 class LoteService
@@ -11,17 +12,12 @@ class LoteService
     public function crearLote(array $datos): Lote
     {
         return DB::transaction(function () use ($datos) {
-
             $datos['codigo'] = $this->generarCodigoLote($datos['location_id']);
             $datos['poligono'] = DB::raw("ST_GeomFromGeoJSON('" . $datos['poligono_geojson'] . "')");
-
             return Lote::create($datos);
         });
     }
 
-    /**
-     * Genera un código automático secuencial: L-{LOCATION_ID}-{AÑO}-{SECUENCIAL}
-     */
     /**
      * Genera un código automático secuencial a prueba de eliminaciones.
      * Ejemplo: L-001-2026-0005
@@ -31,17 +27,14 @@ class LoteService
         $anio = Carbon::now()->year;
         $prefijo = sprintf("L-%03d-%s-", $locationId, $anio);
 
-        // Buscamos el lote que tenga el código más alto con ese prefijo
         $ultimoLote = Lote::where('codigo', 'LIKE', $prefijo . '%')
             ->orderBy('codigo', 'desc')
             ->first();
 
         if ($ultimoLote) {
-            // Extraemos los últimos 4 dígitos (ej: "0006" -> 6) y le sumamos 1
             $consecutivo = (int) substr($ultimoLote->codigo, -4);
             $nuevoSecuencial = $consecutivo + 1;
         } else {
-            // Si es el primer lote del año en esa locación
             $nuevoSecuencial = 1;
         }
 
@@ -87,14 +80,10 @@ class LoteService
         return DB::transaction(function () use ($id, $datos) {
             $lote = Lote::findOrFail($id);
 
-            // 1. Actualización de datos básicos
             if (isset($datos['nombre'])) $lote->nombre = $datos['nombre'];
             if (isset($datos['estado'])) $lote->estado = $datos['estado'];
 
-            // 2. Si hay redibujo espacial, aplicamos validaciones geográficas
             if (!empty($datos['poligono_geojson'])) {
-
-                // Si es una parcela (tiene padre), verificamos que el nuevo dibujo no se salga
                 if ($lote->parent_id) {
                     $padre = Lote::find($lote->parent_id);
                     $estaContenido = DB::selectOne("
@@ -111,7 +100,6 @@ class LoteService
                         throw new \Exception("Error Geográfico: El nuevo dibujo de la parcela se sale de los límites del Lote Padre.");
                     }
 
-                    // Validar suma de áreas excluyendo el área actual del lote
                     $superficieOtros = Lote::where('parent_id', $lote->parent_id)
                         ->where('id', '!=', $lote->id)
                         ->sum('superficie_hectareas');

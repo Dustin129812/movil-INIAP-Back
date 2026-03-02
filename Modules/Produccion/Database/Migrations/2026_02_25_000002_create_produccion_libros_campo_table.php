@@ -15,6 +15,8 @@ return new class extends Migration
     {
         Schema::create('produccion.libros_campo', function (Blueprint $table) {
             $table->id();
+            $table->uuid('qr_token')->nullable()->unique();
+            
             $table->foreignId('lote_id')->constrained('produccion.lotes')->restrictOnDelete();
             $table->string('codigo', 50)->unique(); // Ej: LC-001-2026
             $table->string('nombre', 150);

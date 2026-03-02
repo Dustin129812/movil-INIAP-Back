@@ -2,12 +2,14 @@
 
 namespace Modules\Produccion\Services;
 
+use Illuminate\Support\Str;
 use Modules\Produccion\Entities\Actividad;
 use Modules\Produccion\Entities\ActividadMaquinaria;
 use Modules\Produccion\Entities\ActividadPersonal;
 use Modules\Produccion\Entities\LibroCampo;
 use Illuminate\Support\Facades\DB;
 use Modules\Produccion\Entities\Maquinaria;
+use Modules\Produccion\Entities\RegistroClimatico;
 
 class ProduccionService {
     public function __construct(protected KardexService $kardexService) {}
@@ -110,6 +112,35 @@ class ProduccionService {
                 'fecha'          => $data['fecha'],
                 'horas_uso'      => $data['horas_uso'],
                 'costo_total'    => $data['horas_uso'] * $maquina->costo_hora,
+            ]);
+        });
+    }
+
+    /**
+     * Invalida el QR viejo generando uno nuevo de forma segura.
+     */
+    public function regenerarQrLibro(int $id): LibroCampo
+    {
+        $libro = LibroCampo::findOrFail($id);
+
+        $libro->qr_token = Str::uuid()->toString();
+        $libro->save();
+
+        return $libro;
+    }
+
+    public function registrarCondicionesClimaticas(array $data): RegistroClimatico
+    {
+        return DB::transaction(function () use ($data) {
+            return RegistroClimatico::create([
+                'libro_campo_id'   => $data['libro_id'],
+                'fecha_registro'   => $data['fecha_registro'],
+                'temperatura'      => $data['temperatura'],
+                'humedad'          => $data['humedad'],
+                'precipitacion'    => $data['precipitacion'] ?? 0,
+                'viento_velocidad' => $data['viento_velocidad'],
+                'nubosidad'        => $data['nubosidad'],
+                'notas_clima'      => $data['notas_clima'],
             ]);
         });
     }
