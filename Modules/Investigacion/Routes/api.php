@@ -25,8 +25,9 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
     Route::get('catalogs/all', [IdiProtocolController::class, 'catalogs']);
 
     // Rutas estándar CRUD (index, store, show, update, destroy)
-    Route::apiResource('protocols', IdiProtocolController::class);
     Route::get('/protocols/download/{annexId}', [IdiProtocolController::class, 'downloadAnnex']);
+
+    Route::apiResource('protocols', IdiProtocolController::class);
 
     // Obtener actividades pendientes de reporte (filtradas por plan > 0)
     Route::get('monthly-progress/pending', [MonthlyProgressController::class, 'index']);
