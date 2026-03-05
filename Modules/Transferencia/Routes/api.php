@@ -1,0 +1,29 @@
+<?php
+
+use Illuminate\Http\Request;
+use Modules\Transferencia\Http\Controllers\AcuerdoController;
+use Modules\Transferencia\Http\Controllers\EnsayoController;
+use Modules\Transferencia\Http\Controllers\OrganizacionController;
+use Modules\Transferencia\Http\Controllers\ParcelaController;
+
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider within a group which
+| is assigned the "api" middleware group. Enjoy building your API!
+|
+*/
+
+Route::prefix('transferencia')->group(function() {
+
+    Route::apiResource('organizaciones', OrganizacionController::class);
+    Route::apiResource('acuerdos', AcuerdoController::class);
+    Route::apiResource('ensayos', EnsayoController::class);
+    Route::apiResource('parcelas', ParcelaController::class);
+
+    Route::get('archivos/{tipo}/{id}', function($tipo, $id) {
+    })->name('api.transferencia.archivos.descargar');
+});
