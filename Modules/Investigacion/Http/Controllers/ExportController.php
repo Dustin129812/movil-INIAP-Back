@@ -317,6 +317,9 @@ class ExportController extends Controller
 
     public function exportPlanificacionAllLocations(Request $request)
     {
+        ini_set('memory_limit', '512M');
+        set_time_limit(0);
+
         $response = app(PlannerController::class)->getAllProductsWithActivities($request);
 
         if ($response instanceof \Illuminate\Http\JsonResponse) {
