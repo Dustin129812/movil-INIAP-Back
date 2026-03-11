@@ -35,6 +35,8 @@ class ParcelaResource extends JsonResource
                 'canton_nombre' => $this->whenLoaded('canton', fn() => $this->canton->nombre ?? $this->canton->name),
 
                 'parroquia_id' => $this->parroquia_id,
+                'parroquia_nombre' => $this->whenLoaded('parroquia', fn() => $this->parroquia->nombre ?? $this->parroquia->name),
+
                 'localidad' => $this->localidad,
 
                 'coordenadas' => [

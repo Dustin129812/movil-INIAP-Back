@@ -9,8 +9,9 @@ class ParcelaService
 {
     public function paginate(array $filters): LengthAwarePaginator
     {
+        // CORRECCIÓN: Agregamos 'parroquia' al Eager Loading
         $query = Parcela::query()
-            ->with(['ensayo', 'organizacion', 'provincia', 'canton']);
+            ->with(['ensayo', 'organizacion', 'provincia', 'canton', 'parroquia']);
 
         if (!empty($filters['search'])) {
             $query->where('nombre', 'ilike', '%' . $filters['search'] . '%')

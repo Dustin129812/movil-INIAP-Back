@@ -289,7 +289,11 @@ class PlannerController extends Controller
 
             $relevantStatuses = ['pending', 'approved', 'rejected', 'reassigned'];
 
-            $allPendingActivities = WeekActivity::whereIn('status', $relevantStatuses)
+            // 1. Capturamos el periodo (Por defecto 30 días para proteger la BD)
+            $period = $request->query('period', '15days');
+
+            // 2. Armamos la consulta base
+            $query = WeekActivity::whereIn('status', $relevantStatuses)
                 ->whereIn('user_id', $teamMemberIds)
                 ->with([
                     'activity.product.rubro',
@@ -297,8 +301,18 @@ class PlannerController extends Controller
                     'user',
                     'materials',
                     'activity.indicators',
-                ])
-                ->get();
+                ]);
+
+            // 3. Aplicamos la Regla de Oro (Filtro de fechas)
+            if ($period === '7days') {
+                $query->where('date', '>=', Carbon::now()->subDays(7));
+            } elseif ($period === '15days') {
+                $query->where('date', '>=', Carbon::now()->subDays(15));
+            }
+            // Si $period === 'all', no agregamos filtro de fecha y trae todo
+
+            // 4. Ejecutamos la consulta ordenando por fecha más reciente
+            $allPendingActivities = $query->orderBy('date', 'desc')->get();
 
             $groupedByUser = [];
             foreach ($allPendingActivities as $weekActivity) {
