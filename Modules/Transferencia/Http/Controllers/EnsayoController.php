@@ -29,7 +29,7 @@ class EnsayoController extends Controller
 
     public function show(EnsayoRequest $request, Ensayo $ensayo): EnsayoResource
     {
-        $ensayo->load(['equipoTecnico']);
+        $ensayo->load(['equipoTecnico'])->loadCount('parcelas');
         return new EnsayoResource($ensayo);
     }
 

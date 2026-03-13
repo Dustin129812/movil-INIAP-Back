@@ -3,6 +3,13 @@
 namespace Modules\Transferencia\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use App\Models\User;
+use Modules\Investigacion\Entities\Activity;
+use Modules\Investigacion\Entities\Canton;
+use Modules\Investigacion\Entities\Parroquia;
+use Modules\Investigacion\Entities\Product;
+use Modules\Investigacion\Entities\Province;
 
 class EnsayoRequest extends FormRequest
 {
@@ -26,10 +33,15 @@ class EnsayoRequest extends FormRequest
     private function indexRules(): array
     {
         return [
-            'search'   => ['nullable', 'string', 'max:100'],
-            'estado'   => ['nullable', 'string', 'in:Activo,Inactivo'],
-            'tipo'     => ['nullable', 'string', 'in:Investigación,Validación,Demostrativa,Difusión,Aprendizaje'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'search'       => ['nullable', 'string', 'max:100'],
+            'estado'       => ['nullable', 'string', 'in:Activo,Inactivo'],
+            'tipo'         => ['nullable', 'string', 'in:Investigación,Validación,Demostrativa,Difusión,Aprendizaje'],
+            'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
+
+            // Nuevos filtros por ubicación
+            'provincia_id' => ['nullable', 'integer', Rule::exists(Province::class, 'id')],
+            'canton_id'    => ['nullable', 'integer', Rule::exists(Canton::class, 'id')],
+            'parroquia_id' => ['nullable', 'integer', Rule::exists(Parroquia::class, 'id')],
         ];
     }
 
@@ -47,11 +59,11 @@ class EnsayoRequest extends FormRequest
             'archivo_protocolo' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
             'archivo_informe' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
 
-            'producto_id' => ['nullable', 'exists:products,id'],
-            'actividad_id' => ['nullable', 'exists:activities,id'],
+            'producto_id'  => ['nullable', Rule::exists(Product::class, 'id')],
+            'actividad_id' => ['nullable', Rule::exists(Activity::class, 'id')],
 
-            'equipo_tecnico_ids' => ['nullable', 'array'],
-            'equipo_tecnico_ids.*' => ['exists:users,id'],
+            'equipo_tecnico_ids'   => ['nullable', 'array'],
+            'equipo_tecnico_ids.*' => [Rule::exists(User::class, 'id')],
         ];
     }
 }

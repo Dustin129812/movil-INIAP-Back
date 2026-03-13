@@ -9,7 +9,6 @@ class ParcelaService
 {
     public function paginate(array $filters): LengthAwarePaginator
     {
-        // CORRECCIÓN: Agregamos 'parroquia' al Eager Loading
         $query = Parcela::query()
             ->with(['ensayo', 'organizacion', 'provincia', 'canton', 'parroquia']);
 
@@ -24,6 +23,18 @@ class ParcelaService
 
         if (!empty($filters['ensayo_id'])) {
             $query->where('ensayo_id', $filters['ensayo_id']);
+        }
+
+        if (!empty($filters['provincia_id'])) {
+            $query->where('provincia_id', $filters['provincia_id']);
+        }
+
+        if (!empty($filters['canton_id'])) {
+            $query->where('canton_id', $filters['canton_id']);
+        }
+
+        if (!empty($filters['parroquia_id'])) {
+            $query->where('parroquia_id', $filters['parroquia_id']);
         }
 
         $perPage = $filters['per_page'] ?? 15;

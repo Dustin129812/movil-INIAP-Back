@@ -14,7 +14,11 @@ class ParcelaResource extends JsonResource
             'nombre' => $this->nombre,
             'estado' => $this->estado,
 
-            // Agrupamos las relaciones maestras
+            'ensayo' => $this->whenLoaded('ensayo', fn() => [
+                'id' => $this->ensayo->id,
+                'nombre' => $this->ensayo->nombre,
+            ]),
+
             'referencias' => [
                 'ensayo_id' => $this->ensayo_id,
                 'ensayo_nombre' => $this->whenLoaded('ensayo', fn() => $this->ensayo->nombre),

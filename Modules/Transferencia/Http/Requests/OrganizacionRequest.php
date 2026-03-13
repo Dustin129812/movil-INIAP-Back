@@ -3,6 +3,10 @@
 namespace Modules\Transferencia\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Modules\Investigacion\Entities\Canton;
+use Modules\Investigacion\Entities\Parroquia;
+use Modules\Investigacion\Entities\Province;
 
 class OrganizacionRequest extends FormRequest
 {
@@ -23,7 +27,7 @@ class OrganizacionRequest extends FormRequest
 
         return match ($action) {
             'index'   => $this->indexRules(),
-            'store', 'update' => $this->saveRules(), // POST y PUT/PATCH comparten reglas aquí
+            'store', 'update' => $this->saveRules(),
             'show', 'destroy' => [],
             default   => [],
         };
@@ -46,9 +50,9 @@ class OrganizacionRequest extends FormRequest
             'participantes_hombres' => ['required', 'integer', 'min:0'],
             'participantes_mujeres' => ['required', 'integer', 'min:0'],
 
-            'provincia_id' => ['required', 'exists:provinces,id'],
-            'canton_id' => ['required', 'exists:cantons,id'],
-            'parroquia_id' => ['required', 'exists:parroquias,id'],
+            'provincia_id' => ['required', Rule::exists(Province::class, 'id')],
+            'canton_id'    => ['required', Rule::exists(Canton::class, 'id')],
+            'parroquia_id' => ['required', Rule::exists(Parroquia::class, 'id')],
         ];
     }
 }

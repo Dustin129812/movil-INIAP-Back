@@ -14,6 +14,7 @@ class EnsayoResource extends JsonResource
             'nombre' => $this->nombre,
             'tipo' => $this->tipo,
             'estado' => $this->estado,
+            'cantidad_parcelas' => $this->whenCounted('parcelas'),
             'tecnologia' => [
                 'nombre' => $this->nombre_tecnologia,
                 'tipo' => $this->tipo_tecnologia,
