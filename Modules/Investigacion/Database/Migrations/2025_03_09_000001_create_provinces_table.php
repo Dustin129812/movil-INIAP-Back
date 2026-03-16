@@ -16,6 +16,10 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
             $table->string('name');
+            $table->string('codigo_inec', 2)
+                ->nullable()
+                ->unique()
+                ->comment('Código DPA_PROVIN del INEC');
         });
     }
 

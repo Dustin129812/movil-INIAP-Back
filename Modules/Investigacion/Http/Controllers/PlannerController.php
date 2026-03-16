@@ -279,6 +279,7 @@ class PlannerController extends Controller
             $revisor = $request->user();
             $revisor->load('groups.members');
 
+            // Mantenemos la colección intacta como en tu código original
             $teamMemberIds = $revisor->groups->flatMap(function ($group) {
                 return $group->members->pluck('id');
             })->unique();
@@ -288,60 +289,110 @@ class PlannerController extends Controller
             }
 
             $relevantStatuses = ['pending', 'approved', 'rejected', 'reassigned'];
-
-            // 1. Capturamos el periodo (Por defecto 30 días para proteger la BD)
             $period = $request->query('period', '15days');
 
-            // 2. Armamos la consulta base
-            $query = WeekActivity::whereIn('status', $relevantStatuses)
+            $dateFilter = null;
+            if ($period === '7days') {
+                $dateFilter = Carbon::now()->subDays(7);
+            } elseif ($period === '15days') {
+                $dateFilter = Carbon::now()->subDays(15);
+            }
+
+            // ====================================================================
+            // 1. TAREAS PROPIAS (Las normales)
+            // ====================================================================
+            $ownQuery = WeekActivity::whereIn('status', $relevantStatuses)
                 ->whereIn('user_id', $teamMemberIds)
                 ->with([
                     'activity.product.rubro',
                     'activity.product.location',
                     'user',
                     'materials',
-                    'activity.indicators',
+                    'activity.indicators'
                 ]);
 
-            // 3. Aplicamos la Regla de Oro (Filtro de fechas)
-            if ($period === '7days') {
-                $query->where('date', '>=', Carbon::now()->subDays(7));
-            } elseif ($period === '15days') {
-                $query->where('date', '>=', Carbon::now()->subDays(15));
+            if ($dateFilter) {
+                $ownQuery->where('date', '>=', $dateFilter);
             }
-            // Si $period === 'all', no agregamos filtro de fecha y trae todo
+            $ownActivities = $ownQuery->orderBy('date', 'desc')->get();
 
-            // 4. Ejecutamos la consulta ordenando por fecha más reciente
-            $allPendingActivities = $query->orderBy('date', 'desc')->get();
+            // ====================================================================
+            // 2. TAREAS DE APOYO
+            // ====================================================================
+            $supportQuery = WeekActivity::whereIn('status', $relevantStatuses)
+                ->whereHas('logisticSupportUsers', function ($q) use ($teamMemberIds) {
+                    $q->whereIn('users.id', $teamMemberIds)
+                        ->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
+                })
+                ->with([
+                    'activity.product.rubro',
+                    'activity.product.location',
+                    'user',
+                    'materials',
+                    'activity.indicators',
+                    'logisticSupportUsers'
+                ]);
 
+            if ($dateFilter) {
+                $supportQuery->where('date', '>=', $dateFilter);
+            }
+            $supportActivities = $supportQuery->orderBy('date', 'desc')->get();
+
+            // ====================================================================
+            // 3. AGRUPACIÓN CON INYECCIÓN DE ATRIBUTOS (setAttribute)
+            // ====================================================================
             $groupedByUser = [];
-            foreach ($allPendingActivities as $weekActivity) {
-                // Se asegura de no procesar datos incompletos
-                if (!$weekActivity->user || !$weekActivity->activity || !$weekActivity->activity->product) {
-                    continue;
-                }
-                $groupedByUser[$weekActivity->user_id][] = $weekActivity;
+            $userNamesCache = [];
+
+            foreach ($ownActivities as $act) {
+                if (!$act->user || !$act->activity || !$act->activity->product) continue;
+
+                // Inyección segura: Laravel lo serializará automáticamente en el JSON
+                $act->setAttribute('is_owner', true);
+                $act->setAttribute('display_user_id', $act->user_id);
+                $act->setAttribute('display_user_name', $act->user->name);
+                $act->setAttribute('ownerName', $act->user->name);
+
+                $groupedByUser[$act->user_id][] = $act;
+                $userNamesCache[$act->user_id] = $act->user->name;
             }
 
-            $userIds = array_keys($groupedByUser);
-            $users = User::whereIn('id', $userIds)->get()->keyBy('id');
+            foreach ($supportActivities as $act) {
+                if (!$act->user || !$act->activity || !$act->activity->product) continue;
 
+                foreach ($act->logisticSupportUsers as $supportUser) {
+                    if ($teamMemberIds->contains($supportUser->id) && in_array($supportUser->pivot->status, ['accepted', 'pending'])) {
+                        $clonedAct = clone $act;
+
+                        // Inyección segura para los apoyos
+                        $clonedAct->setAttribute('is_owner', false);
+                        $clonedAct->setAttribute('display_user_id', $supportUser->id);
+                        $clonedAct->setAttribute('display_user_name', $supportUser->name);
+                        $clonedAct->setAttribute('ownerName', $act->user->name);
+
+                        $groupedByUser[$supportUser->id][] = $clonedAct;
+                        $userNamesCache[$supportUser->id] = $supportUser->name;
+                    }
+                }
+            }
+
+            // ====================================================================
+            // 4. FORMATEO IDÉNTICO AL ORIGINAL
+            // ====================================================================
             $formattedData = [];
             foreach ($groupedByUser as $userId => $activities) {
-                if (!isset($users[$userId])) continue;
-
-                $user = $users[$userId];
                 $groupedByProduct = collect($activities)->groupBy('activity.product_id');
 
                 $formattedData[] = [
-                    'id' => $user->id,
-                    'name' => $user->name,
+                    'id' => $userId,
+                    'name' => $userNamesCache[$userId] ?? 'Usuario',
                     'activities' => $groupedByProduct->map(function ($activitiesForProduct) {
                         $firstActivity = $activitiesForProduct->first();
                         return [
                             'product_id' => $firstActivity->activity->product->id,
                             'product_name' => $firstActivity->activity->product->name,
                             'activity_description' => $firstActivity->activity->name,
+                            // Al dejar el ->values() intacto, dejamos que Laravel haga su magia de serialización sin romper nada
                             'week_activities' => $activitiesForProduct->values(),
                         ];
                     })->values()->toArray()
@@ -350,8 +401,8 @@ class PlannerController extends Controller
 
             return response()->json(['data' => $formattedData]);
 
-        } catch (Exception $e) {
-            Log::error('Error en getWeeklyPlanningByResponsible: ' . $e->getMessage(), [
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error en getWeeklyPlanningByResponsible: ' . $e->getMessage(), [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);

@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Modules\Transferencia\Http\Controllers\AcuerdoController;
+use Modules\Transferencia\Http\Controllers\DpaController;
 use Modules\Transferencia\Http\Controllers\EnsayoController;
 use Modules\Transferencia\Http\Controllers\OrganizacionController;
 use Modules\Transferencia\Http\Controllers\ParcelaController;
@@ -26,4 +27,7 @@ Route::prefix('transferencia')->group(function() {
 
     Route::get('archivos/{tipo}/{id}', function($tipo, $id) {
     })->name('api.transferencia.archivos.descargar');
+
+    Route::post('/dpa/importar', [DpaController::class, 'importar'])
+        ->name('api.ubicacion.dpa.importar');
 });

@@ -17,6 +17,17 @@ return new class extends Migration
             $table->id();
             $table->foreignId('canton_id')->constrained('cantons')->cascadeOnDelete();
             $table->string('nombre');
+            $table->string('codigo_inec', 6)
+                ->nullable()
+                ->unique()
+                ->comment('Código DPA_PARROQ del INEC');
+
+            Schema::table('parroquias', function (Blueprint $table) {
+                $table->foreignId('canton_id')
+                    ->nullable()
+                    ->constrained('cantons')
+                    ->nullOnDelete();
+            });
             $table->timestamps();
             $table->softDeletes();
         });

@@ -12,6 +12,8 @@ class Canton extends Model
     protected $table = 'cantons';
     protected $fillable = [
         'name',
+        'codigo_inec',
+        'provincia_id',
     ];
 
     public function locations(){

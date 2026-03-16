@@ -16,6 +16,15 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
             $table->string('name');
+            $table->string('codigo_inec', 4)
+                ->nullable()
+                ->unique()
+                ->comment('Código DPA_CANTON del INEC');
+
+            $table->foreignId('provincia_id')
+                ->nullable()
+                ->constrained('provinces')
+                ->nullOnDelete();
         });
     }
 

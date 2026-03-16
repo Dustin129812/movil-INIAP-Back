@@ -11,7 +11,7 @@ class Parroquia extends Model
     use SoftDeletes;
 
     protected $table = 'parroquias';
-    protected $fillable = ['canton_id', 'nombre'];
+    protected $fillable = ['canton_id', 'codigo_inec', 'nombre', 'canton_id'];
 
     public function canton(): BelongsTo
     {
