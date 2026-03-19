@@ -5,7 +5,6 @@ namespace Modules\Transferencia\Entities;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-// use Modules\Transferencia\Entities\Parcela;
 
 class Ensayo extends Model
 {
@@ -47,11 +46,8 @@ class Ensayo extends Model
         );
     }
 
-    // A futuro: Un catálogo de ensayo tiene muchas ejecuciones en campo (Parcelas)
-    /*
-    public function parcelas(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function parcelas()
     {
-        return $this->hasMany(Parcela::class);
+        return $this->hasMany(Parcela::class, 'ensayo_id'); // Asegúrate de que el foreign key sea el correcto si no es 'ensayo_id'
     }
-    */
 }

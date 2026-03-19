@@ -1,6 +1,5 @@
 <?php
 
-
 namespace Modules\Transferencia\Services;
 
 use Illuminate\Http\UploadedFile;
@@ -8,72 +7,136 @@ use Illuminate\Support\Facades\DB;
 use Modules\Investigacion\Entities\Canton;
 use Modules\Investigacion\Entities\Parroquia;
 use Modules\Investigacion\Entities\Province;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class DpaService
 {
-    /**
-     * Procesa el archivo CSV del DPA y construye la jerarquía geográfica.
-     */
-    public function importarDpaCsv($archivo): array
+    public function importar(UploadedFile $file): array
     {
-        // 1. Forzamos a PHP a reconocer saltos de línea de Mac, Linux o Windows
-        ini_set('auto_detect_line_endings', true);
+        $spreadsheet = IOFactory::load($file->getRealPath());
+        $hojaActiva = $spreadsheet->getSheet(0);
+        $filas = $hojaActiva->toArray();
 
-        return DB::transaction(function () use ($archivo) {
-            $fileHandle = fopen($archivo->getRealPath(), 'r');
+        return DB::transaction(function () use ($filas) {
+            $stats = ['provincias' => 0, 'cantones' => 0, 'parroquias' => 0];
 
-            $stats = ['provincias' => 0, 'cantones' => 0, 'parroquias' => 0, 'lineas_leidas' => 0];
+            $cleanCode = function($val) {
+                if ($val === null || $val === '') return '';
+                $stringVal = trim((string)$val);
+                $sinDecimales = explode('.', $stringVal)[0];
+                return preg_replace('/[^0-9]/', '', $sinDecimales);
+            };
 
-            while (($row = fgetcsv($fileHandle, 4000, ',')) !== false) {
+            foreach ($filas as $indice => $data) {
+                $numeroFila = $indice + 1;
 
-                // 2. Soporte automático si el Excel del usuario guardó con punto y coma (;)
-                if (count($row) === 1 && strpos($row[0], ';') !== false) {
-                    $row = explode(';', $row[0]);
-                }
-
-                // 3. Extraemos las columnas clave según la estructura oficial del INEC
-                $codProv = trim($row[1] ?? '');
-                $nomProv = trim($row[4] ?? '');
-
-                // 4. Búsqueda inteligente: Solo procesa si la fila tiene un código numérico y un nombre.
-                // Esto ignora automáticamente las filas de título, cabeceras y líneas en blanco.
-                if (empty($codProv) || !is_numeric($codProv) || empty($nomProv)) {
+                if ($numeroFila < 4) {
                     continue;
                 }
 
-                $stats['lineas_leidas']++; // Contamos que sí encontró una línea válida
+                if (!isset($data[2]) || trim((string)$data[2]) === '') {
+                    continue;
+                }
 
-                $codCant = trim($row[2] ?? '');
-                $codParr = trim($row[3] ?? '');
-                $nomCant = trim($row[5] ?? '');
-                $nomParr = trim($row[6] ?? '');
+                $codProvRaw = $cleanCode($data[2]);
+                $nombrePro  = trim((string)($data[3] ?? ''));
 
-                // Inserción en cascada con protección de duplicados
-                $provincia = Province::firstOrCreate(
-                    ['codigo_inec' => $codProv],
-                    ['name' => $nomProv]
-                );
-                if ($provincia->wasRecentlyCreated) $stats['provincias']++;
+                $codCanRaw  = $cleanCode($data[4] ?? '');
+                $nombreCan  = trim((string)($data[5] ?? ''));
 
-                $canton = Canton::firstOrCreate(
-                    ['codigo_inec' => $codCant, 'provincia_id' => $provincia->id],
-                    ['name' => $nomCant]
-                );
-                if ($canton->wasRecentlyCreated) $stats['cantones']++;
+                $codParRaw  = $cleanCode($data[6] ?? '');
+                $nombrePar  = trim((string)($data[7] ?? ''));
 
-                $parroquia = Parroquia::firstOrCreate(
-                    ['codigo_inec' => $codParr, 'canton_id' => $canton->id],
-                    ['nombre' => $nomParr]
-                );
-                if ($parroquia->wasRecentlyCreated) $stats['parroquias']++;
+                if (empty($codProvRaw) || strlen($codProvRaw) > 2) {
+                    continue;
+                }
+
+                $codProvincia = str_pad($codProvRaw, 2, '0', STR_PAD_LEFT);
+                $codCanton    = $codProvincia . str_pad($codCanRaw, 2, '0', STR_PAD_LEFT);
+                $codParroquia = $codCanton . str_pad($codParRaw, 2, '0', STR_PAD_LEFT);
+
+                $provincia = $this->skipOrSyncProvincia($codProvincia, $nombrePro, $stats);
+
+                if (!empty($nombreCan) && !empty($codCanRaw)) {
+                    $canton = $this->skipOrSyncCanton($provincia->id, $codCanton, $nombreCan, $stats);
+
+                    if (!empty($nombrePar) && !empty($codParRaw)) {
+                        $this->skipOrSyncParroquia($canton->id, $codParroquia, $nombrePar, $stats);
+                    }
+                }
             }
-
-            fclose($fileHandle);
-
-            // Registramos la métrica real en Spatie ActivityLog
-            activity('system')->log("Sincronización DPA: {$stats['provincias']} Provincias, {$stats['cantones']} Cantones, {$stats['parroquias']} Parroquias nuevas. (Líneas procesadas: {$stats['lineas_leidas']})");
 
             return $stats;
         });
+    }
+
+    private function skipOrSyncProvincia(string $codigo, string $nombre, array &$stats): Province
+    {
+        $provincia = Province::where('codigo_inec', $codigo)
+            ->orWhere('name', 'ilike', $nombre)
+            ->first();
+
+        if ($provincia) {
+            if ($provincia->codigo_inec !== $codigo) {
+                $provincia->update(['codigo_inec' => $codigo]);
+            }
+            return $provincia;
+        }
+
+        $stats['provincias']++;
+        return Province::create(['codigo_inec' => $codigo, 'name' => $nombre]);
+    }
+
+    private function skipOrSyncCanton(int $provinciaId, string $codigo, string $nombre, array &$stats): Canton
+    {
+        $canton = Canton::where('codigo_inec', $codigo)
+            ->orWhere(function ($query) use ($nombre, $provinciaId) {
+                $query->where('name', 'ilike', $nombre)
+                    // ¡Corregido a provincia_id!
+                    ->where('provincia_id', $provinciaId);
+            })
+            ->first();
+
+        if ($canton) {
+            // ¡Corregido a provincia_id!
+            if ($canton->codigo_inec !== $codigo || $canton->provincia_id !== $provinciaId) {
+                $canton->update([
+                    'codigo_inec' => $codigo,
+                    'provincia_id' => $provinciaId // ¡Corregido a provincia_id!
+                ]);
+            }
+            return $canton;
+        }
+
+        $stats['cantones']++;
+        return Canton::create([
+            'provincia_id' => $provinciaId,
+            'codigo_inec' => $codigo,
+            'name' => $nombre
+        ]);
+    }
+
+    private function skipOrSyncParroquia(int $cantonId, string $codigo, string $nombre, array &$stats): Parroquia
+    {
+        $parroquia = Parroquia::where('codigo_inec', $codigo)
+            ->orWhere(function ($query) use ($nombre, $cantonId) {
+                $query->where('nombre', 'ilike', $nombre)
+                    ->where('canton_id', $cantonId);
+            })
+            ->first();
+
+        if ($parroquia) {
+            if ($parroquia->codigo_inec !== $codigo || $parroquia->canton_id !== $cantonId) {
+                $parroquia->update(['codigo_inec' => $codigo, 'canton_id' => $cantonId]);
+            }
+            return $parroquia;
+        }
+
+        $stats['parroquias']++;
+        return Parroquia::create([
+            'canton_id' => $cantonId,
+            'codigo_inec' => $codigo,
+            'nombre' => $nombre
+        ]);
     }
 }

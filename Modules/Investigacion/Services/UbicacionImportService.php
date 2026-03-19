@@ -20,7 +20,7 @@ class UbicacionImportService
             $headers = fgetcsv($handle, 1000, ',');
             $headers[0] = preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $headers[0]);
 
-            $stats = ['provincias' => 0, 'cantones' => 0, 'parroquias' => 0];
+            $stats = ['provinces' => 0, 'cantons' => 0, 'parroquias' => 0];
 
             while (($data = fgetcsv($handle, 1000, ',')) !== false) {
                 if (count($headers) !== count($data)) continue;
@@ -64,28 +64,33 @@ class UbicacionImportService
             return $provincia;
         }
 
-        return Province::create(['codigo_inec' => $codigo, 'nombre' => $nombre]);
+        return Province::create(['codigo_inec' => $codigo, 'name' => $nombre]);
     }
 
-    private function syncCanton(int $provinciaId, string $codigo, string $nombre): Canton
+    private function skipOrSyncCanton(int $provinciaId, string $codigo, string $nombre, array &$stats): Canton
     {
         $canton = Canton::where('codigo_inec', $codigo)
-            ->orWhere('nombre', 'ilike', $nombre)
+            ->orWhere(function ($query) use ($nombre, $provinciaId) {
+                $query->where('name', 'ilike', $nombre)
+                    // 1. Debe decir provincia_id aquí
+                    ->where('provincia_id', $provinciaId);
+            })
             ->first();
 
         if ($canton) {
-            $canton->update([
-                'codigo_inec' => $codigo,
-                'nombre' => $nombre,
-                'provincia_id' => $provinciaId // Aquí sanamos la base de datos
-            ]);
+            // 2. Debe decir provincia_id aquí y en el update
+            if ($canton->codigo_inec !== $codigo || $canton->provincia_id !== $provinciaId) {
+                $canton->update(['codigo_inec' => $codigo, 'provincia_id' => $provinciaId]);
+            }
             return $canton;
         }
 
+        $stats['cantones']++;
         return Canton::create([
+            // 3. Debe decir provincia_id aquí en el create
             'provincia_id' => $provinciaId,
             'codigo_inec' => $codigo,
-            'nombre' => $nombre
+            'name' => $nombre
         ]);
     }
 

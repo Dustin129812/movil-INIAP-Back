@@ -5,23 +5,25 @@ namespace Modules\Transferencia\Services;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Modules\Transferencia\Entities\Acuerdo;
+use Modules\Transferencia\Entities\Ensayo;
 
 class AcuerdoService
 {
     public function paginate(array $filters): LengthAwarePaginator
     {
-        $query = Ensayo::query()
-            ->with(['equipoTecnico'])
+        // 1. Modelo correcto, cargamos la contraparte y contamos cuántas parcelas lo usan
+        $query = Acuerdo::query()
+            ->with(['organizacion'])
             ->withCount('parcelas');
 
+        // 2. Búsqueda por texto (Buscamos si el nombre de la organización coincide)
         if (!empty($filters['search'])) {
-            $query->where('nombre', 'ilike', '%' . $filters['search'] . '%')
-                ->orWhere('nombre_tecnologia', 'ilike', '%' . $filters['search'] . '%');
+            $query->whereHas('organizacion', function ($q) use ($filters) {
+                $q->where('nombre', 'ilike', '%' . $filters['search'] . '%');
+            });
         }
 
-        if (!empty($filters['estado'])) { $query->where('estado', $filters['estado']); }
-        if (!empty($filters['tipo'])) { $query->where('tipo', $filters['tipo']); }
-
+        // 3. Filtros Geográficos: Trae acuerdos que tengan parcelas en esta ubicación
         if (!empty($filters['provincia_id']) || !empty($filters['canton_id']) || !empty($filters['parroquia_id'])) {
             $query->whereHas('parcelas', function ($q) use ($filters) {
                 if (!empty($filters['provincia_id'])) {
@@ -54,7 +56,6 @@ class AcuerdoService
     {
         if (isset($data['archivo_acuerdo']) && $data['archivo_acuerdo'] instanceof \Illuminate\Http\UploadedFile) {
 
-            // Eliminar el archivo antiguo si existe
             if ($acuerdo->archivo_acuerdo_path && Storage::disk('private')->exists($acuerdo->archivo_acuerdo_path)) {
                 Storage::disk('private')->delete($acuerdo->archivo_acuerdo_path);
             }
@@ -70,7 +71,6 @@ class AcuerdoService
 
     public function delete(Acuerdo $acuerdo): bool
     {
-        // Eliminación lógica (SoftDelete) preservando el archivo en storage
         return $acuerdo->delete();
     }
 }

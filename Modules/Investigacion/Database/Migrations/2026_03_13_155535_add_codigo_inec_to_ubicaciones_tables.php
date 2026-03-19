@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Alterar tabla Provinces
+        /*
         Schema::table('provinces', function (Blueprint $table) {
             $table->string('codigo_inec', 2)
                 ->nullable()
@@ -16,20 +16,19 @@ return new class extends Migration
                 ->comment('Código DPA_PROVIN del INEC');
         });
 
-        // 2. Alterar tabla Cantons
+
         Schema::table('cantons', function (Blueprint $table) {
             $table->string('codigo_inec', 4)
                 ->nullable()
                 ->unique()
                 ->comment('Código DPA_CANTON del INEC');
         });
-
-        // 3. Alterar tabla Parroquias
+        */
         Schema::table('parroquias', function (Blueprint $table) {
-            $table->string('codigo_inec', 6)
+            $table->string('codigo_inec', 4)
                 ->nullable()
                 ->unique()
-                ->comment('Código DPA_PARROQ del INEC');
+                ->comment('Código DPA_PARR del INEC');
         });
     }
 

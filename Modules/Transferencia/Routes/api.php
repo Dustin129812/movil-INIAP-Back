@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Modules\Transferencia\Http\Controllers\AcuerdoController;
+use Modules\Transferencia\Http\Controllers\DashboardController;
 use Modules\Transferencia\Http\Controllers\DpaController;
 use Modules\Transferencia\Http\Controllers\EnsayoController;
 use Modules\Transferencia\Http\Controllers\OrganizacionController;
@@ -30,4 +31,7 @@ Route::prefix('transferencia')->group(function() {
 
     Route::post('/dpa/importar', [DpaController::class, 'importar'])
         ->name('api.ubicacion.dpa.importar');
+
+    Route::get('dashboard', [DashboardController::class, 'index'])
+        ->name('api.transferencia.dashboard');
 });

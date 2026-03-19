@@ -25,15 +25,21 @@ class Acuerdo extends Model
         'anios_vigencia' => 'integer',
     ];
 
-    // Relación hacia su Organización
     public function organizacion(): BelongsTo
     {
         return $this->belongsTo(Organizacion::class);
     }
 
-    // Relación hacia los Ensayos vinculados a este acuerdo
     public function ensayos(): HasMany
     {
         return $this->hasMany(Ensayo::class);
+    }
+
+    /**
+     * Relación: Un acuerdo puede respaldar muchas parcelas.
+     */
+    public function parcelas()
+    {
+        return $this->hasMany(Parcela::class, 'acuerdo_id');
     }
 }
