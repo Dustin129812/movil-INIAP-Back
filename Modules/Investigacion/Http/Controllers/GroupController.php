@@ -1,137 +1,69 @@
 <?php
 
 namespace Modules\Investigacion\Http\Controllers;
+
 use App\Http\Controllers\Controller;
-use Modules\Investigacion\Http\Resources\GroupResource;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Modules\Investigacion\Entities\Group;
+use Modules\Investigacion\Http\Requests\Groups\ChangeResponsibleRequest;
+use Modules\Investigacion\Http\Requests\Groups\IndexGroupRequest;
+use Modules\Investigacion\Http\Requests\Groups\StoreGroupRequest;
+use Modules\Investigacion\Http\Requests\Groups\SyncMembersRequest;
+use Modules\Investigacion\Http\Requests\Groups\UpdateGroupRequest;
+use Modules\Investigacion\Http\Resources\GroupResource;
+use Modules\Investigacion\Services\GroupService;
 
 class GroupController extends Controller
 {
-    /**
-     * Muestra una lista de todos los grupos.
-     * GET /api/groups
-     */
-    public function index()
+    public function __construct(
+        private readonly GroupService $groupService
+    ) {}
+
+    public function index(IndexGroupRequest $request): AnonymousResourceCollection
     {
-        $groups = Group::with(['rubro', 'location', 'members', 'responsible', 'creator'])->withCount('members')->latest()->paginate(15);
+        $groups = $this->groupService->getGroups($request->validated());
 
         return GroupResource::collection($groups);
     }
 
-    /**
-     * Crea un nuevo grupo en la base de datos.
-     * POST /api/groups
-     */
-    public function store(Request $request)
+    public function store(StoreGroupRequest $request): GroupResource
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('groups')->where(function ($query) use ($request) {
-                return $query->where('rubro_id', $request->rubro_id)->where('location_id', $request->location_id);
-            })],
-            'rubro_id' => 'required|exists:rubros,id',
-            'location_id' => 'required|exists:locations,id',
-            'members' => 'present|array',
-            'members.*' => 'required|exists:users,id',
-            'responsible_id' => 'required|exists:users,id',
-        ], [
-            'name.unique' => 'Ya existe un grupo con este nombre para el mismo rubro y ubicación.',
-            'responsible_id.required' => 'Debes seleccionar un responsable para el grupo.',
-        ]);
+        $group = $this->groupService->createGroup($request->validated());
 
-        $members = collect($validated['members']);
-        $responsibleId = $validated['responsible_id'];
-
-        if (!$members->contains($responsibleId)) {
-            $members->push($responsibleId);
-        }
-
-        $group = Group::create([
-            'name' => $validated['name'],
-            'rubro_id' => $validated['rubro_id'],
-            'location_id' => $validated['location_id'],
-            'creator_id' => Auth::id(),
-            'responsible_id' => $responsibleId,
-        ]);
-
-        $group->members()->sync($members->unique()->all());
         return new GroupResource($group->load(['rubro', 'location', 'members', 'creator', 'responsible']));
     }
 
-    public function changeResponsible(Request $request, Group $group)
+    public function show(Group $group): GroupResource
     {
-        $validated = $request->validate([
-            'responsible_id' => [
-                'required',
-                'exists:users,id',
-                Rule::exists('group_user', 'user_id')->where('group_id', $group->id),
-            ]
-        ], [
-            'responsible_id.exists' => 'El usuario seleccionado no es un miembro válido de este grupo.'
-        ]);
-
-        $group->update([
-            'responsible_id' => $validated['responsible_id']
-        ]);
-
-        return new GroupResource($group->load('responsible', 'members'));
+        return new GroupResource($group->load(['rubro', 'location', 'creator', 'members', 'responsible']));
     }
 
-    /**
-     * Muestra un grupo específico con todos sus detalles.
-     * GET /api/groups/{group}
-     */
-    public function show(Group $group)
+    public function update(UpdateGroupRequest $request, Group $group): GroupResource
     {
-        $group->load(['rubro', 'location', 'creator', 'members', 'responsible']);
-
-        return new GroupResource($group);
-    }
-
-    /**
-     * Actualiza la información principal de un grupo.
-     * PUT /api/groups/{group}
-     */
-    public function update(Request $request, Group $group)
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('groups')->ignore($group->id)->where(function ($query) use ($request) {
-                return $query->where('rubro_id', $request->rubro_id)->where('location_id', $request->location_id);
-            })],
-            'rubro_id' => 'required|exists:rubros,id',
-            'location_id' => 'required|exists:locations,id',
-        ]);
-
-        $group->update($validated);
+        $group = $this->groupService->updateGroup($group, $request->validated());
 
         return new GroupResource($group->load(['rubro', 'location', 'members']));
     }
 
-    /**
-     * Sincroniza (reemplaza) los miembros de un grupo.
-     * PUT /api/groups/{group}/members
-     */
-    public function syncMembers(Request $request, Group $group)
+    public function syncMembers(SyncMembersRequest $request, Group $group): GroupResource
     {
-        $validated = $request->validate([
-            'members' => 'present|array',
-            'members.*' => 'required|exists:users,id',
-        ]);
-
-        $group->members()->sync($validated['members']);
+        $group = $this->groupService->syncMembers($group, $request->validated('members'));
 
         return new GroupResource($group->load('members'));
     }
 
-    /**
-     * Elimina un grupo de la base de datos.
-     * DELETE /api/groups/{group}
-     */
-    public function destroy(Group $group)
+    public function changeResponsible(ChangeResponsibleRequest $request, Group $group): GroupResource
     {
-        $group->delete();
+        $group = $this->groupService->changeResponsible($group, $request->validated('responsible_id'));
+
+        return new GroupResource($group->load(['responsible', 'members']));
+    }
+
+    public function destroy(Group $group): Response
+    {
+        $this->groupService->deleteGroup($group);
 
         return response()->noContent();
     }
