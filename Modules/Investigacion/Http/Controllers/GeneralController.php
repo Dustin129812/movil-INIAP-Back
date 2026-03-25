@@ -79,7 +79,6 @@ class GeneralController extends Controller
         }
     }
 
-//admin-Station
     public function getProductsByLocation()
     {
         try {

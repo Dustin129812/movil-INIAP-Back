@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Modules\Investigacion\Entities\Performance_Indicator;
 use Modules\Investigacion\Http\Requests\StoreIndicatorRequest;
 use Modules\Investigacion\Http\Requests\UpdateIndicatorRequest;
+use Modules\Investigacion\Transformers\IndicatorResource;
 
 class IndicatorController extends Controller
 {
@@ -16,10 +17,12 @@ class IndicatorController extends Controller
         $query = Performance_Indicator::query();
 
         $query->when($request->input('search'), function ($q, $search) {
-            return $q->where('name', 'like', "%{$search}%");
+            return $q->where('name', 'ilike', "%{$search}%");
         });
 
-        return response()->json($query->latest()->get());
+        return response()->json(
+            IndicatorResource::collection($query->latest()->get())
+        );
     }
 
     public function store(StoreIndicatorRequest $request): JsonResponse

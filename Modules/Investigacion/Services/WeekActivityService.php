@@ -204,18 +204,33 @@ class WeekActivityService
             return;
         }
 
+        $materialNames = array_column($materialsData, 'name');
+        $materialsFromDb = Material::whereIn('name', $materialNames)->get()->keyBy('name');
+
         $syncData = [];
         foreach ($materialsData as $materialInput) {
-            $materialFromDb = Material::where('name', $materialInput['name'])->first();
-            if ($materialFromDb) {
-                $syncData[$materialFromDb->id] = [
-                    'quantity' => $materialInput['quantity'] ?? null,
-                    'description' => $materialInput['description'] ?? null,
+            $name = $materialInput['name'] ?? null;
+
+            if ($name && $materialsFromDb->has($name)) {
+                $materialId = $materialsFromDb->get($name)->id;
+
+                $quantity = !empty($materialInput['quantity']) && is_numeric($materialInput['quantity'])
+                    ? (int) $materialInput['quantity']
+                    : 1;
+
+                $description = !empty($materialInput['description'])
+                    ? (string) $materialInput['description']
+                    : '';
+
+                $syncData[$materialId] = [
+                    'quantity' => $quantity,
+                    'description' => $description,
                     'created_at' => now(),
                     'updated_at' => now()
                 ];
             }
         }
+
         $weekActivity->materials()->sync($syncData);
     }
 
