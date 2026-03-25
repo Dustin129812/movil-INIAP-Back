@@ -51,7 +51,7 @@ class EnsayoService
     public function update(Ensayo $ensayo, array $data): Ensayo
     {
         return DB::transaction(function () use ($ensayo, $data) {
-            // Lógica Protocolo
+
             if (isset($data['archivo_protocolo']) && $data['archivo_protocolo'] instanceof \Illuminate\Http\UploadedFile) {
                 if ($ensayo->archivo_protocolo_path && Storage::disk('private')->exists($ensayo->archivo_protocolo_path)) {
                     Storage::disk('private')->delete($ensayo->archivo_protocolo_path);
@@ -65,7 +65,6 @@ class EnsayoService
                 $data['archivo_protocolo_path'] = null;
             }
 
-            // Lógica Informe
             if (isset($data['archivo_informe']) && $data['archivo_informe'] instanceof \Illuminate\Http\UploadedFile) {
                 if ($ensayo->archivo_informe_path && Storage::disk('private')->exists($ensayo->archivo_informe_path)) {
                     Storage::disk('private')->delete($ensayo->archivo_informe_path);

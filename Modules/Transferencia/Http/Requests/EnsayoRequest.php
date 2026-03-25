@@ -37,8 +37,6 @@ class EnsayoRequest extends FormRequest
             'estado'       => ['nullable', 'string', 'in:Activo,Inactivo'],
             'tipo'         => ['nullable', 'string', 'in:Investigación,Validación,Demostrativa,Difusión,Aprendizaje'],
             'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
-
-            // Nuevos filtros por ubicación
             'provincia_id' => ['nullable', 'integer', Rule::exists(Province::class, 'id')],
             'canton_id'    => ['nullable', 'integer', Rule::exists(Canton::class, 'id')],
             'parroquia_id' => ['nullable', 'integer', Rule::exists(Parroquia::class, 'id')],
@@ -51,8 +49,16 @@ class EnsayoRequest extends FormRequest
             'nombre' => ['required', 'string', 'max:255'],
             'tipo' => ['required', 'string', 'in:Investigación,Validación,Demostrativa,Difusión,Aprendizaje'],
             'nombre_tecnologia' => ['required', 'string', 'max:255'],
-            'tipo_tecnologia' => ['required', 'string', 'in:Material genetico,Recomendación,Producto'],
-
+            'tipo_tecnologia' => [
+                'required',
+                'string',
+                Rule::in([
+                    'Híbridos, clones o Variedades',
+                    'Manejo Integrado de Cultivo',
+                    'Sistemas Agroforestales',
+                    'Bioinsumos'
+                ])
+            ],
             'tiene_protocolo' => ['boolean'],
             'aprobado_por_comite' => ['boolean'],
             'fecha_aprobacion_protocolo' => ['nullable', 'required_if:tiene_protocolo,true', 'date'],
