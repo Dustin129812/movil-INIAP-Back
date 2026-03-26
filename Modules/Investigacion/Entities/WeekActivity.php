@@ -3,13 +3,12 @@
 namespace Modules\Investigacion\Entities;
 
 use App\Models\User;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WeekActivity extends Model
 {
-    use HasFactory, SoftDeletes;
+    use SoftDeletes;
     protected $table = 'weekly_activities';
     protected $fillable = [
         'description',
@@ -20,7 +19,8 @@ class WeekActivity extends Model
         'observations',
         'work_location',
         'user_id',
-        'status'
+        'status',
+        'activity_type',
     ];
 
     public function product()

@@ -7,7 +7,6 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\Investigacion\Entities\Activity;
 use Modules\Investigacion\Entities\Material;
-use Modules\Investigacion\Entities\Performance_Indicator;
 use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Entities\WeekPlanner;
 use Modules\Investigacion\Notifications\OursWeekPlanner;
@@ -49,7 +48,6 @@ class WeekActivityService
 
                 $activityDate = $baseMonday->copy()->addDays($dayOffsets[$data['day']] ?? 0);
 
-                // 1. Crear la WeekActivity
                 $weekActivity = new WeekActivity();
                 $weekActivity->description = $data['description'];
                 $weekActivity->date = $activityDate;
@@ -59,27 +57,23 @@ class WeekActivityService
                 $weekActivity->percentage = 0;
                 $weekActivity->activity_id = $activity->id;
                 $weekActivity->user_id = $user->id;
+                $weekActivity->activity_type = $data['activity_type'];
                 $weekActivity->save();
 
                 $entries[] = $weekActivity;
 
-                // 2. Relaciones: Materiales
                 $this->syncMaterials($weekActivity, $data['materials'] ?? []);
 
-                // 3. Relaciones: Indicadores
                 $this->syncIndicators($weekActivity, $data['indicators'] ?? []);
 
-                // 4. Relaciones: Apoyo Logístico
                 $this->syncLogisticSupport($weekActivity, $data['logisticSupports'] ?? []);
 
-                // 5. Crear el Planner (Asumo que esta lógica es requerida por tu sistema)
                 $planner = new WeekPlanner();
                 $planner->product()->associate($activity->product);
                 $planner->weekActivity()->associate($weekActivity);
                 $planner->save();
             }
 
-            // Notificación (se asume que todas las tareas son del mismo producto)
             if ($product) {
                 $productManager = User::find($product->user_id);
                 if ($productManager) {
@@ -285,7 +279,7 @@ class WeekActivityService
                     $clonedAct->display_user_id = $supportUser->id;
                     $clonedAct->display_user_name = $supportUser->name;
                     $clonedAct->is_owner_flag = false;
-                    $clonedAct->supported_owner_name = $act->user->name; // Para que el jefe sepa a quién ayuda
+                    $clonedAct->supported_owner_name = $act->user->name;
 
                     return $clonedAct;
                 });

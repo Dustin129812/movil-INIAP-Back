@@ -30,6 +30,11 @@ class StoreWeeklyPlanRequest extends FormRequest
                 'required',
                 Rule::exists(Product::class, 'id')
             ],
+            'weeklyPlans.*.activity_type' => [
+                'required',
+                'string',
+                Rule::in(['tecnica', 'administrativa'])
+            ],
 
             'weeklyPlans.*.description' => ['required', 'string'],
 

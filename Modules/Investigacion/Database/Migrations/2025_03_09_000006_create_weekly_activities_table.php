@@ -22,6 +22,9 @@ return new class extends Migration
             $table->string('work_location');
             $table->enum('status', ['pending', 'approved', 'rejected', 'in progress', 'completed', 'rated', 'reassigned', 'partial', 'not completed'])->default('pending');
             $table->text('observations')->nullable()->after('percentage');
+            $table->string('activity_type', 20)
+                ->default('tecnica')
+                ->comment('Diferencia si la actividad es tecnica o administrativa');
 
             $table->foreignId('activity_id')->constrained('activities');
             $table->foreignId('user_id')->constrained('users');

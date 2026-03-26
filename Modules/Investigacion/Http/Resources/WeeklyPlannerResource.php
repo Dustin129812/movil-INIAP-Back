@@ -20,8 +20,9 @@ class WeeklyPlannerResource extends JsonResource
                         return [
                             'id' => $weekActivity->id,
                             'week_description' => $weekActivity->description,
+                            'activity_type' => $weekActivity->activity_type,
                             'date' => $weekActivity->date,
-                            'day_of_week' => \Carbon\Carbon::parse($weekActivity->date)->format('l (d/m/Y)'),
+                            'day_of_week' => Carbon::parse($weekActivity->date)->format('l (d/m/Y)'),
                             'materials' => $weekActivity->materials->map(function ($material) {
                                 return [
                                     'id' => $material->id,
@@ -41,7 +42,7 @@ class WeeklyPlannerResource extends JsonResource
     {
         $daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
         $date = new \DateTime($date);
-        $dayOfWeek = $daysOfWeek[$date->format('w')]; // 'w' devuelve el día de la semana (0 = domingo, 6 = sábado)
+        $dayOfWeek = $daysOfWeek[$date->format('w')];
         $formattedDate = $date->format('d/m/Y');
         return "{$dayOfWeek} ({$formattedDate})";
     }
