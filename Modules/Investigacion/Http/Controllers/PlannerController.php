@@ -585,10 +585,9 @@ class PlannerController extends Controller
         try {
             $user = $request->user();
 
-            $products = Product::where('location_id', $user->location_id)
-                ->whereHas('rubro', function ($query) {
-                    $query->where('name', '=', 'OFICIAL');
-                })
+            $products = Product::whereHas('rubro', function ($query) {
+                $query->where('name', '=', 'OFICIAL');
+            })
                 ->with([
                     'location',
                     'rubro',
@@ -941,7 +940,6 @@ class PlannerController extends Controller
         $officialProducts = collect();
         if ($officialRubroId) {
             $officialProducts = Product::where('rubro_id', $officialRubroId)
-                ->where('location_id', $user->location_id)
                 ->with(['activities.users', 'rubro', 'user', 'location'])
                 ->get();
         }
