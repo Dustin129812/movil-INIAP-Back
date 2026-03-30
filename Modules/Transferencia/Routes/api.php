@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Modules\Transferencia\Http\Controllers\AcuerdoController;
 use Modules\Transferencia\Http\Controllers\DashboardController;
 use Modules\Transferencia\Http\Controllers\DpaController;
@@ -19,7 +20,7 @@ use Modules\Transferencia\Http\Controllers\ParcelaController;
 |
 */
 
-Route::prefix('transferencia')->group(function() {
+Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
 
     Route::apiResource('organizaciones', OrganizacionController::class);
     Route::apiResource('acuerdos', AcuerdoController::class);

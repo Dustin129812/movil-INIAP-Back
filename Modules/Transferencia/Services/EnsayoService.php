@@ -11,7 +11,13 @@ class EnsayoService
 {
     public function paginate(array $filters): LengthAwarePaginator
     {
-        $query = Ensayo::query()->with(['equipoTecnico']);
+        $query = Ensayo::query()->with(['equipoTecnico', 'producto', 'actividad']);
+
+        $user = request()->user();
+
+        if ($user && !$user->hasRole('administrador')) {
+            $query->where('location_id', $user->location_id);
+        }
 
         if (!empty($filters['search'])) {
             $query->where('nombre', 'ilike', '%' . $filters['search'] . '%')
@@ -37,6 +43,8 @@ class EnsayoService
                 $data['archivo_informe_path'] = $data['archivo_informe']->store('transferencia/informes', 'private');
                 unset($data['archivo_informe']);
             }
+
+            $data['location_id'] = request()->user()->location_id;
 
             $ensayo = Ensayo::create($data);
 

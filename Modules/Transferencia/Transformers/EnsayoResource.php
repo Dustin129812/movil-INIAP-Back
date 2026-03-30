@@ -31,6 +31,17 @@ class EnsayoResource extends JsonResource
                     ? route('api.transferencia.archivos.descargar', ['tipo' => 'informe', 'id' => $this->id])
                     : null,
             ],
+            'poa' => [
+                'producto' => $this->whenLoaded('producto', fn() => [
+                    'id' => $this->producto->id,
+                    'nombre' => $this->producto->name,
+                ]),
+                'actividad' => $this->whenLoaded('actividad', fn() => [
+                    'id' => $this->actividad->id,
+                    'descripcion' => $this->actividad->description,
+                ]),
+            ],
+            'location_id' => $this->location_id,
             'equipo_tecnico' => $this->whenLoaded('equipoTecnico'),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

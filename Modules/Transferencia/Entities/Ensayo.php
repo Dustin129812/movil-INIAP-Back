@@ -5,6 +5,8 @@ namespace Modules\Transferencia\Entities;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Modules\Investigacion\Entities\Activity;
+use Modules\Investigacion\Entities\Product;
 
 class Ensayo extends Model
 {
@@ -23,8 +25,10 @@ class Ensayo extends Model
         'fecha_aprobacion_protocolo',
         'archivo_protocolo_path',
         'archivo_informe_path',
+        'acuerdo_id',
         'producto_id',
         'actividad_id',
+        'location_id',
     ];
 
     protected $casts = [
@@ -32,6 +36,22 @@ class Ensayo extends Model
         'aprobado_por_comite' => 'boolean',
         'fecha_aprobacion_protocolo' => 'date',
     ];
+
+    /**
+     * Relación con el Producto del POA
+     */
+    public function producto()
+    {
+        return $this->belongsTo(Product::class, 'producto_id');
+    }
+
+    /**
+     * Relación con la Actividad del POA
+     */
+    public function actividad()
+    {
+        return $this->belongsTo(Activity::class, 'actividad_id');
+    }
 
     /**
      * Relación Muchos a Muchos con Usuarios (Equipo Técnico)

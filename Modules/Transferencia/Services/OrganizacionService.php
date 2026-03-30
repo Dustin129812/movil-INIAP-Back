@@ -10,7 +10,7 @@ class OrganizacionService
     public function paginate(array $filters): LengthAwarePaginator
     {
         $query = Organizacion::query()
-            ->with(['provincia', 'canton', 'parroquia']); // Eager loading
+            ->with(['provincia', 'canton', 'parroquia']);
 
         if (!empty($filters['search'])) {
             $query->where('nombre', 'ilike', '%' . $filters['search'] . '%');

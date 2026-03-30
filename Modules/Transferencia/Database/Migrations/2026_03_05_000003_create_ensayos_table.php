@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('archivo_informe_path')->nullable();
 
             $table->foreignId('acuerdo_id')->nullable()->constrained('transferencia.acuerdos')->nullOnDelete();
-
+            $table->foreignId('location_id')->constrained('locations');
             $table->foreignId('producto_id')->nullable()->constrained('products');
             $table->foreignId('actividad_id')->nullable()->constrained('activities');
             $table->foreignId('libro_campo_id')->nullable()->constrained('produccion.libros_campo');
