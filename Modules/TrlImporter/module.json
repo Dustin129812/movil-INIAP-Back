@@ -1,0 +1,11 @@
+{
+    "name": "TrlImporter",
+    "alias": "trlimporter",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\TrlImporter\\Providers\\TrlImporterServiceProvider"
+    ],
+    "files": []
+}

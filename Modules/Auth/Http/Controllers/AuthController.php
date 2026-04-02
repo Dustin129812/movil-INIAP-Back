@@ -1,39 +1,31 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace Modules\Auth\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Modules\Auth\Http\Requests\LoginRequest;
+use Modules\Auth\Services\AuthService;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    public function __construct(
+        private readonly AuthService $authService
+    ) {}
+
+    public function login(LoginRequest $request): UserResource|JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required', // Quité la validación de min:8 por si los passwords de fiasa son diferentes
-        ]);
-
         $credentials = $request->only('email', 'password');
-        $token = null;
-
-        if ($token = Auth::guard('api')->attempt($credentials)) {
-            $user = Auth::guard('api')->user();
-
-        } else {
-            return response()->json([
-                'message' => 'Invalid credentials!',
-            ], 401);
-        }
-
-        $roles = $user->getRoleNames();
+        $token = $this->authService->authenticate($credentials);
+        $user = auth('api')->user();
 
         return (new UserResource($user))->additional([
             '__session' => $token,
-            'roles' => $roles,
+            'roles' => $user->getRoleNames(),
             'msg' => [
                 'summary' => 'Login success',
                 'detail' => 'Authentication successful',

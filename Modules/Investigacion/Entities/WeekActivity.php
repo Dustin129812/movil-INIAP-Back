@@ -5,6 +5,7 @@ namespace Modules\Investigacion\Entities;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Modules\Administracion\Entities\Dispatch;
 
 class WeekActivity extends Model
 {
@@ -22,6 +23,11 @@ class WeekActivity extends Model
         'status',
         'activity_type',
     ];
+
+    public function dispatch()
+    {
+        return $this->hasOne(Dispatch::class, 'week_activity_id');
+    }
 
     public function product()
     {

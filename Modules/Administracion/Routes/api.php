@@ -1,19 +1,22 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use Modules\Administracion\Http\Controllers\PoaVisibilityController;
+use Modules\Administracion\Http\Controllers\DispatchController;
 
 /*
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
-*/
+|*/
+Route::prefix('administracion')->middleware(['auth:api'])->group(function () {
 
-Route::middleware('auth:api')->prefix('administracion')->group(function () {
+    // 1. Obtener la lista de solicitudes (Kanban de Despachos)
+    Route::get('/dispatches', [DispatchController::class, 'index']);
 
-    Route::middleware('permission:admin.config.gestionar,api')->group(function() {
-        Route::get('/poa-visibility', [PoaVisibilityController::class, 'index']);
-        Route::post('/poa-visibility', [PoaVisibilityController::class, 'sync']);
-    });
+    // 2. Procesar un despacho (El administrador confirma cantidades y entrega)
+    Route::post('/dispatches', [DispatchController::class, 'store']);
+
+    // 3. Ver detalle histórico de un despacho específico (opcional pero recomendado)
+    Route::get('/dispatches/{id}', [DispatchController::class, 'show']);
+
 });

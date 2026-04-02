@@ -4,5 +4,7 @@
     "Investigacion": true,
     "PlanificacionEstrategica": true,
     "Administracion": true,
-    "Transferencia": true
+    "Transferencia": true,
+    "Auth": true,
+    "TrlImporter": true
 }
