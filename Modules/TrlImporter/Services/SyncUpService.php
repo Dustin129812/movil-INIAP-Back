@@ -10,9 +10,12 @@ class SyncUpService
 {
     public function receiveEvaluations(array $evaluaciones): array
     {
+        \Log::info("Procesando lote de evaluaciones", ['cantidad' => count($evaluaciones)]);
+
         return DB::transaction(function () use ($evaluaciones) {
             foreach ($evaluaciones as $data) {
-                // Guardamos o actualizamos la cabecera
+                \Log::info("Guardando evaluación ID: " . $data['id']);
+
                 $eval = Evaluacion::updateOrCreate(
                     ['id' => $data['id']],
                     [

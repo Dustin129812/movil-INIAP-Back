@@ -5,7 +5,8 @@ namespace Modules\TrlImporter\Http\Controllers;
 use Illuminate\Contracts\Support\Renderable;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Modules\Trl\Services\SyncUpService;
+use Modules\TrlImporter\Http\Requests\SyncUpRequest;
+use Modules\TrlImporter\Services\SyncUpService;
 
 class SyncUpController extends Controller
 {
@@ -32,11 +33,10 @@ class SyncUpController extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function store(Request $request, SyncUpService $service)
+    public function store(SyncUpRequest $request, SyncUpService $service)
     {
-        $request->validate(['evaluaciones' => 'required|array']);
-
-        $result = $service->receiveEvaluations($request->evaluaciones);
+        // Si llega aquí, los  ya están validados y el UUID es correcto
+        $result = $service->receiveEvaluations($request->validated()['evaluaciones']);
 
         return response()->json($result, 201);
     }

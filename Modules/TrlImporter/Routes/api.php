@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Modules\TrlImporter\Http\Controllers\SyncController;
+use Modules\TrlImporter\Http\Controllers\SyncUpController;
 use Modules\TrlImporter\Http\Controllers\TrlImporterController;
 
 /*
@@ -19,3 +20,5 @@ Route::post('/importar-matriz-excel', [TrlImporterController::class, 'upload']);
 
 Route::get('/sync/tecnologias', [SyncController::class, 'getTecnologias']);
 Route::get('/sync/matriz', [SyncController::class, 'getMatriz']);
+
+Route::post('/sync/up', [SyncUpController::class, 'store']);
