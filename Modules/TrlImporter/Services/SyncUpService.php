@@ -10,8 +10,6 @@ class SyncUpService
 {
     public function receiveEvaluations(array $evaluaciones): array
     {
-        \Log::info("Procesando lote de evaluaciones", ['cantidad' => count($evaluaciones)]);
-
         return DB::transaction(function () use ($evaluaciones) {
             foreach ($evaluaciones as $data) {
                 \Log::info("Guardando evaluación ID: " . $data['id']);
@@ -26,7 +24,6 @@ class SyncUpService
                     ]
                 );
 
-                // Guardamos el detalle de las respuestas [cite: 19, 30, 41, 52]
                 foreach ($data['respuestas'] as $matrizId => $cumple) {
                     Respuesta::updateOrCreate(
                         ['id' => "RESP-{$eval->id}-{$matrizId}"],
@@ -38,7 +35,6 @@ class SyncUpService
                     );
                 }
 
-                // Actualizamos el TRL maestro de la tecnología [cite: 13]
                 DB::table('trl.tecnologias')
                     ->where('id', $data['tecnologia_id'])
                     ->update(['trl_base' => $data['trl_alcanzado']]);

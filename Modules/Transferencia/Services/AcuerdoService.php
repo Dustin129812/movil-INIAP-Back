@@ -5,25 +5,27 @@ namespace Modules\Transferencia\Services;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Modules\Transferencia\Entities\Acuerdo;
-use Modules\Transferencia\Entities\Ensayo;
 
 class AcuerdoService
 {
     public function paginate(array $filters): LengthAwarePaginator
     {
-        // 1. Modelo correcto, cargamos la contraparte y contamos cuántas parcelas lo usan
         $query = Acuerdo::query()
             ->with(['organizacion'])
             ->withCount('parcelas');
 
-        // 2. Búsqueda por texto (Buscamos si el nombre de la organización coincide)
+        $user = request()->user();
+
+        if ($user && !$user->hasRole('administrador')) {
+            $query->where('location_id', $user->location_id);
+        }
+
         if (!empty($filters['search'])) {
             $query->whereHas('organizacion', function ($q) use ($filters) {
                 $q->where('nombre', 'ilike', '%' . $filters['search'] . '%');
             });
         }
 
-        // 3. Filtros Geográficos: Trae acuerdos que tengan parcelas en esta ubicación
         if (!empty($filters['provincia_id']) || !empty($filters['canton_id']) || !empty($filters['parroquia_id'])) {
             $query->whereHas('parcelas', function ($q) use ($filters) {
                 if (!empty($filters['provincia_id'])) {
@@ -44,6 +46,8 @@ class AcuerdoService
 
     public function create(array $data): Acuerdo
     {
+        $data['location_id'] = request()->user()->location_id;
+
         if (isset($data['archivo_acuerdo']) && $data['archivo_acuerdo'] instanceof \Illuminate\Http\UploadedFile) {
             $data['archivo_acuerdo_path'] = $data['archivo_acuerdo']->store('transferencia/acuerdos', 'private');
             unset($data['archivo_acuerdo']);
@@ -71,6 +75,10 @@ class AcuerdoService
 
     public function delete(Acuerdo $acuerdo): bool
     {
+        if ($acuerdo->archivo_acuerdo_path && Storage::disk('private')->exists($acuerdo->archivo_acuerdo_path)) {
+            Storage::disk('private')->delete($acuerdo->archivo_acuerdo_path);
+        }
+
         return $acuerdo->delete();
     }
 }

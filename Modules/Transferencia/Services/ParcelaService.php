@@ -12,30 +12,22 @@ class ParcelaService
         $query = Parcela::query()
             ->with(['ensayo', 'organizacion', 'provincia', 'canton', 'parroquia']);
 
+        $user = request()->user();
+
+        // Aislamiento de datos por ubicación
+        if ($user && !$user->hasRole('administrador')) {
+            $query->where('location_id', $user->location_id);
+        }
+
         if (!empty($filters['search'])) {
-            $query->where('nombre', 'ilike', '%' . $filters['search'] . '%')
-                ->orWhere('localidad', 'ilike', '%' . $filters['search'] . '%');
+            $query->where(function ($q) use ($filters) {
+                $q->where('nombre', 'ilike', '%' . $filters['search'] . '%')
+                    ->orWhere('localidad', 'ilike', '%' . $filters['search'] . '%');
+            });
         }
 
-        if (!empty($filters['estado'])) {
-            $query->where('estado', $filters['estado']);
-        }
-
-        if (!empty($filters['ensayo_id'])) {
-            $query->where('ensayo_id', $filters['ensayo_id']);
-        }
-
-        if (!empty($filters['provincia_id'])) {
-            $query->where('provincia_id', $filters['provincia_id']);
-        }
-
-        if (!empty($filters['canton_id'])) {
-            $query->where('canton_id', $filters['canton_id']);
-        }
-
-        if (!empty($filters['parroquia_id'])) {
-            $query->where('parroquia_id', $filters['parroquia_id']);
-        }
+        if (!empty($filters['estado'])) { $query->where('estado', $filters['estado']); }
+        if (!empty($filters['ensayo_id'])) { $query->where('ensayo_id', $filters['ensayo_id']); }
 
         $perPage = $filters['per_page'] ?? 15;
 
@@ -44,6 +36,8 @@ class ParcelaService
 
     public function create(array $data): Parcela
     {
+        $data['location_id'] = request()->user()->location_id;
+
         $parcela = Parcela::create($data);
 
         return $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton']);

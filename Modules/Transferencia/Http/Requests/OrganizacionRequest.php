@@ -46,7 +46,7 @@ class OrganizacionRequest extends FormRequest
     {
         return [
             'nombre' => ['required', 'string', 'max:255'],
-            'tipo_organizacion' => ['required', 'string', 'in:Legalizada,Grupo de productores,Comuna o Recinto'],
+            'tipo_organizacion' => ['required', 'string', 'in:Legalizada,Grupo de productores,Comuna o Recinto,Gad,Instituto de Educacion'],
             'participantes_hombres' => ['required', 'integer', 'min:0'],
             'participantes_mujeres' => ['required', 'integer', 'min:0'],
 

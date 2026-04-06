@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Investigacion\Entities\Canton;
+use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Parroquia;
 use Modules\Investigacion\Entities\Province;
 
@@ -24,6 +25,7 @@ class Organizacion extends Model
         'provincia_id',
         'canton_id',
         'parroquia_id',
+        'location_id',
     ];
 
     protected $casts = [
@@ -49,5 +51,10 @@ class Organizacion extends Model
     public function acuerdos(): HasMany
     {
         return $this->hasMany(Acuerdo::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'location_id');
     }
 }

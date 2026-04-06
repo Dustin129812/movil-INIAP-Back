@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('transferencia.organizaciones', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('location_id')->constrained('locations');
             $table->string('nombre');
             $table->string('tipo_organizacion');
             $table->integer('participantes_hombres')->default(0);

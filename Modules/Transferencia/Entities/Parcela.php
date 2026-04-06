@@ -5,6 +5,7 @@ namespace Modules\Transferencia\Entities;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Parroquia;
 use Modules\Investigacion\Entities\Province;
 use Modules\Investigacion\Entities\Canton;
@@ -20,6 +21,7 @@ class Parcela extends Model
         'organizacion_id',
         'acuerdo_id',
         'libro_campo_id',
+        'location_id',
 
         'nombre',
         'provincia_id',
@@ -67,9 +69,13 @@ class Parcela extends Model
         return $this->belongsTo(Canton::class);
     }
 
-
     public function parroquia(): BelongsTo
     {
         return $this->belongsTo(Parroquia::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'location_id');
     }
 }

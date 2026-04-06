@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Investigacion\Entities\Location;
 
 class Acuerdo extends Model
 {
@@ -18,6 +19,7 @@ class Acuerdo extends Model
         'fecha_firma',
         'anios_vigencia',
         'archivo_acuerdo_path',
+        'location_id',
     ];
 
     protected $casts = [
@@ -41,5 +43,10 @@ class Acuerdo extends Model
     public function parcelas()
     {
         return $this->hasMany(Parcela::class, 'acuerdo_id');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'location_id');
     }
 }

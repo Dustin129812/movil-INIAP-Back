@@ -12,6 +12,13 @@ class OrganizacionService
         $query = Organizacion::query()
             ->with(['provincia', 'canton', 'parroquia']);
 
+        $user = request()->user();
+
+        // Aislamiento por ubicación
+        if ($user && !$user->hasRole('administrador')) {
+            $query->where('location_id', $user->location_id);
+        }
+
         if (!empty($filters['search'])) {
             $query->where('nombre', 'ilike', '%' . $filters['search'] . '%');
         }
@@ -20,13 +27,15 @@ class OrganizacionService
             $query->where('tipo_organizacion', $filters['tipo']);
         }
 
-        $perPage = $filters['per_page'] ?? 15;
+        $perPage = $filters['per_page'] ?? 100;
 
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
 
     public function create(array $data): Organizacion
     {
+        $data['location_id'] = request()->user()->location_id;
+
         return Organizacion::create($data)->load(['provincia', 'canton', 'parroquia']);
     }
 

@@ -112,7 +112,7 @@ class WeekActivityService
             })->whereBetween('date', [$startOfWeek, $endOfWeek]);
         } else {
             $targetSunday = Carbon::now()->endOfWeek(Carbon::SUNDAY);
-            $ratedStatuses = ['not completed', 'completed', 'partial', 'rated'];
+            $ratedStatuses = ['not completed', 'completed', 'partial', 'rated', 'rejected'];
 
             $query->where(function ($q) use ($user, $ratedStatuses) {
                 $q->where(function ($q1) use ($user, $ratedStatuses) {

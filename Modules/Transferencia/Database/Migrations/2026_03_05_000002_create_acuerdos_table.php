@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('transferencia.acuerdos', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('location_id')->constrained('locations');
             $table->foreignId('organizacion_id')->constrained('transferencia.organizaciones')->cascadeOnDelete();
 
             $table->date('fecha_firma');

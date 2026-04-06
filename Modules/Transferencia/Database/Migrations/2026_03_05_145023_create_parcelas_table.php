@@ -10,25 +10,22 @@ return new class extends Migration
     {
         Schema::create('transferencia.parcelas', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('location_id')->constrained('locations');
 
-            // --- 1. LAS LLAVES MAESTRAS (El cruce de información) ---
             $table->foreignId('ensayo_id')->constrained('transferencia.ensayos');
             $table->foreignId('organizacion_id')->constrained('transferencia.organizaciones');
             $table->foreignId('acuerdo_id')->nullable()->constrained('transferencia.acuerdos');
             $table->foreignId('libro_campo_id')->nullable()->constrained('produccion.libros_campo');
 
-            // --- 2. UBICACIÓN ---
             $table->string('nombre');
             $table->foreignId('provincia_id')->constrained('provinces');
             $table->foreignId('canton_id')->constrained('cantons');
             $table->foreignId('parroquia_id')->constrained('parroquias');
             $table->string('localidad')->nullable();
 
-            // --- 3. COORDENADAS UTM ---
             $table->string('coordenada_x')->nullable();
             $table->string('coordenada_y')->nullable();
 
-            // --- 4. FECHAS Y ESTADO ---
             $table->date('fecha_implementacion')->nullable();
             $table->date('fecha_finalizacion')->nullable();
 
