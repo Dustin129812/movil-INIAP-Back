@@ -30,7 +30,6 @@ class ParcelaResource extends JsonResource
                 'libro_campo_id' => $this->libro_campo_id,
             ],
 
-            // Agrupamos la ubicación
             'ubicacion' => [
                 'provincia_id' => $this->provincia_id,
                 'provincia_nombre' => $this->whenLoaded('provincia', fn() => $this->provincia->nombre ?? $this->provincia->name),

@@ -8,10 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReusableActivity extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'user_id',
+        'activity_type',
         'activity_id',
         'name',
         'description',
