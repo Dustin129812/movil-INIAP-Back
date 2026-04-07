@@ -63,8 +63,8 @@ class PlannerController extends Controller
                 $activity->budget = (float) $activityData['budget']; // Decimales
                 $activity->accrued_budget = (float) $activityData['accrued_budget'];
                 $activity->ponderacion = $activityData['ponderacion'];
-                $activity->start_date = $activityData['start_date'];
-                $activity->end_date = $activityData['end_date'];
+                $activity->start_date = substr($activityData['start_date'], 0, 10);
+                $activity->end_date = substr($activityData['end_date'], 0, 10);
                 $activity->product_id = $product->id;
                 $activity->save();
 
@@ -86,7 +86,7 @@ class PlannerController extends Controller
 
                 foreach ($activityData['monthly_distribution'] as $monthData) {
                     $activity->monthlyProgress()->create([
-                        'month' => \Carbon\Carbon::parse($monthData['month'])->startOfMonth(),
+                        'month' => \Carbon\Carbon::parse(substr($monthData['month'], 0, 10))->startOfMonth()->format('Y-m-d'),
                         'percentage' => $monthData['percentage'],
                     ]);
                 }
@@ -165,8 +165,8 @@ class PlannerController extends Controller
                 $activity->budget = (float) $activityData['budget'];
                 $activity->accrued_budget = (float) ($activityData['accrued_budget'] ?? 0);
                 $activity->ponderacion = $activityData['ponderacion'];
-                $activity->start_date = $activityData['start_date'];
-                $activity->end_date = $activityData['end_date'];
+                $activity->start_date = substr($activityData['start_date'], 0, 10);
+                $activity->end_date = substr($activityData['end_date'], 0, 10);
                 $activity->product_id = $product->id;
                 if ($product->status !== 'pending') {
                     $product->status = 'pending';
@@ -194,17 +194,13 @@ class PlannerController extends Controller
                     ?? null;
 
                 if (!empty($monthlyData)) {
-                    // 2. Eliminamos registros previos para evitar duplicados al editar
                     $activity->monthlyProgress()->forceDelete();
 
                     foreach ($monthlyData as $plan) {
-                        // Validar que el mes no sea nulo
                         if (empty($plan['month'])) continue;
 
                         $activity->monthlyProgress()->create([
-                            // Usamos Carbon para asegurar el formato Y-m-d, ya que en tu JSON
-                            // viene con formato ISO (2026-02-01T05:00:00.000000Z)
-                            'month' => \Carbon\Carbon::parse($plan['month'])->startOfMonth()->format('Y-m-d'),
+                            'month' => Carbon::parse(substr($plan['month'], 0, 10))->startOfMonth()->format('Y-m-d'),
                             'percentage' => $plan['percentage']
                         ]);
                     }
