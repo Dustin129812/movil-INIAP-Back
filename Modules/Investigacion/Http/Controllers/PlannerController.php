@@ -824,20 +824,17 @@ class PlannerController extends Controller
                     $activityWeight = (float) $activity->ponderacion;
                     $activityAbsoluteWeight = $productAbsoluteWeight * ($activityWeight / 100);
 
-                    $useMonthly = $activity->monthlyExecutionProgress->isNotEmpty();
-                    $sourceCollection = $useMonthly ? $activity->monthlyExecutionProgress : ($activity->weeklyActivities ?? collect([]));
-                    $totalRealProgress = $sourceCollection->sum('percentage');
+                    $totalRealProgress = (float) $activity->monthlyExecutionProgress->sum('percentage');
                     $totalWeightedProgress = $activityAbsoluteWeight * ($totalRealProgress / 100);
 
-                    $executionProgress = $sourceCollection->map(function ($item) use ($useMonthly) {
-                        $dateValue = $useMonthly ? $item->month : $item->date;
+                    $executionProgress = $activity->monthlyExecutionProgress->map(function ($item) {
                         return [
                             'id' => $item->id,
-                            'week_id' => $useMonthly ? null : $item->id,
-                            'month' => Carbon::parse($dateValue)->format('Y-m-d'),
-                            'date' => Carbon::parse($dateValue)->format('Y-m-d'),
+                            'week_id' => null,
+                            'month' => Carbon::parse($item->month)->format('Y-m-d'),
+                            'date' => Carbon::parse($item->month)->format('Y-m-d'),
                             'reported_percentage' => (float) $item->percentage,
-                            'observations' => $item->observations ?? '',
+                            'observations' => $item->observation ?? '',
                         ];
                     })->toArray();
 
