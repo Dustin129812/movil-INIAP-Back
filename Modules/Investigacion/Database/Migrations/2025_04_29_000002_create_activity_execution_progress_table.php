@@ -12,7 +12,9 @@ return new class extends Migration
             $table->id();
             $table->date('month');
             $table->decimal('percentage', 5, 2)->default(0.00);
+            $table->decimal('accrued_budget', 15, 2)->default(0.00);
             $table->string('observation')->nullable();
+            $table->string('evidence_url')->nullable();
             $table->timestamps();
 
             $table->softDeletes();

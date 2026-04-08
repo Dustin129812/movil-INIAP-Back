@@ -84,7 +84,7 @@ class MonthlyProgressController extends Controller
             'reports.*.activity_id' => ['required', 'exists:activities,id'],
             'reports.*.month' => ['required', 'date_format:Y-m-d'],
             'reports.*.percentage' => ['required', 'numeric', 'min:0', 'max:100'],
-            'reports.*.accrued_budget' => ['required'],
+            'reports.*.accrued_budget' => ['required', 'numeric', 'min:0'],
             'reports.*.observation' => ['nullable', 'string'],
             'reports.*.evidence_url' => ['nullable', 'string', 'url'],
         ]);
@@ -99,6 +99,7 @@ class MonthlyProgressController extends Controller
                     ],
                     [
                         'percentage' => $report['percentage'],
+                        'accrued_budget' => $report['accrued_budget'], // Ahora sí existe la columna
                         'observation' => $report['observation'] ?? null,
                         'evidence_url' => $report['evidence_url'] ?? null,
                     ]
@@ -106,22 +107,18 @@ class MonthlyProgressController extends Controller
 
                 $activity = Activity::find($report['activity_id']);
                 if ($activity) {
-                    $activity->accrued_budget = $report['accrued_budget'];
+                    $totalAccrued = ActivityExecutionProgress::where('activity_id', $activity->id)
+                        ->sum('accrued_budget');
+
+                    $activity->accrued_budget = $totalAccrued;
                     $activity->save();
                 }
             }
-
             DB::commit();
-            return response()->json([
-                'msg' => ['summary' => 'Éxito', 'detail' => 'Reporte mensual guardado con evidencia.', 'code' => 201]
-            ], 201);
-
+            return response()->json(['msg' => ['summary' => 'Éxito', 'detail' => 'Progreso actualizado', 'code' => 201]]);
         } catch (Exception $e) {
             DB::rollBack();
-            Log::error("Error storing monthly execution: " . $e->getMessage());
-            return response()->json([
-                'msg' => ['summary' => 'Error', 'detail' => 'Error al guardar: ' . $e->getMessage(), 'code' => 500],
-            ], 500);
+            return response()->json(['msg' => ['summary' => 'Error', 'detail' => $e->getMessage(), 'code' => 500]], 500);
         }
     }
 

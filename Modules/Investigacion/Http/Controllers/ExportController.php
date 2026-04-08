@@ -414,12 +414,10 @@ class ExportController extends Controller
                 // Llave única para separar visualmente
                 $groupKey = $sourceName . '_' . ($rubro['id'] ?? 0);
 
-                // ---> SEPARADOR VERDE: FINANCIAMIENTO | RUBRO <---
                 if ($groupKey !== $lastGroupKey) {
                     $rubroName = $rubro['name'] ?? 'Sin Rubro';
                     $financiamientoLabel = !empty($sourceName) ? $sourceName : 'Sin Fuente';
 
-                    // Mostramos Financiamiento y Rubro en la barra separadora
                     $sheet->setCellValue("A{$row}", "Financiamiento: {$financiamientoLabel}  |  Rubro: {$rubroName}");
                     $sheet->mergeCells("A{$row}:D{$row}");
 
@@ -471,7 +469,7 @@ class ExportController extends Controller
                                 try {
                                     $m = Carbon::parse($p['month'])->month - 1;
                                     $val = $p['planning'] ?? $p['percentage'] ?? 0;
-                                    $plan[$m] = (is_numeric($val) && $val > 0) ? ($val . '%') : '';
+                                    $plan[$m] = (is_numeric($val) && $val > 0) ? ($val / 100) : 0;
                                 } catch (\Exception $e) {}
                             }
                         }
@@ -484,8 +482,8 @@ class ExportController extends Controller
                                 if (isset($e['month'])) {
                                     try {
                                         $m = Carbon::parse($e['month'])->month - 1;
-                                        $val = $e['reported_percentage'] ?? 0;
-                                        $avance[$m] = (is_numeric($val) && $val > 0) ? ($val . '%') : '';
+                                        $val = $e['reported_percentage'] ?? $e['percentage'] ?? 0;
+                                        $avance[$m] = (is_numeric($val) && $val > 0) ? ($val / 100) : 0;
                                     } catch (\Exception $e) {}
                                 }
                             }
@@ -497,8 +495,8 @@ class ExportController extends Controller
                             $responsables,
                             $indicadores,
                             $activity['budget'] ?? 0,
-                            "", // Fuente (vacío)
-                            "", // Proyecto (vacío)
+                            "",
+                            "",
                             $activity['accrued_budget'] ?? 0
                         ], $plan, $avance, [""]);
 

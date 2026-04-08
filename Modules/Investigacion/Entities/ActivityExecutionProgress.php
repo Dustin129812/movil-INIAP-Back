@@ -16,6 +16,7 @@ class ActivityExecutionProgress extends Model
             'activity_id',
             'month',
             'percentage',
+            'accrued_budget',
             'observation',
             'evidence_url',
         ];
