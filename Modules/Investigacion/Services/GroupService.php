@@ -11,7 +11,7 @@ class GroupService
 {
     public function getGroups(array $filters): LengthAwarePaginator
     {
-        return Group::with(['rubro', 'location', 'responsible', 'creator'])
+        return Group::with(['rubro', 'location', 'responsible', 'creator', 'members'])
             ->withCount('members')
             ->when($filters['location_id'] ?? null, function ($query, $locationId) {
                 $query->where('location_id', $locationId);
