@@ -98,12 +98,12 @@ class UserController extends Controller
             'new_password' => ['required', 'confirmed'],
         ]);
 
-        $user = auth()->user(); // usuario autenticado
+        $user = auth()->user();
 
         if (!Hash::check($request->current_password, $user->password)) {
             return response()->json([
                 'message' => 'La contraseña actual no es correcta.'
-            ], 422); // Unprocessable Entity
+            ], 422);
         }
 
         $user->password = Hash::make($request->new_password);
@@ -119,7 +119,7 @@ class UserController extends Controller
         $user = User::findOrFail($id);
         $roles = $request->input('roles', []);
         $user->syncRoles($roles);
-        broadcast(new RoleUpdated($user, $roles)); // Emitiendo el nuevo evento
+        broadcast(new RoleUpdated($user, $roles));
         return response()->json([
             'msg' => [
                 'summary' => 'Roles actualizados',

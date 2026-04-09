@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('activity_id')->constrained()->onDelete('cascade');
             $table->string('name');
+            $table->string('activity_type')->default('tecnica');
             $table->text('description');
             $table->string('work_location')->nullable();
             $table->text('observations')->nullable();

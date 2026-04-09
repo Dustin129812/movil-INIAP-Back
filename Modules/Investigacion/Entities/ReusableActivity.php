@@ -3,11 +3,12 @@
 namespace Modules\Investigacion\Entities;
 
 use App\Models\User;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class ReusableActivity extends Model
 {
+    protected $table = 'reusable_activities';
+
     protected $fillable = [
         'user_id',
         'activity_type',
@@ -46,6 +47,11 @@ class ReusableActivity extends Model
 
     public function logisticSupportUsers()
     {
-        return $this->belongsToMany(User::class, 'reusable_activity_logistic_support', 'reusable_activity_id', 'user_id');
+        return $this->belongsToMany(
+            User::class,
+            'reusable_activity_logistic_support',
+            'reusable_activity_id',
+            'user_id'
+        );
     }
 }

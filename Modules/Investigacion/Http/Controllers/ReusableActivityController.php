@@ -3,91 +3,62 @@
 namespace Modules\Investigacion\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Modules\Investigacion\Entities\ReusableActivity;
+use Modules\Investigacion\Http\Requests\WeekPlanner\StoreReusableActivityRequest;
+use Modules\Investigacion\Http\Requests\WeekPlanner\UpdateReusableActivityRequest;
+use Modules\Investigacion\Services\ReusableActivityService;
+use Modules\Investigacion\Transformers\ReusableActivityResource;
 
 class ReusableActivityController extends Controller
 {
-    // En app/Http/Controllers/ReusableActivityController.php
-    public function index()
+    public function __construct(
+        private readonly ReusableActivityService $activityService
+    ) {}
+
+    public function index(): JsonResponse
     {
-        $user = Auth::user();
         $reusableActivities = ReusableActivity::with([
             'activity.product',
             'materials',
             'performanceIndicators',
             'logisticSupportUsers'
         ])
-            ->where('user_id', $user->id)
+            ->where('user_id', Auth::id())
             ->orderBy('name')
             ->get();
 
-        return response()->json(['data' => $reusableActivities]);
-    }
-
-    public function store(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'activityId' => 'required|exists:activities,id',
-            'description' => 'required|string',
-            'work_location' => 'nullable|string',
-            'observations' => 'nullable|string',
-            'materials' => 'nullable|array',
-            'indicators' => 'nullable|array',
-            'logisticSupports' => 'nullable|array',
+        return response()->json([
+            'data' => ReusableActivityResource::collection($reusableActivities)
         ]);
-
-        DB::beginTransaction();
-        try {
-            $reusable = ReusableActivity::create([
-                'user_id' => Auth::id(),
-                'activity_id' => $request->activityId,
-                'name' => $request->name,
-                'description' => $request->description,
-                'work_location' => $request->work_location,
-                'observations' => $request->observations,
-            ]);
-
-            if ($request->has('materials')) {
-                $materialSyncData = [];
-                foreach ($request->materials as $material) {
-                    $materialSyncData[$material['id']] = [
-                        'quantity' => $material['pivot']['quantity'] ?? null,
-                        'description' => $material['pivot']['description'] ?? null
-                    ];
-                }
-                $reusable->materials()->sync($materialSyncData);
-            }
-
-            if ($request->has('indicators')) {
-                $reusable->performanceIndicators()->sync($request->indicators);
-            }
-
-            if ($request->has('logisticSupports')) {
-                $reusable->logisticSupportUsers()->sync($request->logisticSupports);
-            }
-
-            DB::commit();
-            return response()->json($reusable->load('materials', 'performanceIndicators', 'logisticSupportUsers'), 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['error' => 'Error al guardar la actividad reutilizable: ' . $e->getMessage()], 500);
-        }
     }
 
-    public function destroy($id)
+    public function store(StoreReusableActivityRequest $request): JsonResponse
     {
-        $reusableActivity = ReusableActivity::findOrFail($id);
+        $reusable = $this->activityService->store($request->validated(), Auth::id());
 
+        return response()->json(new ReusableActivityResource($reusable), 201);
+    }
+
+    public function update(UpdateReusableActivityRequest $request, ReusableActivity $reusableActivity): JsonResponse
+    {
         if ($reusableActivity->user_id !== Auth::id()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
-        $reusableActivity->delete();
+        $reusable = $this->activityService->update($reusableActivity, $request->validated());
+
+        return response()->json(new ReusableActivityResource($reusable), 200);
+    }
+
+    public function destroy(ReusableActivity $reusableActivity): JsonResponse
+    {
+        if ($reusableActivity->user_id !== Auth::id()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $this->activityService->destroy($reusableActivity);
 
         return response()->json(null, 204);
     }
