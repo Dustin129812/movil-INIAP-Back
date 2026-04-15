@@ -2,22 +2,22 @@
 
 namespace Modules\Transferencia\Services;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Modules\Transferencia\Entities\Parcela;
+use Modules\Transferencia\Traits\ScopesByLocation;
 
 class ParcelaService
 {
+    use ScopesByLocation;
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $query = Parcela::query()
             ->with(['ensayo', 'organizacion', 'provincia', 'canton', 'parroquia']);
 
-        $user = request()->user();
-
-        // Aislamiento de datos por ubicación
-        if ($user && !$user->hasRole('administrador')) {
-            $query->where('location_id', $user->location_id);
-        }
+        // Aplicamos el Trait
+        $query = $this->applyLocationScope($query);
 
         if (!empty($filters['search'])) {
             $query->where(function ($q) use ($filters) {
@@ -36,22 +36,25 @@ class ParcelaService
 
     public function create(array $data): Parcela
     {
-        $data['location_id'] = request()->user()->location_id;
-
-        $parcela = Parcela::create($data);
-
-        return $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton']);
+        return DB::transaction(function () use ($data) {
+            $data['location_id'] = request()->user()->location_id;
+            $parcela = Parcela::create($data);
+            return $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton']);
+        });
     }
 
     public function update(Parcela $parcela, array $data): Parcela
     {
-        $parcela->update($data);
-
-        return $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton']);
+        return DB::transaction(function () use ($parcela, $data) {
+            $parcela->update($data);
+            return $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton']);
+        });
     }
 
     public function delete(Parcela $parcela): bool
     {
-        return $parcela->delete();
+        return DB::transaction(function () use ($parcela) {
+            return $parcela->delete();
+        });
     }
 }

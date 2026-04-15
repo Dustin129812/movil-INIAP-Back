@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('produccion.registros_climaticos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('libro_campo_id')->constrained('produccion.libros_campo')->onDelete('cascade');
+            $table->foreignId('libro_campo_id')->constrained('produccion.libros_de_campo')->onDelete('cascade');
             $table->dateTime('fecha_registro');
 
             // Datos cuantitativos (API/Sensores)

@@ -37,7 +37,7 @@ class OrganizacionRequest extends FormRequest
     {
         return [
             'search'   => ['nullable', 'string', 'max:100'],
-            'tipo'     => ['nullable', 'string', 'in:Legalizada,Grupo de productores,Comuna o Recinto'],
+            'tipo'     => ['nullable', 'string', 'in:Legalizada,Grupo de productores,Comuna o Recinto,Gad,Instituto de Educacion'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }

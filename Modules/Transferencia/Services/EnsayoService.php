@@ -6,22 +6,24 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Modules\Transferencia\Entities\Ensayo;
+use Modules\Transferencia\Traits\ScopesByLocation;
 
 class EnsayoService
 {
+    use ScopesByLocation;
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $query = Ensayo::query()->with(['equipoTecnico', 'producto', 'actividad']);
 
-        $user = request()->user();
-
-        if ($user && !$user->hasRole('administrador')) {
-            $query->where('location_id', $user->location_id);
-        }
+        // Aplicamos el Trait
+        $query = $this->applyLocationScope($query);
 
         if (!empty($filters['search'])) {
-            $query->where('nombre', 'ilike', '%' . $filters['search'] . '%')
-                ->orWhere('nombre_tecnologia', 'ilike', '%' . $filters['search'] . '%');
+            $query->where(function ($q) use ($filters) {
+                $q->where('nombre', 'ilike', '%' . $filters['search'] . '%')
+                    ->orWhere('nombre_tecnologia', 'ilike', '%' . $filters['search'] . '%');
+            });
         }
 
         if (!empty($filters['estado'])) { $query->where('estado', $filters['estado']); }
@@ -93,6 +95,8 @@ class EnsayoService
 
     public function delete(Ensayo $ensayo): bool
     {
-        return $ensayo->delete();
+        return DB::transaction(function () use ($ensayo) {
+            return $ensayo->delete();
+        });
     }
 }

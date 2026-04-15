@@ -2,23 +2,24 @@
 
 namespace Modules\Transferencia\Services;
 
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Modules\Transferencia\Entities\Acuerdo;
+use Modules\Transferencia\Traits\ScopesByLocation;
 
 class AcuerdoService
 {
+    use ScopesByLocation;
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $query = Acuerdo::query()
             ->with(['organizacion'])
             ->withCount('parcelas');
 
-        $user = request()->user();
-
-        if ($user && !$user->hasRole('administrador')) {
-            $query->where('location_id', $user->location_id);
-        }
+        // Aplicamos el Trait de permisos/ubicación
+        $query = $this->applyLocationScope($query);
 
         if (!empty($filters['search'])) {
             $query->whereHas('organizacion', function ($q) use ($filters) {
@@ -46,39 +47,45 @@ class AcuerdoService
 
     public function create(array $data): Acuerdo
     {
-        $data['location_id'] = request()->user()->location_id;
+        return DB::transaction(function () use ($data) {
+            $data['location_id'] = request()->user()->location_id;
 
-        if (isset($data['archivo_acuerdo']) && $data['archivo_acuerdo'] instanceof \Illuminate\Http\UploadedFile) {
-            $data['archivo_acuerdo_path'] = $data['archivo_acuerdo']->store('transferencia/acuerdos', 'private');
-            unset($data['archivo_acuerdo']);
-        }
+            if (isset($data['archivo_acuerdo']) && $data['archivo_acuerdo'] instanceof \Illuminate\Http\UploadedFile) {
+                $data['archivo_acuerdo_path'] = $data['archivo_acuerdo']->store('transferencia/acuerdos', 'private');
+                unset($data['archivo_acuerdo']);
+            }
 
-        return Acuerdo::create($data)->load('organizacion');
+            return Acuerdo::create($data)->load('organizacion');
+        });
     }
 
     public function update(Acuerdo $acuerdo, array $data): Acuerdo
     {
-        if (isset($data['archivo_acuerdo']) && $data['archivo_acuerdo'] instanceof \Illuminate\Http\UploadedFile) {
+        return DB::transaction(function () use ($acuerdo, $data) {
+            if (isset($data['archivo_acuerdo']) && $data['archivo_acuerdo'] instanceof \Illuminate\Http\UploadedFile) {
 
-            if ($acuerdo->archivo_acuerdo_path && Storage::disk('private')->exists($acuerdo->archivo_acuerdo_path)) {
-                Storage::disk('private')->delete($acuerdo->archivo_acuerdo_path);
+                if ($acuerdo->archivo_acuerdo_path && Storage::disk('private')->exists($acuerdo->archivo_acuerdo_path)) {
+                    Storage::disk('private')->delete($acuerdo->archivo_acuerdo_path);
+                }
+
+                $data['archivo_acuerdo_path'] = $data['archivo_acuerdo']->store('transferencia/acuerdos', 'private');
+                unset($data['archivo_acuerdo']);
             }
 
-            $data['archivo_acuerdo_path'] = $data['archivo_acuerdo']->store('transferencia/acuerdos', 'private');
-            unset($data['archivo_acuerdo']);
-        }
+            $acuerdo->update($data);
 
-        $acuerdo->update($data);
-
-        return $acuerdo->load('organizacion');
+            return $acuerdo->load('organizacion');
+        });
     }
 
     public function delete(Acuerdo $acuerdo): bool
     {
-        if ($acuerdo->archivo_acuerdo_path && Storage::disk('private')->exists($acuerdo->archivo_acuerdo_path)) {
-            Storage::disk('private')->delete($acuerdo->archivo_acuerdo_path);
-        }
+        return DB::transaction(function () use ($acuerdo) {
+            if ($acuerdo->archivo_acuerdo_path && Storage::disk('private')->exists($acuerdo->archivo_acuerdo_path)) {
+                Storage::disk('private')->delete($acuerdo->archivo_acuerdo_path);
+            }
 
-        return $acuerdo->delete();
+            return $acuerdo->delete();
+        });
     }
 }

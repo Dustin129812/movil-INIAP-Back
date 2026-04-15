@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('produccion.actividades', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('libro_campo_id')->constrained('produccion.libros_campo')->cascadeOnDelete();
+            $table->foreignId('libro_campo_id')->constrained('produccion.libros_de_campo')->cascadeOnDelete();
 
             $table->foreignId('kardex_id')->nullable()->constrained('produccion.kardex')->nullOnDelete();
 

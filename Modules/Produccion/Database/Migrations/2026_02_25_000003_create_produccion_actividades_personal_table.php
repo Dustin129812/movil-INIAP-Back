@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('produccion.actividades_personal', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('libro_campo_id')->constrained('produccion.libros_campo')->cascadeOnDelete();
+            $table->foreignId('libro_campo_id')->constrained('produccion.libros_de_campo')->cascadeOnDelete();
             $table->foreignId('user_id')->constrained('public.users');
 
             $table->date('fecha');

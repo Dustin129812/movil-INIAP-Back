@@ -2,22 +2,22 @@
 
 namespace Modules\Transferencia\Services;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Modules\Transferencia\Entities\Organizacion;
+use Modules\Transferencia\Traits\ScopesByLocation;
 
 class OrganizacionService
 {
+    use ScopesByLocation;
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         $query = Organizacion::query()
             ->with(['provincia', 'canton', 'parroquia']);
 
-        $user = request()->user();
-
-        // Aislamiento por ubicación
-        if ($user && !$user->hasRole('administrador')) {
-            $query->where('location_id', $user->location_id);
-        }
+        // Aplicamos el Trait
+        $query = $this->applyLocationScope($query);
 
         if (!empty($filters['search'])) {
             $query->where('nombre', 'ilike', '%' . $filters['search'] . '%');
@@ -34,20 +34,24 @@ class OrganizacionService
 
     public function create(array $data): Organizacion
     {
-        $data['location_id'] = request()->user()->location_id;
-
-        return Organizacion::create($data)->load(['provincia', 'canton', 'parroquia']);
+        return DB::transaction(function () use ($data) {
+            $data['location_id'] = request()->user()->location_id;
+            return Organizacion::create($data)->load(['provincia', 'canton', 'parroquia']);
+        });
     }
 
     public function update(Organizacion $organizacion, array $data): Organizacion
     {
-        $organizacion->update($data);
-
-        return $organizacion->load(['provincia', 'canton', 'parroquia']);
+        return DB::transaction(function () use ($organizacion, $data) {
+            $organizacion->update($data);
+            return $organizacion->load(['provincia', 'canton', 'parroquia']);
+        });
     }
 
     public function delete(Organizacion $organizacion): bool
     {
-        return $organizacion->delete();
+        return DB::transaction(function () use ($organizacion) {
+            return $organizacion->delete();
+        });
     }
 }

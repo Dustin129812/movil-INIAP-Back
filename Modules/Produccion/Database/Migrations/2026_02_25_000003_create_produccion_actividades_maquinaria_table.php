@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('produccion.actividades_maquinaria', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('libro_campo_id')->constrained('produccion.libros_campo')->cascadeOnDelete();
+            $table->foreignId('libro_campo_id')->constrained('produccion.libros_de_campo')->cascadeOnDelete();
             $table->foreignId('maquinaria_id')->constrained('produccion.maquinaria')->restrictOnDelete();
             $table->date('fecha');
             $table->decimal('horas_uso', 8, 2);

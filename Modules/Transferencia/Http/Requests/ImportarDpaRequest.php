@@ -18,7 +18,7 @@ class ImportarDpaRequest extends FormRequest
                 'required',
                 'file',
                 'mimes:csv,xlsx,xls',
-                'max:10240', // Límite de 10MB
+                'max:10240',
             ],
         ];
     }
@@ -28,7 +28,7 @@ class ImportarDpaRequest extends FormRequest
         return [
             'archivo_dpa.required' => 'Debe adjuntar un archivo DPA.',
             'archivo_dpa.file' => 'El archivo subido no es válido.',
-            'archivo_dpa.mimes' => 'El archivo debe ser estrictamente en formato .csv o .txt',
+            'archivo_dpa.mimes' => 'El archivo debe ser estrictamente en formato .csv, .xlsx o .xls.',
         ];
     }
 }

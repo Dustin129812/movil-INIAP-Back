@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class LibroCampo extends Model
 {
-    protected $table = 'produccion.libros_campo';
+    protected $table = 'produccion.libros_de_campo';
     protected $fillable =
         [
             'lote_id',
