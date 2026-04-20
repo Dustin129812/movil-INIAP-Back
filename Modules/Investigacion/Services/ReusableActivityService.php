@@ -12,8 +12,8 @@ class ReusableActivityService
         return DB::transaction(function () use ($data, $userId) {
             $reusable = ReusableActivity::create([
                 'user_id' => $userId,
-                'activity_id' => $data['activityId'],
-                'activity_type' => $data['activityType'],
+                'activity_id' => $data['activity_id'],
+                'activity_type' => $data['activity_type'],
                 'name' => $data['name'],
                 'description' => $data['description'],
                 'work_location' => $data['work_location'] ?? null,
@@ -22,16 +22,15 @@ class ReusableActivityService
 
             $this->syncRelations($reusable, $data);
 
-            return $reusable->load(['materials', 'performanceIndicators', 'logisticSupportUsers']);
-        });
+            return $reusable->load(['activity.product', 'materials', 'performanceIndicators', 'logisticSupportUsers']);        });
     }
 
     public function update(ReusableActivity $reusable, array $data): ReusableActivity
     {
         return DB::transaction(function () use ($reusable, $data) {
             $reusable->update([
-                'activity_id' => $data['activityId'] ?? $reusable->activity_id,
-                'activity_type' => $data['activityType'] ?? $reusable->activity_type,
+                'activity_id' => $data['activity_id'] ?? $reusable->activity_id,
+                'activity_type' => $data['activity_type'] ?? $reusable->activity_type,
                 'name' => $data['name'] ?? $reusable->name,
                 'description' => $data['description'] ?? $reusable->description,
                 'work_location' => $data['work_location'] ?? $reusable->work_location,
@@ -40,8 +39,7 @@ class ReusableActivityService
 
             $this->syncRelations($reusable, $data);
 
-            return $reusable->load(['materials', 'performanceIndicators', 'logisticSupportUsers']);
-        });
+            return $reusable->load(['activity.product', 'materials', 'performanceIndicators', 'logisticSupportUsers']);        });
     }
 
     public function destroy(ReusableActivity $reusableActivity): void

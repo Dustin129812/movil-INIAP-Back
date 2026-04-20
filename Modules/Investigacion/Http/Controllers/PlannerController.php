@@ -17,9 +17,18 @@ use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Notifications\CreateProduct;
 use Modules\Investigacion\Notifications\PlannerAccept;
 use Modules\Investigacion\Notifications\ProductUpdated;
+use Modules\Investigacion\Services\PlanningReviewService;
 
 class PlannerController extends Controller
 {
+
+    protected $reviewService;
+
+    public function __construct(PlanningReviewService $reviewService)
+    {
+        $this->reviewService = $reviewService;
+    }
+
     public function addProductAndActivity(Request $request)
     {
         DB::beginTransaction();
@@ -272,138 +281,21 @@ class PlannerController extends Controller
     public function getWeeklyPlanningByResponsible(Request $request)
     {
         try {
-            $revisor = $request->user();
-            $revisor->load('groups.members');
+            $data = $this->reviewService->getWeeklyPlanningData(
+                $request->user(),
+                $request->query('period', '15days')
+            );
 
-            // Mantenemos la colección intacta como en tu código original
-            $teamMemberIds = $revisor->groups->flatMap(function ($group) {
-                return $group->members->pluck('id');
-            })->unique();
-
-            if ($teamMemberIds->isEmpty()) {
-                return response()->json(['data' => []]);
-            }
-
-            $relevantStatuses = ['pending', 'approved', 'rejected', 'reassigned'];
-            $period = $request->query('period', '15days');
-
-            $dateFilter = null;
-            if ($period === '7days') {
-                $dateFilter = Carbon::now()->subDays(7);
-            } elseif ($period === '15days') {
-                $dateFilter = Carbon::now()->subDays(15);
-            }
-
-            // ====================================================================
-            // 1. TAREAS PROPIAS (Las normales)
-            // ====================================================================
-            $ownQuery = WeekActivity::whereIn('status', $relevantStatuses)
-                ->whereIn('user_id', $teamMemberIds)
-                ->with([
-                    'activity.product.rubro',
-                    'activity.product.location',
-                    'user',
-                    'materials',
-                    'activity.indicators'
-                ]);
-
-            if ($dateFilter) {
-                $ownQuery->where('date', '>=', $dateFilter);
-            }
-            $ownActivities = $ownQuery->orderBy('date', 'desc')->get();
-
-            // ====================================================================
-            // 2. TAREAS DE APOYO
-            // ====================================================================
-            $supportQuery = WeekActivity::whereIn('status', $relevantStatuses)
-                ->whereHas('logisticSupportUsers', function ($q) use ($teamMemberIds) {
-                    $q->whereIn('users.id', $teamMemberIds)
-                        ->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
-                })
-                ->with([
-                    'activity.product.rubro',
-                    'activity.product.location',
-                    'user',
-                    'materials',
-                    'activity.indicators',
-                    'logisticSupportUsers'
-                ]);
-
-            if ($dateFilter) {
-                $supportQuery->where('date', '>=', $dateFilter);
-            }
-            $supportActivities = $supportQuery->orderBy('date', 'desc')->get();
-
-            // ====================================================================
-            // 3. AGRUPACIÓN CON INYECCIÓN DE ATRIBUTOS (setAttribute)
-            // ====================================================================
-            $groupedByUser = [];
-            $userNamesCache = [];
-
-            foreach ($ownActivities as $act) {
-                if (!$act->user || !$act->activity || !$act->activity->product) continue;
-
-                // Inyección segura: Laravel lo serializará automáticamente en el JSON
-                $act->setAttribute('is_owner', true);
-                $act->setAttribute('display_user_id', $act->user_id);
-                $act->setAttribute('display_user_name', $act->user->name);
-                $act->setAttribute('ownerName', $act->user->name);
-
-                $groupedByUser[$act->user_id][] = $act;
-                $userNamesCache[$act->user_id] = $act->user->name;
-            }
-
-            foreach ($supportActivities as $act) {
-                if (!$act->user || !$act->activity || !$act->activity->product) continue;
-
-                foreach ($act->logisticSupportUsers as $supportUser) {
-                    if ($teamMemberIds->contains($supportUser->id) && in_array($supportUser->pivot->status, ['accepted', 'pending'])) {
-                        $clonedAct = clone $act;
-
-                        // Inyección segura para los apoyos
-                        $clonedAct->setAttribute('is_owner', false);
-                        $clonedAct->setAttribute('display_user_id', $supportUser->id);
-                        $clonedAct->setAttribute('display_user_name', $supportUser->name);
-                        $clonedAct->setAttribute('ownerName', $act->user->name);
-
-                        $groupedByUser[$supportUser->id][] = $clonedAct;
-                        $userNamesCache[$supportUser->id] = $supportUser->name;
-                    }
-                }
-            }
-
-            // ====================================================================
-            // 4. FORMATEO IDÉNTICO AL ORIGINAL
-            // ====================================================================
-            $formattedData = [];
-            foreach ($groupedByUser as $userId => $activities) {
-                $groupedByProduct = collect($activities)->groupBy('activity.product_id');
-
-                $formattedData[] = [
-                    'id' => $userId,
-                    'name' => $userNamesCache[$userId] ?? 'Usuario',
-                    'activities' => $groupedByProduct->map(function ($activitiesForProduct) {
-                        $firstActivity = $activitiesForProduct->first();
-                        return [
-                            'product_id' => $firstActivity->activity->product->id,
-                            'product_name' => $firstActivity->activity->product->name,
-                            'activity_description' => $firstActivity->activity->name,
-                            // Al dejar el ->values() intacto, dejamos que Laravel haga su magia de serialización sin romper nada
-                            'week_activities' => $activitiesForProduct->values(),
-                        ];
-                    })->values()->toArray()
-                ];
-            }
-
-            return response()->json(['data' => $formattedData]);
+            return response()->json(['data' => $data]);
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Error en getWeeklyPlanningByResponsible: ' . $e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+            Log::error('Error en getWeeklyPlanningByResponsible: ' . $e->getMessage());
             return response()->json([
-                'msg' => ['summary' => 'Error', 'detail' => 'No se pudieron cargar las planificaciones para revisión.', 'code' => 500]
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => 'No se pudieron cargar las planificaciones.',
+                    'code' => 500
+                ]
             ], 500);
         }
     }
@@ -889,8 +781,7 @@ class PlannerController extends Controller
                         'name' => $responsibleUser->name ?? 'Sin nombre',
                         'last_name' => $responsibleUser->last_name ?? ''
                     ] : null,
-                    'user_id' => $responsibleUser ? $responsibleUser->id : null, // ID directo para facilitar binding
-
+                    'user_id' => $responsibleUser ? $responsibleUser->id : null,
                     'location' => $product->location ? ['id' => $product->location->id, 'name' => $product->location->name] : null,
                     'rubro' => $product->rubro ? ['id' => $product->rubro->id, 'name' => $product->rubro->name] : null,
                     'rubro_id' => $product->rubro_id, // ID directo

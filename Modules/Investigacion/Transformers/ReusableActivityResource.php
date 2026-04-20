@@ -18,6 +18,10 @@ class ReusableActivityResource extends JsonResource
             'description' => $this->description,
             'workLocation' => $this->work_location,
             'observations' => $this->observations,
+            'activityId' => $this->activity_id,
+            'productId' => $this->when($this->relationLoaded('activity'), function () {
+                return $this->activity->product_id ?? null;
+            }),
 
             'activity' => new ActivityResource($this->whenLoaded('activity')),
             'materials' => MaterialResource::collection($this->whenLoaded('materials')),

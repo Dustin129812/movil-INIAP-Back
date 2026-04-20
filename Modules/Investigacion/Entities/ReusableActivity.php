@@ -19,6 +19,13 @@ class ReusableActivity extends Model
         'observations',
     ];
 
+    protected $appends = ['product_id'];
+
+    public function getProductIdAttribute()
+    {
+        return $this->activity->product_id ?? null;
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

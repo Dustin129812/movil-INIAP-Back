@@ -62,4 +62,20 @@ class ReusableActivityController extends Controller
 
         return response()->json(null, 204);
     }
+
+    public function show(ReusableActivity $reusableActivity): JsonResponse
+    {
+        if ($reusableActivity->user_id !== Auth::id()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $reusableActivity->load([
+            'activity.product',
+            'materials',
+            'performanceIndicators',
+            'logisticSupportUsers'
+        ]);
+
+        return response()->json(new ReusableActivityResource($reusableActivity));
+    }
 }

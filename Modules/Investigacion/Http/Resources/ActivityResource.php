@@ -24,6 +24,7 @@ class ActivityResource extends JsonResource
             'indicator_id' => $this->indicator_id,
             'indicator_name' => $this->whenLoaded('indicator', fn() => $this->indicator?->name, null),
             'monthly_distribution' => $this->monthly_distribution ?? [],
+            'product' => $this->whenLoaded('product'),
         ];
     }
 }

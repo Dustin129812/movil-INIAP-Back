@@ -8,39 +8,37 @@ use Modules\Investigacion\Entities\Activity;
 
 class UpdateReusableActivityRequest extends FormRequest
 {
-    /**
-     * Determina si el usuario está autorizado a hacer esta petición.
-     */
     public function authorize(): bool
     {
         return true;
     }
 
     /**
-     * Reglas de validación.
+     * Estandariza las llaves de camelCase a snake_case antes de validar.
      */
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'activity_id' => $this->input('activity_id') ?? $this->input('activityId'),
+            'activity_type' => $this->input('activity_type') ?? $this->input('activityType'),
+        ]);
+    }
+
     public function rules(): array
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-
             'activity_id' => ['sometimes', 'required', Rule::exists(Activity::class, 'id')],
-
             'activity_type' => ['sometimes', 'required', 'string', 'max:255'],
-
             'description' => ['sometimes', 'required', 'string'],
             'work_location' => ['nullable', 'string'],
             'observations' => ['nullable', 'string'],
-
             'materials' => ['nullable', 'array'],
             'indicators' => ['nullable', 'array'],
             'logisticSupports' => ['nullable', 'array'],
         ];
     }
 
-    /**
-     * Mensajes personalizados (Opcional, si manejas i18n o quieres mensajes específicos)
-     */
     public function messages(): array
     {
         return [

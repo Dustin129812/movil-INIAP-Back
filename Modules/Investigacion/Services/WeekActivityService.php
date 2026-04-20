@@ -257,36 +257,76 @@ class WeekActivityService
         $weekActivity->logisticSupportUsers()->sync($syncData);
     }
 
-    public function getActivitiesForReview($period)
+    /**
+     * Obtiene las actividades para revisión dependiendo del rol jerárquico.
+     */
+    public function getActivitiesForReview($period, User $reviewer)
     {
-        $ownActivities = WeekActivity::with(['user', 'activity.product'])
-            ->get()
-            ->map(function ($act) {
-                $act->display_user_id = $act->user_id;
-                $act->display_user_name = $act->user->name;
-                $act->is_owner_flag = true;
-                return $act;
-            });
+        // 1. Iniciamos los Query Builders base
+        $ownActivitiesQuery = WeekActivity::with(['user', 'activity.product']);
 
-        $supportActivities = WeekActivity::whereHas('logisticSupportUsers', function($q) {
+        $supportActivitiesQuery = WeekActivity::whereHas('logisticSupportUsers', function($q) {
             $q->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
-        })
-            ->with(['user', 'activity.product', 'logisticSupportUsers'])
-            ->get()
-            ->flatMap(function ($act) {
-                return $act->logisticSupportUsers->map(function ($supportUser) use ($act) {
-                    $clonedAct = clone $act;
-                    $clonedAct->display_user_id = $supportUser->id;
-                    $clonedAct->display_user_name = $supportUser->name;
-                    $clonedAct->is_owner_flag = false;
-                    $clonedAct->supported_owner_name = $act->user->name;
+        })->with(['user', 'activity.product', 'logisticSupportUsers']);
 
-                    return $clonedAct;
-                });
+        // 2. Aplicamos el Bypass Jerárquico según el rol
+        if ($reviewer->hasRole('station-director')) {
+            // El Director ve a los Product Managers de su misma localidad (estación)
+            $targetUserIds = User::whereHas('roles', function ($q) {
+                $q->where('name', 'product-manager');
+            })
+                ->where('location_id', $reviewer->location_id) // Usamos location_id como vimos en tu GroupService
+                ->pluck('id');
+
+            // Filtramos las actividades donde el dueño o el apoyo sea uno de esos Product Managers
+            $ownActivitiesQuery->whereIn('user_id', $targetUserIds);
+
+            $supportActivitiesQuery->whereHas('logisticSupportUsers', function($q) use ($targetUserIds) {
+                $q->whereIn('users.id', $targetUserIds);
             });
 
-        $allActivities = $ownActivities->merge($supportActivities);
+        } elseif ($reviewer->hasRole('product-manager')) {
+            // El PM ve las actividades atadas a los productos que él administra
+            $ownActivitiesQuery->whereHas('activity.product', function ($q) use ($reviewer) {
+                $q->where('user_id', $reviewer->id);
+            });
 
-        return $allActivities;
+            // Para los apoyos, vemos si apoyan en una actividad de un producto del PM
+            $supportActivitiesQuery->whereHas('activity.product', function ($q) use ($reviewer) {
+                $q->where('user_id', $reviewer->id);
+            });
+        } else {
+            // Si no tiene rol de revisión, devolvemos colecciones vacías por seguridad
+            return collect([]);
+        }
+
+        // 3. Ejecutamos las consultas a la DB
+        $ownActivities = $ownActivitiesQuery->get()->map(function ($act) {
+            $act->display_user_id = $act->user_id;
+            $act->display_user_name = $act->user->name;
+            $act->is_owner_flag = true;
+            return $act;
+        });
+
+        $supportActivities = $supportActivitiesQuery->get()->flatMap(function ($act) use ($reviewer) {
+            return $act->logisticSupportUsers->map(function ($supportUser) use ($act) {
+                $clonedAct = clone $act;
+                $clonedAct->display_user_id = $supportUser->id;
+                $clonedAct->display_user_name = $supportUser->name;
+                $clonedAct->is_owner_flag = false;
+                $clonedAct->supported_owner_name = $act->user->name;
+
+                return $clonedAct;
+            });
+        });
+
+        // 4. (Opcional pero recomendado) Si es un director revisando apoyos,
+        // filtramos la colección final para dejar SOLO los clones donde el PM es el apoyo.
+        if ($reviewer->hasRole('station-director')) {
+            $supportActivities = $supportActivities->whereIn('display_user_id', $targetUserIds);
+        }
+
+        // 5. Retornamos la data mezclada
+        return $ownActivities->merge($supportActivities);
     }
 }
