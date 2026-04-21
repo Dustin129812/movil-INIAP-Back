@@ -49,5 +49,5 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
         Route::get('/', [PlanningReviewController::class, 'index']);
     });
 
-    Route::put('activities/{activity}/status', [PlanningReviewController::class, 'updateStatus']);
+    Route::put('activities/{activityId}/status', [PlanningReviewController::class, 'updateStatus']);
 });
