@@ -243,63 +243,6 @@ class PlannerController extends Controller
         }
     }
 
-    public function approveActivity(Request $request, $activityId)
-    {
-        if (!auth()->user()->hasRole('product-manager')) {
-            return response()->json(['error' => 'No autorizado.'], 403);
-        }
-
-        $weekActivity = WeekActivity::findOrFail($activityId);
-
-        $status = $request->input('status');
-        $validStatuses = ['approved', 'rejected', 'reassigned'];
-
-        if (!in_array($status, $validStatuses)) {
-            return response()->json(['error' => 'El estado proporcionado no es válido.'], 400);
-        }
-
-        $weekActivity->status = $status;
-        if (!$weekActivity->save()) {
-            Log::error(" Error al guardar el estado '{$status}' para la actividad ID {$activityId}");
-            return response()->json(['error' => 'No se pudo actualizar la actividad.'], 500);
-        }
-
-        $creator = $weekActivity->user;
-        $approver = auth()->user();
-
-        if ($creator && $approver && $creator->id !== $approver->id) {
-            $creator->notify(new PlannerAccept($weekActivity, $approver, $status));
-        }
-
-        return response()->json([
-            'message' => 'Actividad actualizada correctamente.',
-            'activity_id' => $activityId,
-            'status' => $status,
-        ]);
-    }
-
-    public function getWeeklyPlanningByResponsible(Request $request)
-    {
-        try {
-            $data = $this->reviewService->getWeeklyPlanningData(
-                $request->user(),
-                $request->query('period', '15days')
-            );
-
-            return response()->json(['data' => $data]);
-
-        } catch (\Exception $e) {
-            Log::error('Error en getWeeklyPlanningByResponsible: ' . $e->getMessage());
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'No se pudieron cargar las planificaciones.',
-                    'code' => 500
-                ]
-            ], 500);
-        }
-    }
-
     public function getProductsWithActivities(Request $request)
     {
         $user = Auth::user();

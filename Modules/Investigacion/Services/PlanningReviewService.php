@@ -5,65 +5,86 @@ namespace Modules\Investigacion\Services;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Modules\Investigacion\Entities\Group;
 use Modules\Investigacion\Entities\WeekActivity;
 
 class PlanningReviewService
 {
     /**
-     * Obtiene y formatea las planificaciones semanales según el rol del revisor.
+     * Obtiene y formatea las planificaciones semanales según los grupos que gestiona el revisor.
      */
-    public function getWeeklyPlanningData(User $revisor, string $period = '15days'): array
+    public function getWeeklyPlanningData(User $revisor, string $period = '15days'): Collection
     {
-        $teamMemberIds = $this->getTeamMemberIds($revisor);
+        $managedGroupIds = $this->getManagedGroupIds($revisor);
 
-        if ($teamMemberIds->isEmpty()) {
-            return [];
+        if ($managedGroupIds->isEmpty()) {
+            return collect();
         }
 
         $dateFilter = $this->getDateFilter($period);
         $statuses = ['pending', 'approved', 'rejected', 'reassigned'];
 
-        // 1. Obtener Actividades Propias y de Apoyo
-        $ownActivities = $this->fetchOwnActivities($teamMemberIds, $statuses, $dateFilter);
-        $supportActivities = $this->fetchSupportActivities($teamMemberIds, $statuses, $dateFilter);
+        $ownActivities = $this->fetchOwnActivities($managedGroupIds, $statuses, $dateFilter);
 
-        // 2. Procesar y Agrupar
-        return $this->formatGroupedData($ownActivities, $supportActivities, $teamMemberIds);
+        $ownActivities->each(fn($act) => $this->injectMetadata($act, true, $act->user_id, $act->user->name, $act->user->name));
+
+        $supportActivities = $this->fetchSupportActivities($managedGroupIds, $statuses, $dateFilter);
+        $decoratedSupport = collect();
+
+        foreach ($supportActivities as $act) {
+            foreach ($act->logisticSupportUsers as $sUser) {
+                $cloned = clone $act;
+                $this->injectMetadata($cloned, false, $sUser->id, $sUser->name, $act->user->name);
+                $decoratedSupport->push($cloned);
+            }
+        }
+
+        return $ownActivities->concat($decoratedSupport);
     }
 
     /**
-     * Lógica de Bypass Jerárquico: Identifica a quién debe supervisar el revisor.
+     * Determina qué grupos puede gestionar el revisor basado en su ubicación y rol.
      */
-    private function getTeamMemberIds(User $revisor): Collection
+    private function getManagedGroupIds(User $revisor): Collection
     {
-        // Si es Director de Estación, supervisa a todos los Product Managers de su localidad
-        if ($revisor->hasRole('station-director')) {
-            return User::role('product-manager')
-                ->where('location_id', $revisor->location_id)
+        if ($revisor->location->is_central) {
+            return Group::where('location_id', $revisor->location_id)
+                ->where('responsible_id', $revisor->id)
                 ->pluck('id');
         }
 
-        // Si es Product Manager, supervisa a los miembros de sus grupos
-        $revisor->load('groups.members');
-        return $revisor->groups->flatMap(fn($group) => $group->members->pluck('id'))->unique();
+        if ($revisor->hasRole('station-director')) {
+            return Group::where('location_id', $revisor->location_id)->pluck('id');
+        }
+
+        return Group::where('location_id', $revisor->location_id)
+            ->where('responsible_id', $revisor->id)
+            ->pluck('id');
     }
 
-    private function fetchOwnActivities(Collection $ids, array $statuses, ?Carbon $date): Collection
+    /**
+     * Obtiene las actividades basadas en los GRUPOS gestionados, no solo en los usuarios.
+     */
+    private function fetchOwnActivities(Collection $groupIds, array $statuses, ?Carbon $date): Collection
     {
         return WeekActivity::whereIn('status', $statuses)
-            ->whereIn('user_id', $ids)
+            ->whereHas('activity.product', function ($q) use ($groupIds) {
+                $q->whereIn('group_id', $groupIds);
+            })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators'])
             ->when($date, fn($q) => $q->where('date', '>=', $date))
             ->orderBy('date', 'desc')
             ->get();
     }
 
-    private function fetchSupportActivities(Collection $ids, array $statuses, ?Carbon $date): Collection
+    private function fetchSupportActivities(Collection $groupIds, array $statuses, ?Carbon $date): Collection
     {
         return WeekActivity::whereIn('status', $statuses)
-            ->whereHas('logisticSupportUsers', function ($q) use ($ids) {
-                $q->whereIn('users.id', $ids)
-                    ->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
+            ->whereHas('activity.product', function ($q) use ($groupIds) {
+                $q->whereIn('group_id', $groupIds);
+            })
+            ->whereHas('logisticSupportUsers', function ($q) {
+                $q->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
             })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators', 'logisticSupportUsers'])
             ->when($date, fn($q) => $q->where('date', '>=', $date))

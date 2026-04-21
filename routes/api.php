@@ -113,8 +113,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('exportPlanificacionAllLocations', [ExportController::class, 'exportPlanificacionAllLocations']);
 
     Route::post('addProductAndActivity', [PlannerController::class, 'addProductAndActivity']);
-    Route::put('week-activities/{activityId}/approve', [PlannerController::class, 'approveActivity']);
-    Route::get('getWeeklyPlanningByResponsible', [PlannerController::class, 'getWeeklyPlanningByResponsible']);
     Route::get('getProductsWithActivities', [PlannerController::class, 'getProductsWithActivities']);
     Route::get('getProductsWithActivitiesExtraPoa', [PlannerController::class, 'getProductsWithActivitiesExtraPoa']);
     Route::get('/plannable-products', [PlannerController::class, 'getPlannableProductsForCurrentUser']);

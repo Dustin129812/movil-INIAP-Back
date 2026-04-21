@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Modules\Investigacion\Http\Controllers\IdiProtocolController;
 use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
+use Modules\Investigacion\Http\Controllers\PlanningReviewController;
 use Modules\Investigacion\Http\Controllers\UbicacionController;
 use Modules\Investigacion\Http\Controllers\WeekActivityController;
 
@@ -22,21 +23,16 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
 
     Route::resource('protocols', IdiProtocolController::class);
 
-    // Rutas personalizadas PRIMERO
     Route::get('catalogs/all', [IdiProtocolController::class, 'catalogs']);
 
-    // Rutas estándar CRUD (index, store, show, update, destroy)
     Route::get('/protocols/download/{annexId}', [IdiProtocolController::class, 'downloadAnnex']);
 
     Route::apiResource('protocols', IdiProtocolController::class);
 
-    // Obtener actividades pendientes de reporte (filtradas por plan > 0)
     Route::get('monthly-progress/pending', [MonthlyProgressController::class, 'index']);
 
-    // Guardar reporte (acepta evidence_url)
     Route::post('monthly-progress/store', [MonthlyProgressController::class, 'store']);
 
-    // Ver historial de reportados
     Route::get('monthly-progress/history', [MonthlyProgressController::class, 'getReported']);
 
     Route::put('/planner/review-product/{id}', [PlannerController::class, 'reviewProduct']);
@@ -48,4 +44,7 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
     Route::get('/provincias/{provinciaId}/cantones', [UbicacionController::class, 'getCantonesPorProvincia']);
 
     Route::get('/cantones/{cantonId}/parroquias', [UbicacionController::class, 'getParroquiasPorCanton']);
+
+    Route::get('/', [PlanningReviewController::class, 'index']);
+    Route::put('activities/{activity}/status', [PlanningReviewController::class, 'updateStatus']);
 });
