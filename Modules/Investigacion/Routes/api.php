@@ -45,6 +45,9 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
 
     Route::get('/cantones/{cantonId}/parroquias', [UbicacionController::class, 'getParroquiasPorCanton']);
 
-    Route::get('/', [PlanningReviewController::class, 'index']);
+    Route::prefix('planning-reviews')->group(function () {
+        Route::get('/', [PlanningReviewController::class, 'index']);
+    });
+
     Route::put('activities/{activity}/status', [PlanningReviewController::class, 'updateStatus']);
 });

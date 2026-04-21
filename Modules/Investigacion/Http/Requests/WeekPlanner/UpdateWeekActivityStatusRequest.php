@@ -5,12 +5,10 @@ namespace Modules\Investigacion\Http\Requests\WeekPlanner;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Modules\Investigacion\Entities\WeekActivity;
+use Modules\Investigacion\Entities\Group;
 
 class UpdateWeekActivityStatusRequest extends FormRequest
 {
-    /**
-     * Determina si el usuario está autorizado para hacer esta petición.
-     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -21,30 +19,24 @@ class UpdateWeekActivityStatusRequest extends FormRequest
 
         $weekActivityId = $this->route('activity');
 
-        return WeekActivity::where('id', $weekActivityId)
-            ->whereHas('activity.product.group', function ($query) use ($user) {
-                $query->where('responsible_id', $user->id);
-            })
+        $weekActivity = WeekActivity::with('activity.product')->find($weekActivityId);
+
+        if (!$weekActivity || !$weekActivity->activity || !$weekActivity->activity->product) {
+            return false;
+        }
+
+        $product = $weekActivity->activity->product;
+
+        return Group::where('location_id', $product->location_id)
+            ->where('rubro_id', $product->rubro_id)
+            ->where('responsible_id', $user->id)
             ->exists();
     }
 
-    /**
-     * Reglas de validación para la petición.
-     */
     public function rules(): array
     {
         return [
             'status' => ['required', 'string', Rule::in(['approved', 'rejected', 'reassigned'])],
-        ];
-    }
-
-    /**
-     * Mensajes de error personalizados (Opcional).
-     */
-    public function messages(): array
-    {
-        return [
-            'status.in' => 'El estado proporcionado no es válido.',
         ];
     }
 }
