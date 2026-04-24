@@ -2,7 +2,9 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Administracion\Http\Controllers\DispatchController;
+use Modules\Administracion\Http\Controllers\InventoryItemController;
 use Modules\Administracion\Http\Controllers\PoaVisibilityController;
+use Modules\Administracion\Http\Controllers\WarehouseController;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,4 +22,7 @@ Route::prefix('administracion')->middleware(['auth:api'])->group(callback: funct
     Route::get('/poa-visibility', [PoaVisibilityController::class, 'index']);
     Route::post('/poa-visibility', [PoaVisibilityController::class, 'sync']);
 
+
+    Route::apiResource('inventory-items', InventoryItemController::class);
+    Route::apiResource('warehouses', WarehouseController::class);
 });
