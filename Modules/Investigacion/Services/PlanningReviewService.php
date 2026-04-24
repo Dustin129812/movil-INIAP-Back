@@ -10,31 +10,36 @@ use Modules\Investigacion\Entities\WeekActivity;
 
 class PlanningReviewService
 {
-    /**
-     * Obtiene y formatea las planificaciones semanales según los grupos que gestiona el revisor.
-     */
     public function getWeeklyPlanningData(User $revisor, string $period = '15days'): Collection
     {
-        $managedGroupIds = $this->getManagedGroupIds($revisor);
+        // 1. Ahora obtenemos los modelos completos de los grupos, no solo los IDs
+        $managedGroups = $this->getManagedGroups($revisor);
 
-        if ($managedGroupIds->isEmpty()) {
+        if ($managedGroups->isEmpty()) {
             return collect();
         }
 
         $dateFilter = $this->getDateFilter($period);
         $statuses = ['pending', 'approved', 'rejected', 'reassigned'];
 
-        $ownActivities = $this->fetchOwnActivities($managedGroupIds, $statuses, $dateFilter);
+        // 2. Buscamos y decoramos las propias
+        $ownActivities = $this->fetchOwnActivities($managedGroups, $statuses, $dateFilter);
+        $ownActivities->each(function($act) use ($managedGroups) {
+            $userName = $act->user ? $act->user->name : 'Usuario Desconocido';
+            $group = $this->findMatchingGroup($act->activity->product, $managedGroups);
+            $this->injectMetadata($act, true, $act->user_id, $userName, $userName, $group);
+        });
 
-        $ownActivities->each(fn($act) => $this->injectMetadata($act, true, $act->user_id, $act->user->name, $act->user->name));
-
-        $supportActivities = $this->fetchSupportActivities($managedGroupIds, $statuses, $dateFilter);
+        // 3. Buscamos y decoramos apoyos
+        $supportActivities = $this->fetchSupportActivities($managedGroups, $statuses, $dateFilter);
         $decoratedSupport = collect();
 
         foreach ($supportActivities as $act) {
             foreach ($act->logisticSupportUsers as $sUser) {
                 $cloned = clone $act;
-                $this->injectMetadata($cloned, false, $sUser->id, $sUser->name, $act->user->name);
+                $ownerName = $act->user ? $act->user->name : 'Usuario Desconocido';
+                $group = $this->findMatchingGroup($act->activity->product, $managedGroups);
+                $this->injectMetadata($cloned, false, $sUser->id, $sUser->name, $ownerName, $group);
                 $decoratedSupport->push($cloned);
             }
         }
@@ -42,34 +47,39 @@ class PlanningReviewService
         return $ownActivities->concat($decoratedSupport);
     }
 
-    /**
-     * Determina qué grupos puede gestionar el revisor basado en su ubicación y rol.
-     */
-    private function getManagedGroupIds(User $revisor): Collection
+    private function getManagedGroups(User $revisor): Collection
     {
-        if ($revisor->location->is_central) {
+        if ($revisor->location && $revisor->location->is_central) {
             return Group::where('location_id', $revisor->location_id)
                 ->where('responsible_id', $revisor->id)
-                ->pluck('id');
+                ->get();
         }
 
         if ($revisor->hasRole('station-director')) {
-            return Group::where('location_id', $revisor->location_id)->pluck('id');
+            return Group::where('location_id', $revisor->location_id)->get();
         }
 
         return Group::where('location_id', $revisor->location_id)
             ->where('responsible_id', $revisor->id)
-            ->pluck('id');
+            ->get();
     }
 
     /**
-     * Obtiene las actividades basadas en los GRUPOS gestionados, no solo en los usuarios.
+     * Busca las actividades cuyos productos coincidan con el rubro y localidad de los grupos.
      */
-    private function fetchOwnActivities(Collection $groupIds, array $statuses, ?Carbon $date): Collection
+    private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $date): Collection
     {
         return WeekActivity::whereIn('status', $statuses)
-            ->whereHas('activity.product', function ($q) use ($groupIds) {
-                $q->whereIn('group_id', $groupIds);
+            ->whereHas('activity.product', function ($q) use ($managedGroups) {
+                // Filtramos por las combinaciones (rubro + location) de los grupos
+                $q->where(function ($query) use ($managedGroups) {
+                    foreach ($managedGroups as $group) {
+                        $query->orWhere(function ($subQ) use ($group) {
+                            $subQ->where('rubro_id', $group->rubro_id)
+                                ->where('location_id', $group->location_id);
+                        });
+                    }
+                });
             })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators'])
             ->when($date, fn($q) => $q->where('date', '>=', $date))
@@ -77,11 +87,18 @@ class PlanningReviewService
             ->get();
     }
 
-    private function fetchSupportActivities(Collection $groupIds, array $statuses, ?Carbon $date): Collection
+    private function fetchSupportActivities(Collection $managedGroups, array $statuses, ?Carbon $date): Collection
     {
         return WeekActivity::whereIn('status', $statuses)
-            ->whereHas('activity.product', function ($q) use ($groupIds) {
-                $q->whereIn('group_id', $groupIds);
+            ->whereHas('activity.product', function ($q) use ($managedGroups) {
+                $q->where(function ($query) use ($managedGroups) {
+                    foreach ($managedGroups as $group) {
+                        $query->orWhere(function ($subQ) use ($group) {
+                            $subQ->where('rubro_id', $group->rubro_id)
+                                ->where('location_id', $group->location_id);
+                        });
+                    }
+                });
             })
             ->whereHas('logisticSupportUsers', function ($q) {
                 $q->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
@@ -92,55 +109,24 @@ class PlanningReviewService
             ->get();
     }
 
-    private function formatGroupedData(Collection $own, Collection $support, Collection $teamIds): array
+    /**
+     * Empareja visualmente el producto con el grupo correspondiente
+     */
+    private function findMatchingGroup($product, Collection $managedGroups)
     {
-        $groupedByUser = [];
-        $userNames = [];
-
-        // Inyección de atributos para Actividades Propias
-        foreach ($own as $act) {
-            $this->injectMetadata($act, true, $act->user_id, $act->user->name, $act->user->name);
-            $groupedByUser[$act->user_id][] = $act;
-            $userNames[$act->user_id] = $act->user->name;
-        }
-
-        // Inyección de atributos para Apoyos (Clonación por usuario de apoyo)
-        foreach ($support as $act) {
-            foreach ($act->logisticSupportUsers as $sUser) {
-                if ($teamIds->contains($sUser->id)) {
-                    $cloned = clone $act;
-                    $this->injectMetadata($cloned, false, $sUser->id, $sUser->name, $act->user->name);
-                    $groupedByUser[$sUser->id][] = $cloned;
-                    $userNames[$sUser->id] = $sUser->name;
-                }
-            }
-        }
-
-        // Estructura final para el Frontend
-        $formatted = [];
-        foreach ($groupedByUser as $uId => $acts) {
-            $products = collect($acts)->groupBy('activity.product_id');
-            $formatted[] = [
-                'id' => $uId,
-                'name' => $userNames[$uId] ?? 'Usuario',
-                'activities' => $products->map(fn($pActs) => [
-                    'product_id' => $pActs->first()->activity->product->id,
-                    'product_name' => $pActs->first()->activity->product->name,
-                    'activity_description' => $pActs->first()->activity->name,
-                    'week_activities' => $pActs->values(),
-                ])->values()
-            ];
-        }
-
-        return $formatted;
+        if (!$product) return null;
+        return $managedGroups->first(function ($g) use ($product) {
+            return $g->rubro_id == $product->rubro_id && $g->location_id == $product->location_id;
+        });
     }
 
-    private function injectMetadata($act, bool $isOwner, $displayId, $displayName, $ownerName): void
+    private function injectMetadata($act, bool $isOwner, $displayId, $displayName, $ownerName, $group = null): void
     {
         $act->setAttribute('is_owner', $isOwner);
         $act->setAttribute('display_user_id', $displayId);
         $act->setAttribute('display_user_name', $displayName);
         $act->setAttribute('ownerName', $ownerName);
+        $act->setAttribute('assigned_group', $group); // Inyectamos el grupo al modelo
     }
 
     private function getDateFilter(string $period): ?Carbon
