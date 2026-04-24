@@ -13,11 +13,12 @@ class UpdateWeekActivityStatusRequest extends FormRequest
     {
         $user = $this->user();
 
-        if ($user->hasRole('station-director')) {
+        // REGLA FLEXIBLE: Evaluamos el permiso exacto, no el rol que lo posee.
+        if ($user->can('approve-any-planning')) {
             return true;
         }
 
-        $weekActivityId = $this->route('activity');
+        $weekActivityId = $this->route('activityId');
 
         $weekActivity = WeekActivity::with('activity.product')->find($weekActivityId);
 
