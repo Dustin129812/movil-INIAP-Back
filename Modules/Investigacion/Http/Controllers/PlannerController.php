@@ -798,13 +798,7 @@ class PlannerController extends Controller
             }
 
         } else {
-            $query = Product::query();
-            $query->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                ->orWhereHas('activities.users', function($subQ) use ($user) {
-                    $subQ->where('users.id', $user->id);
-                });
-            });
+            $query = Product::whereUserRelated($user->id);
 
             if ($officialRubroId) {
                 $query->where('rubro_id', '!=', $officialRubroId);
