@@ -13,24 +13,21 @@ class UpdateWeekActivityStatusRequest extends FormRequest
     {
         $user = $this->user();
 
-        // REGLA FLEXIBLE: Evaluamos el permiso exacto, no el rol que lo posee.
         if ($user->can('approve-any-planning')) {
             return true;
         }
 
-        $weekActivityId = $this->route('activityId');
+        $weekActivity = WeekActivity::with('user')->find($this->route('activityId'));
+        if (!$weekActivity) return false;
 
-        $weekActivity = WeekActivity::with('activity.product')->find($weekActivityId);
-
-        if (!$weekActivity || !$weekActivity->activity || !$weekActivity->activity->product) {
-            return false;
+        if ($user->hasRole('station-director')) {
+            return $weekActivity->user && $weekActivity->user->location_id === $user->location_id;
         }
 
-        $product = $weekActivity->activity->product;
-
-        return Group::where('location_id', $product->location_id)
-            ->where('rubro_id', $product->rubro_id)
-            ->where('responsible_id', $user->id)
+        return Group::where('responsible_id', $user->id)
+            ->whereHas('members', function($q) use ($weekActivity) {
+                $q->where('users.id', $weekActivity->user_id);
+            })
             ->exists();
     }
 

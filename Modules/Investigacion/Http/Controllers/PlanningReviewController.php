@@ -57,22 +57,11 @@ class PlanningReviewController extends Controller
     public function updateStatus(UpdateWeekActivityStatusRequest $request, $activityId)
     {
         try {
-            // La validación de seguridad (authorize) ya pasó exitosamente
-            $weekActivity = WeekActivity::findOrFail($activityId);
-            $status = $request->validated('status');
-
-            $weekActivity->status = $status;
-
-            if (!$weekActivity->save()) {
-                throw new \Exception("No se pudo guardar la actividad en base de datos.");
-            }
-
-            $creator = $weekActivity->user;
-            $approver = $request->user();
-
-            if ($creator && $approver && $creator->id !== $approver->id) {
-                $creator->notify(new PlannerAccept($weekActivity, $approver, $status));
-            }
+            $data = $this->reviewService->updateActivityStatus(
+                $activityId,
+                $request->validated('status'),
+                $request->user()
+            );
 
             return response()->json([
                 'msg' => [
@@ -80,10 +69,7 @@ class PlanningReviewController extends Controller
                     'detail' => 'Actividad actualizada correctamente.',
                     'code' => 200
                 ],
-                'data' => [
-                    'activity_id' => $activityId,
-                    'status' => $status,
-                ]
+                'data' => $data
             ]);
 
         } catch (\Exception $e) {
