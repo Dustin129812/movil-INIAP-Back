@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Administracion\Entities\Dispatch;
+use Modules\Administracion\Http\Requests\GetStationRequestsRequest;
 use Modules\Administracion\Http\Requests\ProcessDispatchRequest;
 use Modules\Administracion\Services\DispatchService;
 use Modules\Administracion\Transformers\DispatchResource;
@@ -20,14 +21,18 @@ class DispatchController extends Controller
      * Lista todas las solicitudes para el Kanban de Administración.
      * Retorna las 3 columnas: Pendientes, En Proceso y Despachados.
      */
-    public function index(): JsonResponse
+    public function index(GetStationRequestsRequest $request): JsonResponse
     {
-        $requests = $this->dispatchService->getStationRequests();
+        $user = $request->user();
+
+        $locationId = $request->validated('location_id') ?? $user->location_id;
+
+        $requests = $this->dispatchService->getStationRequests($locationId);
 
         return response()->json([
             'msg' => [
                 'summary' => 'Solicitudes obtenidas',
-                'detail' => 'Lista de requerimientos de la estación cargada.',
+                'detail' => 'Cargando tablero para la ubicación seleccionada.',
                 'code' => 200,
             ],
             'data' => $requests

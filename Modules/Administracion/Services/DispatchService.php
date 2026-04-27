@@ -44,16 +44,21 @@ class DispatchService
     }
 
     /**
-     * Obtiene todas las solicitudes de la estación que requieren materiales,
-     * combinando la planificación del técnico con el estado de despacho del admin.
-     * Ideal para alimentar el Kanban del frontend.
-     * * @return Collection
+     * Obtiene solicitudes filtradas por ID de ubicación.
+     * @param int|null $locationId
+     * @return Collection
      */
-    public function getStationRequests(): Collection
+    public function getStationRequests(?int $locationId = null): Collection
     {
         return WeekActivity::has('materials')
+            // Corregimos el filtro: Buscamos actividades cuyos usuarios pertenezcan a la locación
+            ->when($locationId, function ($query, $locationId) {
+                return $query->whereHas('user', function ($q) use ($locationId) {
+                    $q->where('location_id', $locationId);
+                });
+            })
             ->with([
-                'user:id,name,email',
+                'user:id,name,email,location_id',
                 'activity.product',
                 'materials',
                 'dispatch'
