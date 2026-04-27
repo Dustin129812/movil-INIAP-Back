@@ -67,22 +67,22 @@ class PlanningReviewService
 
     private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $isDirector): Collection
     {
-        $memberIds = $managedGroups->flatMap->members->pluck('id')->unique();
+        $targetStatuses = ['pending'];
 
-        return WeekActivity::whereIn('status', $statuses)
-            ->where(function ($q) use ($memberIds, $revisor, $isDirector) {
+        return WeekActivity::whereIn('status', $targetStatuses)
+            ->where(function ($q) use ($managedGroups, $revisor, $isDirector) {
                 if ($isDirector) {
-                    $q->whereHas('user', fn($u) => $u->where('location_id', $revisor->location_id));
+                    $responsibleIds = $managedGroups->pluck('responsible_id')->unique();
+                    $q->whereIn('user_id', $responsibleIds);
                 } else {
+                    $memberIds = $managedGroups->flatMap->members->pluck('id')->unique()
+                        ->reject(fn($id) => $id == $revisor->id);
                     $q->whereIn('user_id', $memberIds);
                 }
             })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators'])
             ->when($date, function($q) use ($date) {
-                $q->where(function($query) use ($date) {
-                    $query->where('date', '>=', $date)
-                        ->orWhere('status', 'pending');
-                });
+                $q->where('date', '>=', $date);
             })
             ->orderBy('date', 'desc')
             ->get();
