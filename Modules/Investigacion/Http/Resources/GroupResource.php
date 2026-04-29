@@ -21,6 +21,10 @@ class GroupResource extends JsonResource
                 'id' => $this->location->id,
                 'name' => $this->location->name,
             ]),
+            'parent' => $this->whenLoaded('parent', fn () => [
+                'id' => $this->parent->id,
+                'name' => $this->parent->name,
+            ]),
             'creator' => new UserBasicResource($this->whenLoaded('creator')),
             'responsible' => new UserBasicResource($this->whenLoaded('responsible')),
             'members_count' => $this->whenCounted('members'),

@@ -32,6 +32,7 @@ class StoreGroupRequest extends FormRequest
             'members' => ['present', 'array'],
             'members.*' => ['required', Rule::exists(User::class, 'id')],
             'responsible_id' => ['required', Rule::exists(User::class, 'id')],
+            'parent_id' => ['nullable', Rule::exists(Group::class, 'id')],
         ];
     }
 

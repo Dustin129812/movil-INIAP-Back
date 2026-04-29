@@ -4,6 +4,7 @@ namespace Modules\Investigacion\Http\Requests\Groups;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Modules\Investigacion\Entities\Group;
 use Modules\Investigacion\Entities\Rubro;
 use Modules\Investigacion\Entities\Location;
 
@@ -30,6 +31,7 @@ class UpdateGroupRequest extends FormRequest
             ],
             'rubro_id' => ['required', Rule::exists(Rubro::class, 'id')],
             'location_id' => ['required', Rule::exists(Location::class, 'id')],
+            'parent_id' => ['nullable', Rule::exists(Group::class, 'id')],
         ];
     }
 

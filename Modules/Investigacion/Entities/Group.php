@@ -14,6 +14,7 @@ class Group extends Model
             'location_id',
             'creator_id',
             'responsible_id',
+            'parent_id'
         ];
 
     public function rubro() {
@@ -36,5 +37,12 @@ class Group extends Model
 
     public function responsible() {
         return $this->belongsTo(User::class, 'responsible_id');
+    }
+
+    public function parent() {
+        return $this->belongsTo(Group::class, 'parent_id');
+    }
+    public function dependents() {
+        return $this->hasMany(Group::class, 'parent_id');
     }
 }

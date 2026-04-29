@@ -24,6 +24,7 @@ return new class extends Migration
             $table->string('activity_type', 20)
                 ->default('tecnica')
                 ->comment('Diferencia si la actividad es tecnica o administrativa');
+            $table->boolean('is_rescheduled')->default(false);
 
             $table->foreignId('activity_id')->constrained('activities');
             $table->foreignId('user_id')->constrained('users');

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->foreignId('location_id')->constrained('locations')->cascadeOnDelete();
             $table->foreignId('creator_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('responsible_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('parent_id')->nullable()->constrained('groups')->nullOnDelete();
             $table->timestamps();
         });
 

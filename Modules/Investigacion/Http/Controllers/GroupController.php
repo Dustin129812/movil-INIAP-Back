@@ -32,19 +32,19 @@ class GroupController extends Controller
     {
         $group = $this->groupService->createGroup($request->validated());
 
-        return new GroupResource($group->load(['rubro', 'location', 'members', 'creator', 'responsible']));
+        return new GroupResource($group->load(['rubro', 'location', 'members', 'creator', 'responsible', 'parent']));
     }
 
     public function show(Group $group): GroupResource
     {
-        return new GroupResource($group->load(['rubro', 'location', 'creator', 'members', 'responsible']));
+        return new GroupResource($group->load(['rubro', 'location', 'creator', 'members', 'responsible', 'parent']));
     }
 
     public function update(UpdateGroupRequest $request, Group $group): GroupResource
     {
         $group = $this->groupService->updateGroup($group, $request->validated());
 
-        return new GroupResource($group->load(['rubro', 'location', 'members']));
+        return new GroupResource($group->load(['rubro', 'location', 'members', 'parent']));
     }
 
     public function syncMembers(SyncMembersRequest $request, Group $group): GroupResource
