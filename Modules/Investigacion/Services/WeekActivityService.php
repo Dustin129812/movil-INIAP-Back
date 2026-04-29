@@ -195,7 +195,12 @@ class WeekActivityService
                     'lunes' => 0, 'martes' => 1, 'miercoles' => 2,
                     'jueves' => 3, 'viernes' => 4, 'sábado' => 5, 'domingo' => 6,
                 ];
-                $weekActivity->date = $baseMonday->copy()->addDays($dayOffsets[$data['day']] ?? 0);
+                $newDate = $baseMonday->copy()->addDays($dayOffsets[$data['day']] ?? 0);
+
+                if (Carbon::parse($weekActivity->date)->format('Y-m-d') !== $newDate->format('Y-m-d')) {
+                    $weekActivity->date = $newDate;
+                    $weekActivity->is_rescheduled = true;
+                }
             }
 
             if ($weekActivity->status === 'pending') {

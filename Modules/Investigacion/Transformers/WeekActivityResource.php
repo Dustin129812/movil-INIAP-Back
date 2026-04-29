@@ -29,6 +29,7 @@ class WeekActivityResource extends JsonResource
             'userName' => $this->display_user_name ?? ($this->user->name ?? 'Usuario'),
 
             'is_owner' => $isReviewDashboard ? $this->is_owner_flag : (bool) ($this->user_id === $user->id),
+            'is_rescheduled' => (bool) $this->is_rescheduled,
 
             'owner_name' => $this->supported_owner_name ?? ($this->user->name ?? 'Compañero'),
 

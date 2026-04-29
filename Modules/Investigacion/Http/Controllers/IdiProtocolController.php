@@ -39,12 +39,10 @@ class IdiProtocolController extends Controller
     {
         try {
             $data = [
-                // Selects simples: solo ID y Nombre para no pesar la red
                 'stations' => Location::select('id', 'name')->get(),
 
                 'users'    => User::select('id', 'name', 'dni')->orderBy('name')->get(),
 
-                // Relaciones anidadas para lógica dependiente
                 'crops'    => Crops::with('productiveRubro:id,name')
                     ->select('id', 'name', 'productive_rubro_id')
                     ->orderBy('name')
