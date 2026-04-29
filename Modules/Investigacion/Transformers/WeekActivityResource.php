@@ -16,6 +16,7 @@ class WeekActivityResource extends JsonResource
         return [
             'id' => $this->id,
             'activity_id' => $this->activity->id ?? null,
+            'product_id' => $this->activity->product_id ?? ($this->activity->product->id ?? null),
             'description' => $this->description,
             'date' => Carbon::parse($this->date)->format('Y-m-d'),
             'product_name' => $this->activity->product->name ?? null,

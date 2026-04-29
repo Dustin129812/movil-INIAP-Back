@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Modules\Investigacion\Http\Requests\WeekPlanner\UpdateWeeklyActivityRequest;
 use Modules\Investigacion\Services\WeekActivityService;
 use Modules\Investigacion\Transformers\WeekActivityResource;
 use Modules\Investigacion\Http\Requests\WeekPlanner\StoreWeeklyPlanRequest;
@@ -74,6 +75,35 @@ class WeekActivityController extends Controller
             Log::error("Error al obtener actividades: " . $e->getMessage());
             return response()->json([
                 'msg' => ['summary' => 'Error', 'detail' => $e->getMessage(), 'code' => 500]
+            ], 500);
+        }
+    }
+
+    public function updateActivity(UpdateWeeklyActivityRequest $request, $id)
+    {
+        try {
+            $activity = $this->weekActivityService->updateActivity(
+                $id,
+                $request->validated(),
+                $request->user()
+            );
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Actividad actualizada correctamente.',
+                    'code' => 200
+                ],
+                'data' => new WeekActivityResource($activity)
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error al actualizar actividad: " . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => $e->getMessage(),
+                    'code' => 500
+                ]
             ], 500);
         }
     }

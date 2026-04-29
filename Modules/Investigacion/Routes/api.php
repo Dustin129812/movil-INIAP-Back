@@ -22,17 +22,12 @@ use Modules\Investigacion\Http\Controllers\WeekActivityController;
 Route::middleware('auth:api')->prefix('investigacion')->group(function () {
 
     Route::resource('protocols', IdiProtocolController::class);
-
     Route::get('catalogs/all', [IdiProtocolController::class, 'catalogs']);
-
     Route::get('/protocols/download/{annexId}', [IdiProtocolController::class, 'downloadAnnex']);
-
     Route::apiResource('protocols', IdiProtocolController::class);
 
     Route::get('monthly-progress/pending', [MonthlyProgressController::class, 'index']);
-
     Route::post('monthly-progress/store', [MonthlyProgressController::class, 'store']);
-
     Route::get('monthly-progress/history', [MonthlyProgressController::class, 'getReported']);
 
     Route::put('/planner/review-product/{id}', [PlannerController::class, 'reviewProduct']);
@@ -40,9 +35,7 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
     Route::put('/week-activities/{activityId}/respond-support', [WeekActivityController::class, 'respondToSupport']);
 
     Route::get('/provincias', [UbicacionController::class, 'getProvincias']);
-
     Route::get('/provincias/{provinciaId}/cantones', [UbicacionController::class, 'getCantonesPorProvincia']);
-
     Route::get('/cantones/{cantonId}/parroquias', [UbicacionController::class, 'getParroquiasPorCanton']);
 
     Route::prefix('planning-reviews')->group(function () {
@@ -50,4 +43,6 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
     });
 
     Route::put('activities/{activityId}/status', [PlanningReviewController::class, 'updateStatus']);
+
+    Route::put('/week-activities/{id}', [WeekActivityController::class, 'updateActivity']);
 });

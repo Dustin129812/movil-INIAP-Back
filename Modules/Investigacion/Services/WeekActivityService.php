@@ -178,6 +178,69 @@ class WeekActivityService
     }
 
     /**
+     * Actualiza o reprograma una actividad semanal existente.
+     */
+    public function updateActivity(int $id, array $data, User $user): WeekActivity
+    {
+        return DB::transaction(function () use ($id, $data, $user) {
+            $weekActivity = WeekActivity::where('user_id', $user->id)->findOrFail($id);
+
+            if (!in_array($weekActivity->status, ['pending', 'approved'])) {
+                throw new \Exception("Solo se pueden modificar o reprogramar actividades en estado pendiente o aprobado.");
+            }
+
+            if (isset($data['day'])) {
+                $baseMonday = Carbon::parse($weekActivity->date)->startOfWeek(Carbon::MONDAY);
+                $dayOffsets = [
+                    'lunes' => 0, 'martes' => 1, 'miercoles' => 2,
+                    'jueves' => 3, 'viernes' => 4, 'sábado' => 5, 'domingo' => 6,
+                ];
+                $weekActivity->date = $baseMonday->copy()->addDays($dayOffsets[$data['day']] ?? 0);
+            }
+
+            if ($weekActivity->status === 'pending') {
+                if (isset($data['description'])) $weekActivity->description = $data['description'];
+                if (isset($data['work_location'])) $weekActivity->work_location = $data['work_location'];
+                if (array_key_exists('observations', $data)) $weekActivity->observations = $data['observations'];
+                if (isset($data['activity_type'])) $weekActivity->activity_type = $data['activity_type'];
+
+                if (isset($data['activityId']) && $data['activityId'] != $weekActivity->activity_id) {
+                    $newActivity = Activity::findOrFail($data['activityId']);
+                    $weekActivity->activity_id = $newActivity->id;
+
+                    $planner = WeekPlanner::where('week_activity_id', $weekActivity->id)->first();
+                    if ($planner) {
+                        $planner->product_id = $newActivity->product_id;
+                        $planner->save();
+                    }
+                }
+
+                if (isset($data['materials'])) {
+                    $this->syncMaterials($weekActivity, $data['materials']);
+                }
+                if (isset($data['indicators'])) {
+                    $this->syncIndicators($weekActivity, $data['indicators']);
+                }
+                if (isset($data['logisticSupports'])) {
+                    $this->syncLogisticSupport($weekActivity, $data['logisticSupports']);
+                }
+            }
+
+            $weekActivity->save();
+
+            $weekActivity->load([
+                'user',
+                'activity.product',
+                'logisticSupportUsers',
+                'activity.monthlyProgress',
+                'activity.weeklyActivities'
+            ]);
+
+            return $weekActivity;
+        });
+    }
+
+    /**
      * Responde a una solicitud de apoyo.
      */
     public function respondToSupportRequest(int $activityId, User $user, string $status): void
@@ -319,14 +382,10 @@ class WeekActivityService
                 return $clonedAct;
             });
         });
-
-        // 4. (Opcional pero recomendado) Si es un director revisando apoyos,
-        // filtramos la colección final para dejar SOLO los clones donde el PM es el apoyo.
         if ($reviewer->hasRole('station-director')) {
             $supportActivities = $supportActivities->whereIn('display_user_id', $targetUserIds);
         }
 
-        // 5. Retornamos la data mezclada
         return $ownActivities->merge($supportActivities);
     }
 }
