@@ -5,6 +5,10 @@ use Modules\Investigacion\Http\Controllers\IdiProtocolController;
 use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
 use Modules\Investigacion\Http\Controllers\PlanningReviewController;
+use Modules\Investigacion\Http\Controllers\Reports\ExecutiveReportController;
+use Modules\Investigacion\Http\Controllers\Reports\PerformanceReportController;
+use Modules\Investigacion\Http\Controllers\Reports\SurveyReportController;
+use Modules\Investigacion\Http\Controllers\Reports\WeeklyReportController;
 use Modules\Investigacion\Http\Controllers\UbicacionController;
 use Modules\Investigacion\Http\Controllers\WeekActivityController;
 
@@ -45,4 +49,37 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
     Route::put('activities/{activityId}/status', [PlanningReviewController::class, 'updateStatus']);
 
     Route::put('/week-activities/{id}', [WeekActivityController::class, 'updateActivity']);
+
+
+});
+
+Route::middleware(['auth:api'])->prefix('reports')->group(function () {
+
+    // Reportes de Operación Semanal
+    Route::controller(WeeklyReportController::class)->group(function () {
+        Route::get('/weekly-plan', 'generateWeeklyPlanReport');
+        Route::get('/weekly-monitoring', 'generateWeeklyMonitoringReport');
+        Route::get('/user-weekly-plans', 'getUserWeeklyPlans');
+        Route::get('/location-weekly-plans', 'getUserWeeklyPlansbyLocation');
+    });
+
+    // Reportes de Rendimiento y Análisis
+    Route::controller(PerformanceReportController::class)->group(function () {
+        Route::get('/user-deep-dive/{user}', 'generateUserDeepDivePdf');
+        Route::get('/user-deep-dive/{user}/data', 'getUserDeepDiveData');
+        Route::get('/rubro-deep-dive/{rubro}', 'generateRubroDeepDivePdf');
+        Route::get('/team-pulse', 'generateTeamPulseReport');
+    });
+
+    // Reportes Ejecutivos Nacionales
+    Route::middleware('permission:view-direccion-dashboard')->group(function () {
+        Route::get('/national/executive-summary', [ExecutiveReportController::class, 'generateNationalExecutiveSummary']);
+        Route::get('/national/station-comparison', [ExecutiveReportController::class, 'generateStationComparisonReport']);
+    });
+
+    // Reportes de Encuestas
+    Route::controller(SurveyReportController::class)->prefix('surveys/{survey}')->group(function () {
+        Route::get('/export/pdf', 'exportPdf');
+        Route::get('/export/excel', 'exportExcel');
+    });
 });

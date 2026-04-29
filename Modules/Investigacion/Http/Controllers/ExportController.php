@@ -96,7 +96,10 @@ class ExportController extends Controller
 
     public function exportPlanificacion(Request $request)
     {
-        // 1. OBTENER DATOS
+        // 1. OXÍGENO PARA PHP: Ampliamos memoria y tiempo solo para esta ejecución
+        ini_set('memory_limit', '512M'); // Súbelo a '1G' si sigue fallando a futuro
+        set_time_limit(300); // 5 minutos de tiempo de ejecución
+
         $response = app(PlannerController::class)->getProductsWithActivities($request);
 
         if ($response instanceof \Illuminate\Http\JsonResponse) {
@@ -111,17 +114,21 @@ class ExportController extends Controller
         $products = json_decode(json_encode($productsSource), true);
         if (!is_array($products)) $products = [];
 
-        // 2. APLICAR FILTROS
+        // 2. GARBAGE COLLECTION: Liberamos la memoria de la respuesta original pesada
+        unset($response, $dataRaw, $productsSource);
+
         $products = $this->applyFilters($products, $request);
 
-        // 3. AGRUPAR
         $groupedProducts = collect($products)->groupBy(function ($item) {
             $rawSource = $item['budget_type'] ?? '';
             $sourceName = is_array($rawSource) ? ($rawSource['name'] ?? '') : $rawSource;
             return !empty($sourceName) ? mb_strtoupper(trim($sourceName)) : 'SIN TIPO DEFINIDO';
         });
 
-        $spreadsheet = new Spreadsheet();
+        // 3. GARBAGE COLLECTION: Liberamos el array plano, ya que ahora usamos la colección agrupada
+        unset($products);
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
 
         $userLocationName = auth()->user()->location['name'] ?? 'Sistema';
@@ -149,9 +156,8 @@ class ExportController extends Controller
             $safeSheetName = preg_replace('/[*\:\/\\\\\?\[\]]/', '', $financingName);
             $sheet->setTitle(substr($safeSheetName, 0, 31));
 
-            // HEADERS
             $sheet->setCellValue('A1', 'Reporte de Planificacion POA - ' . $financingName);
-            $sheet->mergeCells('A1:AI1'); // Ajustado
+            $sheet->mergeCells('A1:AI1');
             $sheet->getStyle('A1')->applyFromArray(['font' => ['bold' => true, 'size' => 16], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']]);
 
             $sheet->setCellValue('A2', 'Fecha de generación: ' . Carbon::now()->format('d/m/Y'));
@@ -161,7 +167,6 @@ class ExportController extends Controller
             $sheet->setCellValue('A4', 'Generado por: ' . (auth()->user()->name ?? 'Sistema'));
             $sheet->mergeCells('A4:AI4');
 
-            // --- CAMBIO: Se agregó "Nombre del Proyecto" después de Fuente Financiamiento ---
             $headers = [
                 $isAdmCentral ? "Entregable" : "Producto / Actividad",
                 "Descripción", "Responsable", "Indicadores",
@@ -174,12 +179,11 @@ class ExportController extends Controller
             ];
             $sheet->fromArray($headers, null, 'A8');
 
-            // Ahora el rango llega hasta AG (porque agregamos una columna)
             $sheet->getStyle('A8:AG8')->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => 'F2F3F2']],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '008000']],
+                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => ['rgb' => '008000']],
                 'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true],
-                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]
             ]);
 
             $row = 9;
@@ -193,10 +197,10 @@ class ExportController extends Controller
                     $sheet->setCellValue("A{$row}", $labelRubro . ($rubro['name'] ?? 'Sin Clasificación'));
                     $sheet->mergeCells("A{$row}:D{$row}");
                     $sheet->setCellValue("E{$row}", $totalesPorRubro[$currentRubroId] ?? 0);
-                    // Rango actualizado A:AG
+
                     $sheet->getStyle("A{$row}:AG{$row}")->applyFromArray([
                         'font' => ['bold' => true],
-                        'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '68A829']],
+                        'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => ['rgb' => '68A829']],
                         'alignment' => ['vertical' => 'center']
                     ]);
                     $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
@@ -210,14 +214,12 @@ class ExportController extends Controller
                 $rawSource = $product['fund_source'] ?? $product['budget_type'] ?? '';
                 $sheet->setCellValue("F{$row}", is_array($rawSource) ? ($rawSource['name'] ?? '') : $rawSource);
 
-                // --- NUEVO: Columna G para el nombre del proyecto ---
                 $sheet->setCellValue("G{$row}", $product['funding_source_name'] ?? '');
 
-                // Rango actualizado A:AG
                 $sheet->getStyle("A{$row}:AG{$row}")->applyFromArray([
                     'font' => ['bold' => true, 'color' => ['rgb' => '1F497D']],
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'D9D9D9']],
-                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => ['rgb' => 'D9D9D9']],
+                    'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
                     'alignment' => ['vertical' => 'center']
                 ]);
                 $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
@@ -260,26 +262,23 @@ class ExportController extends Controller
                             }
                         }
 
-                        // --- AJUSTE: Se agrega un campo vacío "" para la columna de Proyecto ---
                         $rowData = array_merge([
                             $labelActividad,
                             $activity['description'] ?? '',
                             $responsables,
                             $indicadores,
                             $activity['budget'] ?? 0,
-                            "", // Fuente (vacío en actividad)
-                            "", // Proyecto (vacío en actividad) <--- NUEVO
+                            "",
+                            "",
                             $activity['accrued_budget'] ?? 0,
                         ], $plan, $avance, [""]);
 
                         $sheet->fromArray($rowData, null, "A{$row}");
-                        // Rango actualizado A:AG
                         $sheet->getStyle("A{$row}:AG{$row}")->applyFromArray([
-                            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+                            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
                             'alignment' => ['vertical' => 'center', 'wrapText' => true]
                         ]);
                         $sheet->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00_-');
-                        // Ajustamos centrado para las columnas de meses (ahora empiezan en I)
                         $sheet->getStyle("I{$row}:AF{$row}")->getAlignment()->setHorizontal('center');
                         $row++;
                     }
@@ -293,13 +292,13 @@ class ExportController extends Controller
             $sheet->getColumnDimension('D')->setWidth(30);
             $sheet->getColumnDimension('E')->setWidth(18);
             $sheet->getColumnDimension('F')->setWidth(20);
-            $sheet->getColumnDimension('G')->setWidth(25); // Nueva columna Proyecto
+            $sheet->getColumnDimension('G')->setWidth(25);
 
             $highestColumn = $sheet->getHighestColumn();
-            $highestColumnIndex = Coordinate::columnIndexFromString($highestColumn);
+            $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
 
-            for ($col = 9; $col <= $highestColumnIndex; $col++) { // Empezamos desde la I (9)
-                $colString = Coordinate::stringFromColumnIndex($col);
+            for ($col = 9; $col <= $highestColumnIndex; $col++) {
+                $colString = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
                 $sheet->getColumnDimension($colString)->setWidth(12);
             }
 
@@ -307,12 +306,18 @@ class ExportController extends Controller
             $sheet->getStyle("A8:{$highestColumn}{$lastRow}")->getAlignment()->setWrapText(true);
         }
 
-        $writer = new Xlsx($spreadsheet);
-        $fileName = "reporte_productos_actividades.xlsx";
-        $filePath = storage_path("app/public/{$fileName}");
-        $writer->save($filePath);
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
 
-        return response()->download($filePath)->deleteFileAfterSend(true);
+        if (ob_get_length()) {
+            ob_end_clean();
+        }
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, 'reporte_productos_actividades.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
     }
 
     public function exportPlanificacionAllLocations(Request $request)
@@ -530,10 +535,12 @@ class ExportController extends Controller
         }
 
         $writer = new Xlsx($spreadsheet);
-        $fileName = "reporte_consolidado_locaciones.xlsx";
-        $filePath = storage_path("app/public/{$fileName}");
-        $writer->save($filePath);
 
-        return response()->download($filePath)->deleteFileAfterSend(true);
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, 'reporte_consolidado_locaciones.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
     }
 }

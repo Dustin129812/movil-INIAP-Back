@@ -144,11 +144,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('getPositions', [GeneralController::class, 'getPositions']);
     Route::get('getLogistic', [GeneralController::class, 'getLogistic']);
 
-    Route::get('weekly-plan-report', [ReportController::class, 'generateWeeklyPlanReport']);
-    Route::get('user-weekly-plans', [ReportController::class, 'getUserWeeklyPlans']);
-    Route::get('getUserWeeklyPlansbyLocation', [ReportController::class, 'getUserWeeklyPlansbyLocation']);
-    Route::get('generateWeeklyMonitoringReport', [ReportController::class, 'generateWeeklyMonitoringReport']);
-
     Route::get('/wordpress-posts', [WordPressController::class, 'getPosts']);
 
     Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
@@ -166,7 +161,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/dashboard/researcher', [DashboardController::class, 'getResearcherDashboardData']);
     Route::get('/dashboard/product-manager', [DashboardController::class, 'getProductManagerDashboardData']);
 
-    Route::get('team-pulse-report', [ReportController::class, 'generateTeamPulseReport']);
     Route::post('weekly-pulse', [PulseController::class, 'store']);
 
     Route::get('/patch-notes/latest', [PatchNoteController::class, 'getLatest']);
