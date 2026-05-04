@@ -6,13 +6,14 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Modules\Investigacion\Entities\Group;
 use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Notifications\PlannerAccept;
+use ZipArchive;
 
 class PlanningReviewService
 {
-
     public function getWeeklyPlanningData(User $revisor, string $period = '15days'): Collection
     {
         $isDirector = $revisor->hasRole('station-director');
@@ -36,11 +37,29 @@ class PlanningReviewService
         $supportActivities = $this->fetchSupportActivities($managedGroups, $statuses, $dateFilter, $revisor, $isDirector);
         $decoratedSupport = collect();
 
+        $directResponsibles = $isDirector
+            ? $managedGroups->whereNull('parent_id')->pluck('responsible_id')->unique()->filter()->toArray()
+            : [];
+
         foreach ($supportActivities as $act) {
             foreach ($act->logisticSupportUsers as $sUser) {
                 $group = $this->findMatchingGroup($sUser->id, $managedGroups);
+                $shouldInclude = false;
 
-                if ($group || $isDirector) {
+                if ($isDirector) {
+                    $isHistorical = in_array($act->status, ['completed', 'approved']);
+                    $isDirectResponsible = in_array($sUser->id, $directResponsibles);
+
+                    if ($isHistorical || $isDirectResponsible) {
+                        $shouldInclude = true;
+                    }
+                } else {
+                    if ($group) {
+                        $shouldInclude = true;
+                    }
+                }
+
+                if ($shouldInclude) {
                     $cloned = clone $act;
                     $ownerName = $act->user ? $act->user->name : 'Usuario Desconocido';
                     $this->injectMetadata($cloned, false, $sUser->id, $sUser->name, $ownerName, $group);
@@ -60,26 +79,56 @@ class PlanningReviewService
             return $query->where('location_id', $revisor->location_id)->get();
         }
 
-        return $query->where('location_id', $revisor->location_id)
+        $directGroups = $query->where('location_id', $revisor->location_id)
             ->where('responsible_id', $revisor->id)
             ->get();
+
+        $allManagedGroups = collect($directGroups);
+        $parentIds = $directGroups->pluck('id')->toArray();
+
+        while (!empty($parentIds)) {
+            $childGroups = Group::with('members')
+                ->whereIn('parent_id', $parentIds)
+                ->whereNotIn('id', $allManagedGroups->pluck('id')->toArray())
+                ->get();
+
+            if ($childGroups->isEmpty()) {
+                break;
+            }
+
+            $allManagedGroups = $allManagedGroups->concat($childGroups);
+            $parentIds = $childGroups->pluck('id')->toArray();
+        }
+
+        return $allManagedGroups;
     }
 
     private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $isDirector): Collection
     {
-        $targetStatuses = ['pending'];
+        return WeekActivity::where(function ($q) use ($managedGroups, $revisor, $isDirector, $statuses) {
+            if ($isDirector) {
+                $directResponsibles = $managedGroups->whereNull('parent_id')
+                    ->pluck('responsible_id')
+                    ->unique()
+                    ->filter();
 
-        return WeekActivity::whereIn('status', $targetStatuses)
-            ->where(function ($q) use ($managedGroups, $revisor, $isDirector) {
-                if ($isDirector) {
-                    $responsibleIds = $managedGroups->pluck('responsible_id')->unique();
-                    $q->whereIn('user_id', $responsibleIds);
-                } else {
-                    $memberIds = $managedGroups->flatMap->members->pluck('id')->unique()
-                        ->reject(fn($id) => $id == $revisor->id);
-                    $q->whereIn('user_id', $memberIds);
-                }
-            })
+                $allStationMembers = $managedGroups->flatMap->members->pluck('id')->unique();
+
+                $q->where(function ($subQ) use ($directResponsibles) {
+                    $subQ->whereIn('status', ['pending', 'rejected', 'reassigned'])
+                        ->whereIn('user_id', $directResponsibles);
+                })->orWhere(function ($subQ) use ($allStationMembers) {
+                    $subQ->whereIn('status', ['completed', 'approved'])
+                        ->whereIn('user_id', $allStationMembers);
+                });
+            } else {
+                $memberIds = $managedGroups->flatMap->members->pluck('id')->unique()
+                    ->reject(fn($id) => $id == $revisor->id);
+
+                $q->whereIn('status', $statuses)
+                    ->whereIn('user_id', $memberIds);
+            }
+        })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators'])
             ->when($date, function($q) use ($date) {
                 $q->where('date', '>=', $date);
@@ -90,24 +139,32 @@ class PlanningReviewService
 
     private function fetchSupportActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $isDirector): Collection
     {
-        $memberIds = $managedGroups->flatMap->members->pluck('id')->unique();
+        return WeekActivity::whereHas('logisticSupportUsers', function ($sq) {
+            $sq->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
+        })
+            ->where(function($q) use ($managedGroups, $revisor, $isDirector, $statuses) {
+                if ($isDirector) {
+                    $directResponsibles = $managedGroups->whereNull('parent_id')->pluck('responsible_id')->unique()->filter();
+                    $allStationMembers = $managedGroups->flatMap->members->pluck('id')->unique();
 
-        return WeekActivity::whereIn('status', $statuses)
-            ->where(function($q) use ($memberIds, $revisor, $isDirector) {
-                $q->whereHas('logisticSupportUsers', function ($sq) use ($memberIds, $revisor, $isDirector) {
-                    $sq->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
-                    if ($isDirector) {
-                        $sq->where('location_id', $revisor->location_id);
-                    } else {
-                        $sq->whereIn('users.id', $memberIds);
-                    }
-                });
+                    $q->where(function ($subQ) use ($directResponsibles) {
+                        $subQ->whereIn('status', ['pending', 'rejected', 'reassigned'])
+                            ->whereHas('logisticSupportUsers', fn($sq) => $sq->whereIn('users.id', $directResponsibles));
+                    })->orWhere(function ($subQ) use ($allStationMembers) {
+                        $subQ->whereIn('status', ['completed', 'approved'])
+                            ->whereHas('logisticSupportUsers', fn($sq) => $sq->whereIn('users.id', $allStationMembers));
+                    });
+                } else {
+                    $memberIds = $managedGroups->flatMap->members->pluck('id')->unique();
+                    $q->whereIn('status', $statuses)
+                        ->whereHas('logisticSupportUsers', fn($sq) => $sq->whereIn('users.id', $memberIds));
+                }
             })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators', 'logisticSupportUsers'])
             ->when($date, function($q) use ($date) {
                 $q->where(function($query) use ($date) {
                     $query->where('date', '>=', $date)
-                        ->orWhere('status', 'pending');
+                        ->orWhereIn('status', ['pending', 'reassigned']);
                 });
             })
             ->orderBy('date', 'desc')
@@ -121,10 +178,6 @@ class PlanningReviewService
         });
     }
 
-    /**
-     * Extraemos la lógica de estado del controlador al servicio (Fat Service)
-     * e implementamos DB::transaction para garantizar la integridad en PostgreSQL.
-     */
     public function updateActivityStatus(int $activityId, string $status, User $approver): array
     {
         return DB::transaction(function () use ($activityId, $status, $approver) {
@@ -157,9 +210,6 @@ class PlanningReviewService
         $act->setAttribute('assigned_group', $group);
     }
 
-    /**
-     * 🔧 FIX: Ahora retorna null cuando period='all' para mostrar TODO
-     */
     private function getDateFilter(string $period): ?Carbon
     {
         return match($period) {
@@ -168,5 +218,43 @@ class PlanningReviewService
             'all' => null,
             default => null
         };
+    }
+
+    public function generateUserEvidenceZip(int $userId, string $period = '15days'): string
+    {
+        $revisor = auth()->user();
+        $dateFilter = $this->getDateFilter($period);
+
+        // Obtenemos todas las actividades de ese usuario que tengan evidencias
+        $activities = WeekActivity::where('user_id', $userId)
+            ->whereNotNull('evidence_path')
+            ->when($dateFilter, fn($q) => $q->where('date', '>=', $dateFilter))
+            ->get();
+
+        if ($activities->isEmpty()) {
+            throw new \Exception("El usuario no tiene archivos verificables en este periodo.");
+        }
+
+        $zipFileName = 'evidencias_user_' . $userId . '_' . now()->format('Ymd_His') . '.zip';
+        $zipPath = storage_path('app/temp/' . $zipFileName);
+
+        if (!file_exists(storage_path('app/temp'))) {
+            mkdir(storage_path('app/temp'), 0755, true);
+        }
+
+        $zip = new ZipArchive;
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
+            foreach ($activities as $act) {
+                foreach ($act->evidence_path as $path) {
+                    $fullPath = Storage::disk('verificables_externos')->path($path);
+                    if (file_exists($fullPath)) {
+                        $zip->addFile($fullPath, $act->date . '/' . basename($path));
+                    }
+                }
+            }
+            $zip->close();
+        }
+
+        return $zipPath;
     }
 }

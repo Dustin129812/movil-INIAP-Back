@@ -48,6 +48,8 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
 
     Route::put('activities/{activityId}/status', [PlanningReviewController::class, 'updateStatus']);
 
+    Route::get('/verificables/zip-user/{userId}', [PlanningReviewController::class, 'prepareUserZip']);
+
     Route::put('/week-activities/{id}', [WeekActivityController::class, 'updateActivity']);
 
 
@@ -82,4 +84,13 @@ Route::middleware(['auth:api'])->prefix('reports')->group(function () {
         Route::get('/export/pdf', 'exportPdf');
         Route::get('/export/excel', 'exportExcel');
     });
+
 });
+
+Route::get('/verificables/descargar', [PlanningReviewController::class, 'downloadEvidence'])
+    ->name('api.investigacion.evidence.download')
+    ->middleware('signed');
+
+Route::get('/verificables/descargar-zip', [PlanningReviewController::class, 'downloadZip'])
+    ->name('api.investigacion.evidence.zip.download')
+    ->middleware('signed');

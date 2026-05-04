@@ -130,7 +130,7 @@ class WeekActivityService
     }
 
     /**
-     * Actualiza el progreso de las actividades.
+     * Actualiza el progreso de las actividades y almacena múltiples verificables.
      */
     public function updateProgress(array $progressData, User $investigador): void
     {
@@ -157,11 +157,24 @@ class WeekActivityService
                     default => 0,
                 };
 
-                $weekActivity->update([
+                $updatePayload = [
                     'observations' => $observations,
                     'status' => $dbStatus,
                     'percentage' => $numericPercentage
-                ]);
+                ];
+
+                if (isset($progressItem['evidence']) && is_array($progressItem['evidence'])) {
+                    $paths = [];
+                    foreach ($progressItem['evidence'] as $file) {
+                        if ($file instanceof \Illuminate\Http\UploadedFile) {
+                            $filename = 'act_' . $weekActivity->id . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                            $paths[] = $file->storeAs('semanas', $filename, 'verificables_externos');
+                        }
+                    }
+                    $updatePayload['evidence_path'] = $paths;
+                }
+
+                $weekActivity->update($updatePayload);
 
                 $wasAlreadyNegative = in_array($oldStatus, ['not completed', 'partial']);
 
@@ -200,6 +213,10 @@ class WeekActivityService
                 if (Carbon::parse($weekActivity->date)->format('Y-m-d') !== $newDate->format('Y-m-d')) {
                     $weekActivity->date = $newDate;
                     $weekActivity->is_rescheduled = true;
+
+                    if ($weekActivity->status === 'approved') {
+                        $weekActivity->status = 'pending';
+                    }
                 }
             }
 

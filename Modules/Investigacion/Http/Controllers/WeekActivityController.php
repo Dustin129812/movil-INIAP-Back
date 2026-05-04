@@ -6,11 +6,11 @@ use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Modules\Investigacion\Http\Requests\WeekPlanner\UpdateProgressRequest;
 use Modules\Investigacion\Http\Requests\WeekPlanner\UpdateWeeklyActivityRequest;
 use Modules\Investigacion\Services\WeekActivityService;
 use Modules\Investigacion\Transformers\WeekActivityResource;
 use Modules\Investigacion\Http\Requests\WeekPlanner\StoreWeeklyPlanRequest;
-use Modules\Investigacion\Http\Requests\WeekPlanner\UpdateProgressRequest;
 use Modules\Investigacion\Http\Requests\WeekPlanner\RespondSupportRequest;
 
 class WeekActivityController extends Controller
@@ -108,6 +108,9 @@ class WeekActivityController extends Controller
         }
     }
 
+    /**
+     * Actualiza el progreso de las actividades y recibe verificables (Skinny Controller)
+     */
     public function updateWeeklyProgress(UpdateProgressRequest $request)
     {
         try {

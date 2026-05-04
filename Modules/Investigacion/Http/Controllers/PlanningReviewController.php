@@ -5,9 +5,9 @@ namespace Modules\Investigacion\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Modules\Investigacion\Entities\WeekActivity;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Storage;
 use Modules\Investigacion\Http\Requests\WeekPlanner\UpdateWeekActivityStatusRequest;
-use Modules\Investigacion\Notifications\PlannerAccept;
 use Modules\Investigacion\Services\PlanningReviewService;
 use Modules\Investigacion\Transformers\PlanningReviewResource;
 
@@ -82,5 +82,53 @@ class PlanningReviewController extends Controller
                 ]
             ], 500);
         }
+    }
+
+    /**
+     * Sirve el archivo físico usando URLs firmadas
+     */
+    public function downloadEvidence(Request $request)
+    {
+        $path = $request->query('path');
+        $disk = Storage::disk('verificables_externos');
+
+        if (!$path || !$disk->exists($path)) {
+            abort(404, 'El documento verificable no se encuentra en el servidor.');
+        }
+
+        return response()->file($disk->path($path));
+    }
+
+    /**
+     * Genera el ZIP y retorna una URL firmada
+     */
+    public function prepareUserZip(Request $request, $userId)
+    {
+        try {
+            $period = $request->query('period', '15days');
+            $zipPath = $this->reviewService->generateUserEvidenceZip($userId, $period);
+
+            $url = URL::temporarySignedRoute(
+                'api.investigacion.evidence.zip.download',
+                now()->addMinutes(15),
+                ['filename' => basename($zipPath)]
+            );
+
+            return response()->json(['url' => $url]);
+        } catch (\Exception $e) {
+            return response()->json(['msg' => ['detail' => $e->getMessage()]], 500);
+        }
+    }
+
+    /**
+     * Descarga física del ZIP (Ruta firmada)
+     */
+    public function downloadZip(Request $request)
+    {
+        $path = storage_path('app/temp/' . $request->query('filename'));
+
+        if (!file_exists($path)) abort(404);
+
+        return response()->download($path)->deleteFileAfterSend(true);
     }
 }

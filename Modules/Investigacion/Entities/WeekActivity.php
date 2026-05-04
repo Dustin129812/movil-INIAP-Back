@@ -21,7 +21,12 @@ class WeekActivity extends Model
         'work_location',
         'user_id',
         'status',
+        'evidence_path',
         'activity_type',
+    ];
+
+    protected $casts = [
+        'evidence_path' => 'array',
     ];
 
     public function dispatch()

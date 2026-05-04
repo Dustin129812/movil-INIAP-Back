@@ -14,6 +14,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('jwt:prune-revoked')->dailyAt('01:00');
         $schedule->command('app:prune-old-notifications')->dailyAt('01:00');
+        $schedule->command('simpagi:clean-evidences')->dailyAt('03:00');
     }
 
     /**

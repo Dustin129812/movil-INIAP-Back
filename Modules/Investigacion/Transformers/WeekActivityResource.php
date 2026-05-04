@@ -22,6 +22,7 @@ class WeekActivityResource extends JsonResource
             'product_name' => $this->activity->product->name ?? null,
             'activity_name' => $this->activity->description ?? null,
             'status' => $this->status,
+            'requires_evidence' => (bool) ($this->user->location->requires_evidence ?? false),
             'percentage' => $this->percentage,
             'observations' => $this->observations,
 

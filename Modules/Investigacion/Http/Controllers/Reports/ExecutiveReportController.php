@@ -20,7 +20,6 @@ class ExecutiveReportController extends Controller
 
     public function generateStationComparisonReport(Request $request)
     {
-        // Orquestación: El controlador obtiene la data necesaria de otros controladores/servicios si es necesario
         $dashboardController = new NationalDashboardController();
         $performanceData = (array) $dashboardController->getStationPerformance($request)->getData()->data;
 

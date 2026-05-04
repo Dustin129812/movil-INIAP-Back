@@ -64,6 +64,12 @@ return [
             'throw' => false,
         ],
 
+        'verificables_externos' => [
+            'driver' => 'local',
+            'root' => '/home/desarrollo/simpagi_data/verificables',
+            'throw' => false,
+        ],
+
         'private' => [
             'driver' => 'local',
             'root' => env('PATH_PRIVATE_STORAGE', storage_path('app/private')),

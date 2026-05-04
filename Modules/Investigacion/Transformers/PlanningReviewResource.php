@@ -3,6 +3,7 @@
 namespace Modules\Investigacion\Transformers;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\URL;
 
 class PlanningReviewResource extends JsonResource
 {
@@ -33,6 +34,17 @@ class PlanningReviewResource extends JsonResource
 
             'group_id' => $group ? $group->id : -1,
             'group_name' => $group ? $group->name : 'Sin Grupo Asignado',
+
+            'evidence_files' => collect($this->evidence_path ?? [])->map(function ($path) {
+                return [
+                    'name' => basename($path),
+                    'url' => URL::temporarySignedRoute(
+                        'api.investigacion.evidence.download',
+                        now()->addMinutes(60),
+                        ['path' => $path]
+                    )
+                ];
+            })->toArray(),
         ];
     }
 }

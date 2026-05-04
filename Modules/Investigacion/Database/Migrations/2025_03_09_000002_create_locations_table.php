@@ -21,6 +21,8 @@ return new class extends Migration
             $table->decimal('longitude', 10, 7)->nullable();
             $table->string('adress');
 
+            $table->boolean('requires_evidence')->default(false);
+
             $table->foreignId('province_id')->constrained('provinces');
             $table->foreignId('canton_id')->constrained('cantons');
         });
