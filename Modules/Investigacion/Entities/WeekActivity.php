@@ -51,7 +51,7 @@ class WeekActivity extends Model
     public function materials()
     {
         return $this->belongsToMany(Material::class, 'material_week_activity')
-            ->withPivot('quantity', 'description')
+            ->withPivot('quantity', 'description', 'request_type', 'metadata')
             ->withTimestamps();
     }
 

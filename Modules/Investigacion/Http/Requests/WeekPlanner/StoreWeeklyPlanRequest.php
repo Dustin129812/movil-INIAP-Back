@@ -53,6 +53,8 @@ class StoreWeeklyPlanRequest extends FormRequest
             'weeklyPlans.*.materials.*.name' => ['required_with:weeklyPlans.*.materials', 'string'],
             'weeklyPlans.*.materials.*.quantity' => ['required_with:weeklyPlans.*.materials', 'integer', 'min:1'],
             'weeklyPlans.*.materials.*.description' => ['nullable', 'string'],
+            'weeklyPlans.*.materials.*.request_type' => ['required_with:weeklyPlans.*.materials', 'string', 'in:infrastructure,equipment,consumable,logistics'],
+            'weeklyPlans.*.materials.*.metadata' => ['nullable', 'array'],
 
             // Apoyos Logísticos
             'weeklyPlans.*.logisticSupports' => ['nullable', 'array'],

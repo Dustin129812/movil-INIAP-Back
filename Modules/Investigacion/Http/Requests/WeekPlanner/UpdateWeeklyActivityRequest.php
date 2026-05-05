@@ -44,6 +44,8 @@ class UpdateWeeklyActivityRequest extends FormRequest
             'materials.*.name' => ['required_with:materials', 'string'],
             'materials.*.quantity' => ['required_with:materials', 'integer', 'min:1'],
             'materials.*.description' => ['nullable', 'string'],
+            'materials.*.request_type' => ['required_with:weeklyPlans.*.materials', 'string', 'in:infrastructure,equipment,consumable,logistics'],
+            'materials.*.metadata' => ['nullable', 'array'],
 
             // Apoyos Logísticos
             'logisticSupports' => ['sometimes', 'array'],

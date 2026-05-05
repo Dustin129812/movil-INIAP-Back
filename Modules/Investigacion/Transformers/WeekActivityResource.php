@@ -56,6 +56,17 @@ class WeekActivityResource extends JsonResource
                     'reported_percentage' => $exec->percentage,
                 ];
             }),
+
+            'materials' => $this->materials->map(function ($m) {
+                return [
+                    'id' => $m->id,
+                    'name' => $m->name,
+                    'quantity' => $m->pivot->quantity,
+                    'description' => $m->pivot->description,
+                    'request_type' => $m->pivot->request_type,
+                    'metadata' => is_string($m->pivot->metadata) ? json_decode($m->pivot->metadata, true) : $m->pivot->metadata,
+                ];
+            }),
         ];
     }
 }

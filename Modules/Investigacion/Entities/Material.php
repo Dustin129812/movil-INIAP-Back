@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Material extends Model
 {
-    use HasFactory, SoftDeletes;
+    use SoftDeletes;
     protected $table = 'materials';
     protected $fillable = [
         'name',
@@ -17,8 +17,8 @@ class Material extends Model
     public function weeklyActivities()
     {
         return $this->belongsToMany(WeekActivity::class, 'material_week_activity')
-            ->withPivot('quantity') // Para traer también la cantidad
-            ->withTimestamps(); // Opcional, si tu pivote tiene timestamps
+            ->withPivot('quantity')
+            ->withTimestamps();
     }
 }
 
