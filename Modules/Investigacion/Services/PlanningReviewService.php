@@ -103,6 +103,14 @@ class PlanningReviewService
         return $allManagedGroups;
     }
 
+    /**
+     * Verifica si el usuario pertenece a la locación ADM. CENTRAL.
+     */
+    private function isAdmCentral(User $user): bool
+    {
+        return $user->location && strtoupper($user->location->name) === 'ADM. CENTRAL';
+    }
+
     private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $isDirector): Collection
     {
         return WeekActivity::where(function ($q) use ($managedGroups, $revisor, $isDirector, $statuses) {
@@ -122,8 +130,11 @@ class PlanningReviewService
                         ->whereIn('user_id', $allStationMembers);
                 });
             } else {
-                $memberIds = $managedGroups->flatMap->members->pluck('id')->unique()
-                    ->reject(fn($id) => $id == $revisor->id);
+                $memberIds = $managedGroups->flatMap->members->pluck('id')->unique();
+
+                if (!$this->isAdmCentral($revisor)) {
+                    $memberIds = $memberIds->reject(fn($id) => $id == $revisor->id);
+                }
 
                 $q->whereIn('status', $statuses)
                     ->whereIn('user_id', $memberIds);
