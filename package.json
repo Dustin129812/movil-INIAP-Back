@@ -1,11 +1,10 @@
 {
     "private": true,
     "scripts": {
-        "dev": "vite",
+        "dev": "next dev --experimental-https --experimental-https-key ./localhost-key.pem --experimental-https-cert ./localhost.pem",
         "build": "vite build"
     },
     "devDependencies": {
-        "axios": "^1.1.2",
         "laravel-vite-plugin": "^0.7.2",
         "vite": "^4.0.0"
     },

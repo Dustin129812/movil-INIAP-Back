@@ -1,0 +1,11 @@
+{
+    "name": "Kopia",
+    "alias": "kopia",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Kopia\\Providers\\KopiaServiceProvider"
+    ],
+    "files": []
+}

@@ -6,5 +6,6 @@
     "Administracion": true,
     "Transferencia": true,
     "Auth": true,
-    "TrlImporter": true
+    "TrlImporter": true,
+    "Kopia": true
 }

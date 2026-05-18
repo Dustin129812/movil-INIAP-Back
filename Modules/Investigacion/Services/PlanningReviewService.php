@@ -236,7 +236,6 @@ class PlanningReviewService
         $revisor = auth()->user();
         $dateFilter = $this->getDateFilter($period);
 
-        // Obtenemos todas las actividades de ese usuario que tengan evidencias
         $activities = WeekActivity::where('user_id', $userId)
             ->whereNotNull('evidence_path')
             ->when($dateFilter, fn($q) => $q->where('date', '>=', $dateFilter))
@@ -247,17 +246,22 @@ class PlanningReviewService
         }
 
         $zipFileName = 'evidencias_user_' . $userId . '_' . now()->format('Ymd_His') . '.zip';
-        $zipPath = storage_path('app/temp/' . $zipFileName);
 
-        if (!file_exists(storage_path('app/temp'))) {
-            mkdir(storage_path('app/temp'), 0755, true);
+        $disk = Storage::disk('verificables_externos');
+
+        if (!$disk->exists('temp_zips')) {
+            $disk->makeDirectory('temp_zips');
         }
+
+        $zipPath = $disk->path('temp_zips/' . $zipFileName);
 
         $zip = new ZipArchive;
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
             foreach ($activities as $act) {
-                foreach ($act->evidence_path as $path) {
-                    $fullPath = Storage::disk('verificables_externos')->path($path);
+                $paths = is_array($act->evidence_path) ? $act->evidence_path : [$act->evidence_path];
+
+                foreach ($paths as $path) {
+                    $fullPath = $disk->path($path);
                     if (file_exists($fullPath)) {
                         $zip->addFile($fullPath, $act->date . '/' . basename($path));
                     }
@@ -266,6 +270,6 @@ class PlanningReviewService
             $zip->close();
         }
 
-        return $zipPath;
+        return $zipFileName;
     }
 }

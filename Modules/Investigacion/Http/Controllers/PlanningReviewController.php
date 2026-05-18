@@ -100,35 +100,43 @@ class PlanningReviewController extends Controller
     }
 
     /**
-     * Genera el ZIP y retorna una URL firmada
+     * Genera el ZIP en almacenamiento externo y retorna una URL firmada
      */
     public function prepareUserZip(Request $request, $userId)
     {
         try {
             $period = $request->query('period', '15days');
-            $zipPath = $this->reviewService->generateUserEvidenceZip($userId, $period);
+
+            $zipFileName = $this->reviewService->generateUserEvidenceZip($userId, $period);
 
             $url = URL::temporarySignedRoute(
                 'api.investigacion.evidence.zip.download',
                 now()->addMinutes(15),
-                ['filename' => basename($zipPath)]
+                ['filename' => $zipFileName]
             );
 
             return response()->json(['url' => $url]);
         } catch (\Exception $e) {
+            Log::error('Error en PlanningReviewController@prepareUserZip: ' . $e->getMessage());
             return response()->json(['msg' => ['detail' => $e->getMessage()]], 500);
         }
     }
 
     /**
-     * Descarga física del ZIP (Ruta firmada)
+     * Descarga física del ZIP desde el disco externo (Ruta firmada)
      */
     public function downloadZip(Request $request)
     {
-        $path = storage_path('app/temp/' . $request->query('filename'));
+        $filename = $request->query('filename');
+        $disk = Storage::disk('verificables_externos');
+        $relativeTemporalPath = 'temp_zips/' . $filename;
 
-        if (!file_exists($path)) abort(404);
+        if (!$filename || !$disk->exists($relativeTemporalPath)) {
+            abort(404, 'El archivo solicitado no existe o el enlace ha expirado.');
+        }
 
-        return response()->download($path)->deleteFileAfterSend(true);
+        $absolutePath = $disk->path($relativeTemporalPath);
+
+        return response()->download($absolutePath)->deleteFileAfterSend(true);
     }
 }
