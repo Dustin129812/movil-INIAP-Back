@@ -88,9 +88,7 @@ Route::middleware(['auth:api'])->prefix('reports')->group(function () {
 });
 
 Route::get('/verificables/descargar', [PlanningReviewController::class, 'downloadEvidence'])
-    ->name('api.investigacion.evidence.download')
-    ->middleware('signed');
+    ->name('api.investigacion.evidence.download');
 
 Route::get('/verificables/descargar-zip', [PlanningReviewController::class, 'downloadZip'])
-    ->name('api.investigacion.evidence.zip.download')
-    ->middleware('signed');
+    ->name('api.investigacion.evidence.zip.download');
