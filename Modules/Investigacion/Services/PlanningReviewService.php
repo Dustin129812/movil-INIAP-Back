@@ -14,6 +14,22 @@ use ZipArchive;
 
 class PlanningReviewService
 {
+
+    /**
+     * Define centralizadamente quién pertenece al perímetro de visión del revisor.
+     * Retorna un arreglo de IDs válidos.
+     */
+    private function getValidPerimeterIds(Collection $managedGroups, User $revisor, bool $isDirector): array
+    {
+        $memberIds = $managedGroups->flatMap->members->pluck('id')->unique();
+
+        if (!$isDirector && !$this->isAdmCentral($revisor)) {
+            $memberIds = $memberIds->reject(fn($id) => $id == $revisor->id);
+        }
+
+        return $memberIds->toArray();
+    }
+
     public function getWeeklyPlanningData(User $revisor, string $period = '15days'): Collection
     {
         $isDirector = $revisor->hasRole('station-director');
@@ -25,6 +41,8 @@ class PlanningReviewService
 
         $dateFilter = $this->getDateFilter($period);
         $statuses = ['pending', 'approved', 'rejected', 'reassigned', 'completed'];
+
+        $validMemberIds = $this->getValidPerimeterIds($managedGroups, $revisor, $isDirector);
 
         $ownActivities = $this->fetchOwnActivities($managedGroups, $statuses, $dateFilter, $revisor, $isDirector);
 
@@ -43,27 +61,28 @@ class PlanningReviewService
 
         foreach ($supportActivities as $act) {
             foreach ($act->logisticSupportUsers as $sUser) {
-                $group = $this->findMatchingGroup($sUser->id, $managedGroups);
-                $shouldInclude = false;
+                if (in_array($sUser->id, $validMemberIds)) {
+                    $shouldInclude = false;
 
-                if ($isDirector) {
-                    $isHistorical = in_array($act->status, ['completed', 'approved']);
-                    $isDirectResponsible = in_array($sUser->id, $directResponsibles);
+                    if ($isDirector) {
+                        $isHistorical = in_array($act->status, ['completed', 'approved']);
+                        $isDirectResponsible = in_array($sUser->id, $directResponsibles);
 
-                    if ($isHistorical || $isDirectResponsible) {
+                        if ($isHistorical || $isDirectResponsible) {
+                            $shouldInclude = true;
+                        }
+                    } else {
                         $shouldInclude = true;
                     }
-                } else {
-                    if ($group) {
-                        $shouldInclude = true;
-                    }
-                }
 
-                if ($shouldInclude) {
-                    $cloned = clone $act;
-                    $ownerName = $act->user ? $act->user->name : 'Usuario Desconocido';
-                    $this->injectMetadata($cloned, false, $sUser->id, $sUser->name, $ownerName, $group);
-                    $decoratedSupport->push($cloned);
+                    if ($shouldInclude) {
+                        $group = $this->findMatchingGroup($sUser->id, $managedGroups);
+                        $cloned = clone $act;
+                        $ownerName = $act->user ? $act->user->name : 'Usuario Desconocido';
+
+                        $this->injectMetadata($cloned, false, $sUser->id, $sUser->name, $ownerName, $group);
+                        $decoratedSupport->push($cloned);
+                    }
                 }
             }
         }
