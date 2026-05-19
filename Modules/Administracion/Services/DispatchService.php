@@ -1,5 +1,6 @@
 <?php
 
+
 namespace Modules\Administracion\Services;
 
 use App\Models\User;
@@ -11,10 +12,7 @@ use Modules\Investigacion\Entities\WeekActivity;
 class DispatchService
 {
     /**
-     * Procesa la solicitud de despacho, confirmando cantidades y actualizando el estado.
-     * * @param array $data Datos validados desde el FormRequest
-     * @param User $admin El usuario administrador en sesión
-     * @return Dispatch
+     * Procesa la solicitud de movilización (Lógica 1 a 1).
      */
     public function processDispatch(array $data, User $admin): Dispatch
     {
@@ -24,18 +22,9 @@ class DispatchService
                 'week_activity_id' => $data['week_activity_id']
             ]);
 
-            if (!$dispatch->exists || empty($dispatch->requested_items)) {
-                $weekActivity = WeekActivity::with('materials')->findOrFail($data['week_activity_id']);
-                $dispatch->requested_items = $this->buildRequestedItemsSnapshot($weekActivity);
-            }
-
             $dispatch->admin_id = $admin->id;
             $dispatch->status = $data['status'];
             $dispatch->admin_notes = $data['admin_notes'] ?? null;
-
-            if ($data['status'] === 'dispatched' && isset($data['dispatched_items'])) {
-                $dispatch->dispatched_items = $data['dispatched_items'];
-            }
 
             $dispatch->save();
 
@@ -44,18 +33,18 @@ class DispatchService
     }
 
     /**
-     * Obtiene solicitudes filtradas por ID de ubicación.
-     * @param int|null $locationId
-     * @return Collection
+     * Obtiene solicitudes logísticas filtradas por ID de ubicación.
      */
     public function getStationRequests(?int $locationId = null): Collection
     {
-        return WeekActivity::has('materials')
-            // Corregimos el filtro: Buscamos actividades cuyos usuarios pertenezcan a la locación
-            ->when($locationId, function ($query, $locationId) {
-                return $query->whereHas('user', function ($q) use ($locationId) {
-                    $q->where('location_id', $locationId);
-                });
+        return WeekActivity::query($locationId, function ($query, $locationId) {
+            return $query->whereHas('user', function ($q) use ($locationId) {
+                $q->where('location_id', $locationId);
+            });
+        })
+            // Filtro vital: Solo extraer actividades que solicitan vehículo
+            ->whereHas('materials', function ($query) {
+                $query->where('material_week_activity.request_type', 'logistics');
             })
             ->with([
                 'user:id,name,email,location_id',
@@ -69,18 +58,31 @@ class DispatchService
                 $dispatch = $weekActivity->dispatch;
                 $status = $dispatch ? $dispatch->status : 'pending';
 
+                // Búsqueda y decodificación del JSONB logístico
+                $logisticItem = $weekActivity->materials->firstWhere('pivot.request_type', 'logistics');
+
+                $mobilizationData = [];
+                if ($logisticItem) {
+                    $metadata = $logisticItem->pivot->metadata;
+                    $decodedMeta = is_string($metadata) ? json_decode($metadata, true) : ($metadata ?? []);
+
+                    $mobilizationData = [
+                        'type'           => $decodedMeta['tipo'] ?? 'interna',
+                        'destination'    => $decodedMeta['lugar'] ?? $weekActivity->work_location,
+                        'departure_time' => $decodedMeta['fecha_desde'] ?? 'Por definir',
+                        'return_time'    => $decodedMeta['fecha_hasta'] ?? 'Por definir',
+                        'justification'  => $logisticItem->pivot->description ?? $weekActivity->description,
+                        'passengers'     => $logisticItem->pivot->quantity ?? 1,
+                    ];
+                }
+
                 return (object) [
                     'id' => $weekActivity->id,
                     'date' => $weekActivity->date,
                     'technician_name' => $weekActivity->user->name,
-                    'product_name' => $weekActivity->activity->product->name ?? 'Sin producto',
                     'activity_description' => $weekActivity->description,
-                    'work_location' => $weekActivity->work_location,
                     'status' => $status,
-                    'requested_items' => $dispatch && $dispatch->requested_items
-                        ? $dispatch->requested_items
-                        : $this->buildRequestedItemsSnapshot($weekActivity),
-                    'dispatched_items' => $dispatch ? $dispatch->dispatched_items : null,
+                    'mobilization' => $mobilizationData,
                     'admin_notes' => $dispatch ? $dispatch->admin_notes : null,
                 ];
             });

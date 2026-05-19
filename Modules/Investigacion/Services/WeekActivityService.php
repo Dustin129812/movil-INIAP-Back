@@ -4,6 +4,7 @@ namespace Modules\Investigacion\Services;
 
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Modules\Investigacion\Entities\Activity;
 use Modules\Investigacion\Entities\Material;
@@ -11,6 +12,9 @@ use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Entities\WeekPlanner;
 use Modules\Investigacion\Notifications\OursWeekPlanner;
 use Modules\Investigacion\Notifications\RateWeeklyActivityNo;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
+use Illuminate\Support\Facades\Storage;
 
 class WeekActivityService
 {
@@ -165,10 +169,37 @@ class WeekActivityService
 
                 if (isset($progressItem['evidence']) && is_array($progressItem['evidence'])) {
                     $paths = [];
+
+                    // En v4, el manager se inicializa con el método estático usingDriver()
+                    $manager = ImageManager::usingDriver(Driver::class);
+
                     foreach ($progressItem['evidence'] as $file) {
                         if ($file instanceof \Illuminate\Http\UploadedFile) {
-                            $filename = 'act_' . $weekActivity->id . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                            $paths[] = $file->storeAs('semanas', $filename, 'verificables_externos');
+                            $extension = strtolower($file->getClientOriginalExtension());
+                            $filenameBase = 'act_' . $weekActivity->id . '_' . uniqid();
+
+                            // Si es imagen, la optimizamos y convertimos a WebP
+                            if (in_array($extension, ['jpg', 'jpeg', 'png'])) {
+                                $filename = $filenameBase . '.webp';
+
+                                // En v4, usamos decode() para leer el archivo
+                                $image = $manager->decode($file->getRealPath());
+
+                                // scaleDown() reduce el ancho (si es mayor) y mantiene la proporción
+                                $image->scaleDown(width: 1200);
+
+                                // Codificamos la imagen a webp con 75% de calidad usando el nuevo estándar v4
+                                $encodedImage = $image->encodeUsingFileExtension('webp', quality: 75);
+
+                                // Guardamos en el disco correspondiente casteando a string
+                                Storage::disk('verificables_externos')->put('semanas/' . $filename, (string) $encodedImage);
+                                $paths[] = 'semanas/' . $filename;
+                            }
+                            // Si es PDF, lo guardamos tal cual (ya limitamos el peso en el Request)
+                            elseif ($extension === 'pdf') {
+                                $filename = $filenameBase . '.pdf';
+                                $paths[] = $file->storeAs('semanas', $filename, 'verificables_externos');
+                            }
                         }
                     }
                     $updatePayload['evidence_path'] = $paths;
@@ -274,7 +305,6 @@ class WeekActivityService
         ]);
     }
 
-    // --- Métodos Privados Auxiliares para limpieza ---
 
     private function syncMaterials(WeekActivity $weekActivity, array $materialsData): void
     {
@@ -301,9 +331,14 @@ class WeekActivityService
                     ? (string) $materialInput['description']
                     : '';
 
+                $requestType = !empty($materialInput['request_type']) ? $materialInput['request_type'] : null;
+                $metadata = !empty($materialInput['metadata']) ? json_encode($materialInput['metadata']) : null;
+
                 $syncData[$materialId] = [
                     'quantity' => $quantity,
                     'description' => $description,
+                    'request_type' => $requestType,
+                    'metadata' => $metadata,
                     'created_at' => now(),
                     'updated_at' => now()
                 ];
