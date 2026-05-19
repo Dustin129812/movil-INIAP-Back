@@ -42,10 +42,11 @@ class OrganizacionService
 
     public function update(Organizacion $organizacion, array $data): Organizacion
     {
-        return DB::transaction(function () use ($organizacion, $data) {
-            $organizacion->update($data);
-            return $organizacion->load(['provincia', 'canton', 'parroquia']);
+        DB::transaction(function () use ($organizacion, $data) {
+            $organizacion->fill($data)->save();
         });
+
+        return $organizacion->refresh()->load(['provincia', 'canton', 'parroquia']);
     }
 
     public function delete(Organizacion $organizacion): bool

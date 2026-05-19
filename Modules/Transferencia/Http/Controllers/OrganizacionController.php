@@ -5,6 +5,7 @@ namespace Modules\Transferencia\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Modules\Transferencia\Http\Requests\OrganizacionRequest;
 use Modules\Transferencia\Services\OrganizacionService;
 use Modules\Transferencia\Transformers\OrganizacionResource;
@@ -33,7 +34,7 @@ class OrganizacionController extends Controller
 
     public function show(OrganizacionRequest $request, Organizacion $organizacion): OrganizacionResource
     {
-        $organizacion->load(['province', 'canton', 'parroquia']);
+        $organizacion->load(['provincia', 'canton', 'parroquia']);
         return new OrganizacionResource($organizacion);
     }
 

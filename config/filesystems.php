@@ -72,7 +72,7 @@ return [
 
         'private' => [
             'driver' => 'local',
-            'root' => env('PATH_PRIVATE_STORAGE', storage_path('app/private')),
+            'root' => '/home/desarrollo/simpagi_data/private',
             'visibility' => 'private',
         ],
 

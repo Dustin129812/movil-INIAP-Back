@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Modules\Transferencia\Entities\Acuerdo;
 use Modules\Transferencia\Traits\ScopesByLocation;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Str;
 
 class AcuerdoService
 {
@@ -18,7 +20,6 @@ class AcuerdoService
             ->with(['organizacion'])
             ->withCount('parcelas');
 
-        // Aplicamos el Trait de permisos/ubicación
         $query = $this->applyLocationScope($query);
 
         if (!empty($filters['search'])) {
@@ -87,5 +88,28 @@ class AcuerdoService
 
             return $acuerdo->delete();
         });
+    }
+
+    /**
+     * Procesa la descarga física del archivo desde el almacenamiento privado.
+     */
+    public function downloadFile(Acuerdo $acuerdo): StreamedResponse
+    {
+        if (!$acuerdo->archivo_acuerdo_path || !Storage::disk('private')->exists($acuerdo->archivo_acuerdo_path)) {
+            abort(404, 'El documento solicitado no se encuentra disponible o fue removido.');
+        }
+
+        $extension = pathinfo($acuerdo->archivo_acuerdo_path, PATHINFO_EXTENSION);
+        $slugNombre = Str::slug($acuerdo->organizacion->nombre ?? 'organizacion');
+        $nombreDescarga = "Acuerdo_{$slugNombre}_{$acuerdo->id}.{$extension}";
+
+        return Storage::disk('private')->response(
+            $acuerdo->archivo_acuerdo_path,
+            $nombreDescarga,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $nombreDescarga . '"'
+            ]
+        );
     }
 }

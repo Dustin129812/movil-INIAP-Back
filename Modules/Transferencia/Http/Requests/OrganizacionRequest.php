@@ -12,24 +12,15 @@ class OrganizacionRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $action = $this->route()->getActionMethod();
-
-        return match ($action) {
-            'index', 'show' => true,
-            'store', 'update', 'destroy' => true,
-            default => false,
-        };
+        return true;
     }
 
     public function rules(): array
     {
-        $action = $this->route()->getActionMethod();
-
-        return match ($action) {
-            'index'   => $this->indexRules(),
-            'store', 'update' => $this->saveRules(),
-            'show', 'destroy' => [],
-            default   => [],
+        return match (true) {
+            $this->isMethod('GET') && $this->route()->getName() === 'organizaciones.index' => $this->indexRules(),
+            $this->isMethod('POST'), $this->isMethod('PUT'), $this->isMethod('PATCH')      => $this->saveRules(),
+            default                                                                         => [],
         };
     }
 

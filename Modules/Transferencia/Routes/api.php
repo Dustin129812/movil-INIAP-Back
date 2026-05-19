@@ -22,7 +22,10 @@ use Modules\Transferencia\Http\Controllers\ParcelaController;
 
 Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
 
-    Route::apiResource('organizaciones', OrganizacionController::class);
+    Route::apiResource('organizaciones', OrganizacionController::class)->parameters([
+        'organizaciones' => 'organizacion'
+    ]);
+
     Route::apiResource('acuerdos', AcuerdoController::class);
     Route::apiResource('ensayos', EnsayoController::class);
     Route::apiResource('parcelas', ParcelaController::class);
@@ -35,4 +38,9 @@ Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
 
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->name('api.transferencia.dashboard');
+
+
 });
+
+Route::get('/acuerdos/descargar/{acuerdo}', [AcuerdoController::class, 'download'])
+    ->name('api.transferencia.acuerdos.download');

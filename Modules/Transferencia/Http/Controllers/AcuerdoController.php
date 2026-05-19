@@ -9,6 +9,7 @@ use Modules\Transferencia\Http\Requests\AcuerdoRequest;
 use Modules\Transferencia\Services\AcuerdoService;
 use Modules\Transferencia\Transformers\AcuerdoResource;
 use Modules\Transferencia\Entities\Acuerdo;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AcuerdoController extends Controller
 {
@@ -48,5 +49,13 @@ class AcuerdoController extends Controller
         $this->acuerdoService->delete($acuerdo);
 
         return response()->json(['message' => 'Acuerdo eliminado correctamente']);
+    }
+
+    /**
+     * Descarga el archivo de acuerdo validando la firma temporal.
+     */
+    public function download(Acuerdo $acuerdo): StreamedResponse
+    {
+        return $this->acuerdoService->downloadFile($acuerdo);
     }
 }

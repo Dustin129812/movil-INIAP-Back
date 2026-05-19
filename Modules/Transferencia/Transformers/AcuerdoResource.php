@@ -5,6 +5,7 @@ namespace Modules\Transferencia\Transformers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\URL;
 
 class AcuerdoResource extends JsonResource
 {
@@ -21,8 +22,15 @@ class AcuerdoResource extends JsonResource
                 'fecha_vencimiento' => $fechaVencimiento?->format('Y-m-d'),
                 'es_vigente' => $esVigente,
             ],
-            'archivo_url' => $this->archivo_acuerdo_path ? route('api.transferencia.archivos.descargar', ['tipo' => 'acuerdo', 'id' => $this->id]) : null,
+            'archivo_url' => $this->archivo_acuerdo_path
+                ? URL::temporarySignedRoute(
+                    'api.transferencia.acuerdos.download',
+                    now()->addMinutes(30),
+                    ['acuerdo' => $this->id]
+                )
+                : null,
             'organizacion' => new OrganizacionResource($this->whenLoaded('organizacion')),
+
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
