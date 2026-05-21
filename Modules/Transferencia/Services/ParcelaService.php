@@ -18,17 +18,11 @@ class ParcelaService
         $query = $this->applyLocationScope($query);
 
         $canSeeAll = $filters['can_see_all'] ?? false;
-        if (!$canSeeAll && !empty($filters['user_id'])) {
-            $query->where(function ($q) use ($filters) {
-                $q->where('user_id', $filters['user_id'])
-                    ->orWhereHas('ensayo.equipoTecnico', function ($teamQuery) use ($filters) {
-                        $teamQuery->where('users.id', $filters['user_id']);
-                    });
-            });
-        }
 
-        if (!empty($filters['filter_user_id'])) {
-            $query->where('user_id', $filters['filter_user_id']);
+        if (!$canSeeAll && !empty($filters['user_id'])) {
+            $query->whereHas('ensayo.equipoTecnico', function ($teamQuery) use ($filters) {
+                $teamQuery->where('users.id', $filters['user_id']);
+            });
         }
 
         if ($canSeeAll && !empty($filters['location_id'])) {

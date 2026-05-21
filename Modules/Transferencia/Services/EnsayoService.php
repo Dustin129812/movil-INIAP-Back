@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Modules\Transferencia\Entities\Ensayo;
 use Modules\Transferencia\Traits\ScopesByLocation;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Str;
 
 class EnsayoService
 {
@@ -14,22 +16,16 @@ class EnsayoService
 
     public function paginate(array $filters): LengthAwarePaginator
     {
-        $query = Ensayo::query()->with(['equipoTecnico', 'producto', 'actividad', 'user:id,name']);
+        $query = Ensayo::query()->with(['equipoTecnico', 'producto', 'actividad']);
 
         $query = $this->applyLocationScope($query);
 
         $canSeeAll = $filters['can_see_all'] ?? false;
-        if (!$canSeeAll && !empty($filters['user_id'])) {
-            $query->where(function ($q) use ($filters) {
-                $q->where('user_id', $filters['user_id'])
-                    ->orWhereHas('equipoTecnico', function ($teamQuery) use ($filters) {
-                        $teamQuery->where('users.id', $filters['user_id']);
-                    });
-            });
-        }
 
-        if (!empty($filters['filter_user_id'])) {
-            $query->where('user_id', $filters['filter_user_id']);
+        if (!$canSeeAll && !empty($filters['user_id'])) {
+            $query->whereHas('equipoTecnico', function ($teamQuery) use ($filters) {
+                $teamQuery->where('users.id', $filters['user_id']);
+            });
         }
 
         if ($canSeeAll && !empty($filters['location_id'])) {
@@ -121,5 +117,28 @@ class EnsayoService
         return DB::transaction(function () use ($ensayo) {
             return $ensayo->delete();
         });
+    }
+
+    /**
+     * Procesa la descarga física del protocolo desde el almacenamiento privado.
+     */
+    public function downloadProtocolo(Ensayo $ensayo): StreamedResponse
+    {
+        if (!$ensayo->archivo_protocolo_path || !Storage::disk('private')->exists($ensayo->archivo_protocolo_path)) {
+            abort(404, 'El documento solicitado no se encuentra disponible o fue removido.');
+        }
+
+        $extension = pathinfo($ensayo->archivo_protocolo_path, PATHINFO_EXTENSION);
+        $slugNombre = Str::slug($ensayo->nombre ?? 'ensayo');
+        $nombreDescarga = "Protocolo_{$slugNombre}_{$ensayo->id}.{$extension}";
+
+        return Storage::disk('private')->response(
+            $ensayo->archivo_protocolo_path,
+            $nombreDescarga,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $nombreDescarga . '"'
+            ]
+        );
     }
 }

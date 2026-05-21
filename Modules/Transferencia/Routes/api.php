@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Modules\Transferencia\Entities\Acuerdo;
+use Modules\Transferencia\Entities\Ensayo;
 use Modules\Transferencia\Http\Controllers\AcuerdoController;
 use Modules\Transferencia\Http\Controllers\DashboardController;
 use Modules\Transferencia\Http\Controllers\DpaController;
@@ -9,6 +11,8 @@ use Modules\Transferencia\Http\Controllers\EnsayoController;
 use Modules\Transferencia\Http\Controllers\OrganizacionController;
 use Modules\Transferencia\Http\Controllers\ParcelaController;
 use Modules\Transferencia\Http\Controllers\TransferenciaFiltroController;
+use Modules\Transferencia\Services\AcuerdoService;
+use Modules\Transferencia\Services\EnsayoService;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,9 +35,6 @@ Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
     Route::apiResource('ensayos', EnsayoController::class);
     Route::apiResource('parcelas', ParcelaController::class);
 
-    Route::get('archivos/{tipo}/{id}', function($tipo, $id) {
-    })->name('api.transferencia.archivos.descargar');
-
     Route::post('/dpa/importar', [DpaController::class, 'importar'])
         ->name('api.ubicacion.dpa.importar');
 
@@ -53,3 +54,6 @@ Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
 
 Route::get('/acuerdos/descargar/{acuerdo}', [AcuerdoController::class, 'download'])
     ->name('api.transferencia.acuerdos.download');
+
+Route::get('/ensayos/descargar/{ensayo}', [EnsayoController::class, 'download'])
+    ->name('api.transferencia.ensayos.download');

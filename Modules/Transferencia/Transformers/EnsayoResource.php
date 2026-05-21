@@ -4,7 +4,7 @@ namespace Modules\Transferencia\Transformers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-
+use Illuminate\Support\Facades\URL;
 class EnsayoResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -25,11 +25,13 @@ class EnsayoResource extends JsonResource
                 'fecha_aprobacion' => $this->fecha_aprobacion_protocolo?->format('Y-m-d'),
 
                 'protocolo_url' => $this->archivo_protocolo_path
-                    ? route('api.transferencia.archivos.descargar', ['tipo' => 'protocolo', 'id' => $this->id])
+                    ? URL::temporarySignedRoute(
+                        'api.transferencia.ensayos.download',
+                        now()->addMinutes(30),
+                        ['ensayo' => $this->id]
+                    )
                     : null,
-                'informe_url' => $this->archivo_informe_path
-                    ? route('api.transferencia.archivos.descargar', ['tipo' => 'informe', 'id' => $this->id])
-                    : null,
+                'informe_url' => null, // Temporalmente null hasta que implementemos su endpoint
             ],
             'poa' => [
                 'producto' => $this->whenLoaded('producto', fn() => [

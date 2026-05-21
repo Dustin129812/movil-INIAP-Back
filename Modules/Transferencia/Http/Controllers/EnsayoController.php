@@ -8,6 +8,7 @@ use Modules\Transferencia\Entities\Ensayo;
 use Modules\Transferencia\Http\Requests\EnsayoRequest;
 use Modules\Transferencia\Services\EnsayoService;
 use Modules\Transferencia\Transformers\EnsayoResource;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EnsayoController extends Controller
 {
@@ -19,7 +20,6 @@ class EnsayoController extends Controller
     {
         $filters = $request->validated();
 
-        // Inyectamos el control de seguridad por roles y usuario
         $filters['user_id'] = $request->user()->id;
         $filters['can_see_all'] = $request->user()->hasPermissionTo('transferencia.seguimiento_general');
 
@@ -50,5 +50,13 @@ class EnsayoController extends Controller
     {
         $this->ensayoService->delete($ensayo);
         return response()->json(['message' => 'Ensayo eliminado correctamente']);
+    }
+
+    /**
+     * Descarga el archivo de protocolo validando la firma temporal.
+     */
+    public function download(Ensayo $ensayo): StreamedResponse
+    {
+        return $this->ensayoService->downloadProtocolo($ensayo);
     }
 }
