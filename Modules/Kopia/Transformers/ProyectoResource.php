@@ -26,6 +26,7 @@ class ProyectoResource extends JsonResource
         }
 
         if ($this->relationLoaded('variedades')) {
+            $data['variedades_ids'] = $this->variedades->pluck('id')->toArray();
             $data['variedades'] = $this->variedades->map(function ($v) {
                 return ($v->cultivo->nombre ?? '') . ' - ' . $v->nombre;
             })->filter()->values();
@@ -41,9 +42,13 @@ class ProyectoResource extends JsonResource
 
         if ($this->relationLoaded('ciclos')) {
             $historialVisitas = collect();
+            $ciclosCrudos = [];
 
             foreach ($this->ciclos as $ciclo) {
+                $cicloArray = $ciclo->toArray();
+
                 if ($ciclo->relationLoaded('visitas')) {
+                    $visitasArray = [];
                     foreach ($ciclo->visitas as $visita) {
                         $hojas = $visita->relationLoaded('hojas_datos') ? $visita->hojas_datos : [];
 
@@ -56,12 +61,19 @@ class ProyectoResource extends JsonResource
                             'cantidad_datos' => count($hojas),
                             'plantillas_usadas' => collect($hojas)->pluck('nombre_plantilla')->unique()->values()
                         ]);
+
+                        $visitaArray = $visita->toArray();
+                        $visitaArray['hojas_datos'] = $hojas;
+                        $visitasArray[] = $visitaArray;
                     }
+                    $cicloArray['visitas'] = $visitasArray;
                 }
+                $ciclosCrudos[] = $cicloArray;
             }
 
             $data['bitacora_visitas'] = $historialVisitas->sortByDesc('fecha')->values();
             $data['total_visitas'] = $historialVisitas->count();
+            $data['ciclos'] = $ciclosCrudos;
 
             $data['contacto_externo'] = [
                 'nombre' => $this->colaborador_nombre ?? 'N/A',

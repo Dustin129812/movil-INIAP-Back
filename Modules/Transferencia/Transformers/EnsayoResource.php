@@ -41,6 +41,12 @@ class EnsayoResource extends JsonResource
                     'descripcion' => $this->actividad->description,
                 ]),
             ],
+            'creador' => $this->whenLoaded('user', function () {
+                return [
+                    'id' => $this->user->id,
+                    'name' => $this->user->name,
+                ];
+            }),
             'location_id' => $this->location_id,
             'equipo_tecnico' => $this->whenLoaded('equipoTecnico'),
             'created_at' => $this->created_at?->toIso8601String(),

@@ -14,10 +14,35 @@ class EnsayoService
 
     public function paginate(array $filters): LengthAwarePaginator
     {
-        $query = Ensayo::query()->with(['equipoTecnico', 'producto', 'actividad']);
+        $query = Ensayo::query()->with(['equipoTecnico', 'producto', 'actividad', 'user:id,name']);
 
-        // Aplicamos el Trait
         $query = $this->applyLocationScope($query);
+
+        $canSeeAll = $filters['can_see_all'] ?? false;
+        if (!$canSeeAll && !empty($filters['user_id'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->where('user_id', $filters['user_id'])
+                    ->orWhereHas('equipoTecnico', function ($teamQuery) use ($filters) {
+                        $teamQuery->where('users.id', $filters['user_id']);
+                    });
+            });
+        }
+
+        if (!empty($filters['filter_user_id'])) {
+            $query->where('user_id', $filters['filter_user_id']);
+        }
+
+        if ($canSeeAll && !empty($filters['location_id'])) {
+            $query->where('location_id', $filters['location_id']);
+        }
+
+        if (!empty($filters['provincia_id']) || !empty($filters['canton_id']) || !empty($filters['parroquia_id'])) {
+            $query->whereHas('parcelas', function ($q) use ($filters) {
+                if (!empty($filters['provincia_id'])) { $q->where('provincia_id', $filters['provincia_id']); }
+                if (!empty($filters['canton_id'])) { $q->where('canton_id', $filters['canton_id']); }
+                if (!empty($filters['parroquia_id'])) { $q->where('parroquia_id', $filters['parroquia_id']); }
+            });
+        }
 
         if (!empty($filters['search'])) {
             $query->where(function ($q) use ($filters) {
@@ -25,11 +50,9 @@ class EnsayoService
                     ->orWhere('nombre_tecnologia', 'ilike', '%' . $filters['search'] . '%');
             });
         }
-
         if (!empty($filters['estado'])) { $query->where('estado', $filters['estado']); }
-        if (!empty($filters['tipo'])) { $query->where('tipo', $filters['tipo']); }
 
-        $perPage = $filters['per_page'] ?? 15;
+        $perPage = $filters['per_page'] ?? 100;
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
 

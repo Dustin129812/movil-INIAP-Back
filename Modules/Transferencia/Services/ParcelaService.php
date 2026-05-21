@@ -13,11 +13,31 @@ class ParcelaService
 
     public function paginate(array $filters): LengthAwarePaginator
     {
-        $query = Parcela::query()
-            ->with(['ensayo', 'organizacion', 'provincia', 'canton', 'parroquia']);
+        $query = Parcela::query()->with(['ensayo', 'organizacion', 'provincia', 'canton', 'parroquia']);
 
-        // Aplicamos el Trait
         $query = $this->applyLocationScope($query);
+
+        $canSeeAll = $filters['can_see_all'] ?? false;
+        if (!$canSeeAll && !empty($filters['user_id'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->where('user_id', $filters['user_id'])
+                    ->orWhereHas('ensayo.equipoTecnico', function ($teamQuery) use ($filters) {
+                        $teamQuery->where('users.id', $filters['user_id']);
+                    });
+            });
+        }
+
+        if (!empty($filters['filter_user_id'])) {
+            $query->where('user_id', $filters['filter_user_id']);
+        }
+
+        if ($canSeeAll && !empty($filters['location_id'])) {
+            $query->where('location_id', $filters['location_id']);
+        }
+
+        if (!empty($filters['provincia_id'])) { $query->where('provincia_id', $filters['provincia_id']); }
+        if (!empty($filters['canton_id'])) { $query->where('canton_id', $filters['canton_id']); }
+        if (!empty($filters['parroquia_id'])) { $query->where('parroquia_id', $filters['parroquia_id']); }
 
         if (!empty($filters['search'])) {
             $query->where(function ($q) use ($filters) {
@@ -25,12 +45,9 @@ class ParcelaService
                     ->orWhere('localidad', 'ilike', '%' . $filters['search'] . '%');
             });
         }
-
         if (!empty($filters['estado'])) { $query->where('estado', $filters['estado']); }
-        if (!empty($filters['ensayo_id'])) { $query->where('ensayo_id', $filters['ensayo_id']); }
 
-        $perPage = $filters['per_page'] ?? 15;
-
+        $perPage = $filters['per_page'] ?? 100;
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
 

@@ -17,7 +17,14 @@ class EnsayoController extends Controller
 
     public function index(EnsayoRequest $request): AnonymousResourceCollection
     {
-        $ensayos = $this->ensayoService->paginate($request->validated());
+        $filters = $request->validated();
+
+        // Inyectamos el control de seguridad por roles y usuario
+        $filters['user_id'] = $request->user()->id;
+        $filters['can_see_all'] = $request->user()->hasPermissionTo('transferencia.seguimiento_general');
+
+        $ensayos = $this->ensayoService->paginate($filters);
+
         return EnsayoResource::collection($ensayos);
     }
 

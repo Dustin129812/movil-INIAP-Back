@@ -16,7 +16,6 @@ class OrganizacionService
         $query = Organizacion::query()
             ->with(['provincia', 'canton', 'parroquia']);
 
-        // Aplicamos el Trait
         $query = $this->applyLocationScope($query);
 
         if (!empty($filters['search'])) {
@@ -25,6 +24,10 @@ class OrganizacionService
 
         if (!empty($filters['tipo'])) {
             $query->where('tipo_organizacion', $filters['tipo']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
         }
 
         $perPage = $filters['per_page'] ?? 100;

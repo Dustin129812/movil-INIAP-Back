@@ -30,19 +30,17 @@ class AcuerdoService
 
         if (!empty($filters['provincia_id']) || !empty($filters['canton_id']) || !empty($filters['parroquia_id'])) {
             $query->whereHas('parcelas', function ($q) use ($filters) {
-                if (!empty($filters['provincia_id'])) {
-                    $q->where('provincia_id', $filters['provincia_id']);
-                }
-                if (!empty($filters['canton_id'])) {
-                    $q->where('canton_id', $filters['canton_id']);
-                }
-                if (!empty($filters['parroquia_id'])) {
-                    $q->where('parroquia_id', $filters['parroquia_id']);
-                }
+                if (!empty($filters['provincia_id'])) { $q->where('provincia_id', $filters['provincia_id']); }
+                if (!empty($filters['canton_id'])) { $q->where('canton_id', $filters['canton_id']); }
+                if (!empty($filters['parroquia_id'])) { $q->where('parroquia_id', $filters['parroquia_id']); }
             });
         }
 
-        $perPage = $filters['per_page'] ?? 15;
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
+
+        $perPage = $filters['per_page'] ?? 100;
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
 

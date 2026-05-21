@@ -103,4 +103,52 @@ class LoteService
         $wkt = $puntos->implode(', ');
         return "ST_GeomFromText('POLYGON(({$wkt}))', 4326)";
     }
+
+    /**
+     * Crea un Lote y sus Proyectos asociados en una sola transacción (Offline-First approach)
+     */
+    public function crearLoteIntegrado(array $datos, int $responsableId): Lote
+    {
+        return DB::transaction(function () use ($datos, $responsableId) {
+            // 1. Preparar e insertar Lote
+            $loteAttributes = [
+                'uuid_movil'       => $datos['uuid_movil'],
+                'nombre_lote'      => $datos['nombre_lote'],
+                'province_id'      => $datos['province_id'],
+                'canton_id'        => $datos['canton_id'],
+                'location_id'      => $datos['location_id'] ?? null,
+                'ubicacion_manual' => $datos['ubicacion_manual'] ?? null,
+                'altitud'          => $datos['altitud'] ?? null,
+            ];
+
+            if (!empty($datos['coordenadas']) && is_array($datos['coordenadas'])) {
+                $loteAttributes['area'] = DB::raw($this->convertirCoordenadasAPoligono($datos['coordenadas']));
+            }
+
+            $lote = Lote::create($loteAttributes);
+
+            // 2. Iterar e insertar Proyectos del lote
+            foreach ($datos['proyectos'] as $proyectoData) {
+                $proyecto = Proyecto::create([
+                    'uuid_movil'     => $proyectoData['uuid_movil'],
+                    'lote_id'        => $lote->id,
+                    'responsable_id' => $responsableId,
+                    'titulo'         => $proyectoData['titulo'],
+                    'descripcion'    => $proyectoData['descripcion'] ?? null,
+                    'tipo_ensayo'    => $proyectoData['tipo_ensayo'] ?? null,
+                ]);
+
+                // Sincronizar relaciones
+                if (!empty($proyectoData['variedades_ids'])) {
+                    $proyecto->variedades()->sync($proyectoData['variedades_ids']);
+                }
+
+                if (!empty($proyectoData['colaboradores'])) {
+                    $proyecto->colaboradores()->sync($proyectoData['colaboradores']);
+                }
+            }
+
+            return $lote;
+        });
+    }
 }

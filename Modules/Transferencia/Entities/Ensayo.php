@@ -2,6 +2,7 @@
 
 namespace Modules\Transferencia\Entities;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -69,5 +70,10 @@ class Ensayo extends Model
     public function parcelas()
     {
         return $this->hasMany(Parcela::class, 'ensayo_id'); // Asegúrate de que el foreign key sea el correcto si no es 'ensayo_id'
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

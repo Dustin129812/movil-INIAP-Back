@@ -8,6 +8,7 @@ use Modules\Transferencia\Http\Controllers\DpaController;
 use Modules\Transferencia\Http\Controllers\EnsayoController;
 use Modules\Transferencia\Http\Controllers\OrganizacionController;
 use Modules\Transferencia\Http\Controllers\ParcelaController;
+use Modules\Transferencia\Http\Controllers\TransferenciaFiltroController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,6 +40,14 @@ Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->name('api.transferencia.dashboard');
 
+    /**
+     * Rutas para Filtros Geográficos Optimizados (DPA Activos)
+     */
+    Route::prefix('filtros')->group(function () {
+        Route::get('provincias', [TransferenciaFiltroController::class, 'provincias']);
+        Route::get('cantones/{provincia_id}', [TransferenciaFiltroController::class, 'cantones']);
+        Route::get('parroquias/{canton_id}', [TransferenciaFiltroController::class, 'parroquias']);
+    });
 
 });
 

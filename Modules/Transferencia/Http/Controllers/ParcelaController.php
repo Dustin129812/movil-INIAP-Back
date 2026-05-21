@@ -18,7 +18,13 @@ class ParcelaController extends Controller
 
     public function index(ParcelaRequest $request): AnonymousResourceCollection
     {
-        $parcelas = $this->parcelaService->paginate($request->validated());
+        $filters = $request->validated();
+
+        // Inyectamos el control de seguridad por roles y usuario
+        $filters['user_id'] = $request->user()->id;
+        $filters['can_see_all'] = $request->user()->hasPermissionTo('transferencia.seguimiento_general');
+
+        $parcelas = $this->parcelaService->paginate($filters);
 
         return ParcelaResource::collection($parcelas);
     }

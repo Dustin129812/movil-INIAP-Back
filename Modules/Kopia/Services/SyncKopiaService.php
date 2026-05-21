@@ -156,11 +156,15 @@ class SyncKopiaService
 
     private function guardarProyecto(Lote $lote, array $data): Proyecto
     {
+        $uuid = $data['uuid_movil'];
+        if (str_starts_with($uuid, '00000000')) {
+            throw new \Exception("UUID inválido recibido desde el dispositivo móvil.");
+        }
         $proyecto = Proyecto::updateOrCreate(
-            ['uuid_movil' => $data['uuid_movil']],
+            ['uuid_movil' => $uuid],
             [
                 'lote_id' => $lote->id,
-                'responsable_id' => $data['responsable_id'],
+                'responsable_id' => $data['responsable_id'] ?? auth('api')->id(),
                 'titulo' => $data['titulo'],
                 'descripcion' => $data['descripcion'] ?? null,
                 'tipo_ensayo' => $data['tipo_ensayo'] ?? null,

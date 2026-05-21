@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\Kopia\Entities\Lote;
+use Modules\Kopia\Http\Requests\StoreLoteProyectoRequest;
 use Modules\Kopia\Services\LoteService;
 use Modules\Kopia\Transformers\LoteResource;
 
@@ -31,27 +32,23 @@ class LoteController extends Controller
         return new LoteResource($lote);
     }
 
-    public function store(Request $request)
+    public function store(StoreLoteProyectoRequest $request)
     {
-        $validated = $request->validate([
-            'nombre_lote' => 'required|string|max:150',
-            'coordenadas' => 'required|array',
-            'uuid_movil'  => 'required|string',
-            'altitud'     => 'nullable|numeric',
-            // Agrega más validaciones según tus necesidades
-        ]);
-
         try {
-            $lote = $this->loteService->crearLote($validated);
+            $lote = $this->loteService->crearLoteIntegrado(
+                $request->validated(),
+                auth('api')->id()
+            );
 
-            // Refrescamos para obtener el GeoJSON generado por PostGIS
-            $loteRefrescado = Lote::select('*', DB::raw('ST_AsGeoJSON(area) as geometria_geojson'))
+            $loteRefrescado = Lote::with(['proyectos.variedad.cultivo', 'proyectos.colaboradores'])
+                ->select('*', DB::raw('ST_AsGeoJSON(area) as geometria_geojson'))
                 ->find($lote->id);
 
             return response()->json([
-                'data' => new LoteResource($loteRefrescado),
-                'message' => 'Lote experimental creado con éxito.'
+                'data'    => new LoteResource($loteRefrescado),
+                'message' => 'Lote experimental y proyectos creados de forma integrada con éxito.'
             ], 201);
+
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
