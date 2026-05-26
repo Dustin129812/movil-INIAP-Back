@@ -51,7 +51,7 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
     Route::get('/verificables/zip-user/{userId}', [PlanningReviewController::class, 'prepareUserZip']);
 
     Route::put('/week-activities/{id}', [WeekActivityController::class, 'updateActivity']);
-
+    Route::delete('week-activities-delete/{id}', [WeekActivityController::class, 'destroy']);
 
 });
 

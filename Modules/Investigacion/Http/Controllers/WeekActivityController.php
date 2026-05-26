@@ -108,6 +108,30 @@ class WeekActivityController extends Controller
         }
     }
 
+    public function destroy($id, Request $request)
+    {
+        try {
+            $this->weekActivityService->deleteActivity($id, $request->user());
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Success',
+                    'detail' => 'Actividad eliminada correctamente.',
+                    'code' => 200
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error al eliminar actividad: " . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error',
+                    'detail' => $e->getMessage(),
+                    'code' => 500
+                ]
+            ], 500);
+        }
+    }
+
     /**
      * Actualiza el progreso de las actividades y recibe verificables (Skinny Controller)
      */

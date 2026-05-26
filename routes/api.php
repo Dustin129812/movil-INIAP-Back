@@ -82,8 +82,6 @@ Route::middleware(['auth:api', 'role:administrador'])->prefix('admin')->group(fu
     Route::apiResource('surveys', SurveyController::class)->except(['index', 'show']);
     Route::get('/surveys/{survey}/results', [SurveyController::class, 'results']);
 
-    Route::get('/surveys/{survey}/export/pdf', [ReportController::class, 'exportPdf']);
-    Route::get('/surveys/{survey}/export/excel', [ReportController::class, 'exportExcel']);
     Route::get('/surveys/{survey}/individual-responses', [SurveyController::class, 'individualResponses']);
 });
 
@@ -209,9 +207,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/dashboard/review-queue', [DashboardController::class, 'getReviewQueue']);
     Route::get('/dashboard/team-pulse', [DashboardController::class, 'getTeamPulseData']);
 
-    Route::get('/reports/user-deep-dive/{user}', [ReportController::class, 'generateUserDeepDivePdf']);
-    Route::get('/reports/user-deep-dive/{user}/data', [ReportController::class, 'getUserDeepDiveData']);
-
     Route::get('/reports/my-performance', [DashboardController::class, 'getMyPerformance']);
     Route::get('/reports/my-pulse-history', [DashboardController::class, 'getMyPulseHistory']);
 
@@ -220,7 +215,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
     Route::get('/dashboard/estacion/team-pulse', [EstacionDashboardController::class, 'getTeamPulse']);
     Route::get('/dashboard/estacion/rubro-deep-dive/{rubro}', [EstacionDashboardController::class, 'getRubroDeepDive']);
     Route::get('/dashboard/estacion/rubro-performance', [EstacionDashboardController::class, 'getRubroPerformance']);
-    Route::get('/reports/rubro-deep-dive/{rubro}', [ReportController::class, 'generateRubroDeepDivePdf']);
 
     Route::post('/novelties/batch', [NoveltyController::class, 'storeBatch']);
     Route::get('/novelties', [NoveltyController::class, 'getForCurrentWeek']);
@@ -231,8 +225,6 @@ Route::middleware('auth:api', 'throttle:60,1')->group(callback: function () {
         Route::get('/dashboard/national/station-performance', [NationalDashboardController::class, 'getStationPerformance']);
         Route::get('/dashboard/national/pulse-summary', [NationalDashboardController::class, 'getNationalPulseSummary']);
         Route::get('/dashboard/national/rubro-performance', [NationalDashboardController::class, 'getNationalRubroPerformance']);
-        Route::get('/reports/national/executive-summary', [ReportController::class, 'generateNationalExecutiveSummary']);
-        Route::get('/reports/national/station-comparison', [ReportController::class, 'generateStationComparisonReport']);
 
     });
 

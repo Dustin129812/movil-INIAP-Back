@@ -233,6 +233,9 @@ class WeekActivityService
                 throw new \Exception("Solo se pueden modificar o reprogramar actividades en estado pendiente o aprobado.");
             }
 
+            $wasApproved = $weekActivity->status === 'approved';
+            $hasChanges = false;
+
             if (isset($data['day'])) {
                 $baseMonday = Carbon::parse($weekActivity->date)->startOfWeek(Carbon::MONDAY);
                 $dayOffsets = [
@@ -244,39 +247,54 @@ class WeekActivityService
                 if (Carbon::parse($weekActivity->date)->format('Y-m-d') !== $newDate->format('Y-m-d')) {
                     $weekActivity->date = $newDate;
                     $weekActivity->is_rescheduled = true;
-
-                    if ($weekActivity->status === 'approved') {
-                        $weekActivity->status = 'pending';
-                    }
+                    $hasChanges = true;
                 }
             }
 
-            if ($weekActivity->status === 'pending') {
-                if (isset($data['description'])) $weekActivity->description = $data['description'];
-                if (isset($data['work_location'])) $weekActivity->work_location = $data['work_location'];
-                if (array_key_exists('observations', $data)) $weekActivity->observations = $data['observations'];
-                if (isset($data['activity_type'])) $weekActivity->activity_type = $data['activity_type'];
+            if (isset($data['description']) && $weekActivity->description !== $data['description']) {
+                $weekActivity->description = $data['description'];
+                $hasChanges = true;
+            }
+            if (isset($data['work_location']) && $weekActivity->work_location !== $data['work_location']) {
+                $weekActivity->work_location = $data['work_location'];
+                $hasChanges = true;
+            }
+            if (array_key_exists('observations', $data) && $weekActivity->observations !== $data['observations']) {
+                $weekActivity->observations = $data['observations'];
+                $hasChanges = true;
+            }
+            if (isset($data['activity_type']) && $weekActivity->activity_type !== $data['activity_type']) {
+                $weekActivity->activity_type = $data['activity_type'];
+                $hasChanges = true;
+            }
 
-                if (isset($data['activityId']) && $data['activityId'] != $weekActivity->activity_id) {
-                    $newActivity = Activity::findOrFail($data['activityId']);
-                    $weekActivity->activity_id = $newActivity->id;
+            if (isset($data['activityId']) && $data['activityId'] != $weekActivity->activity_id) {
+                $newActivity = Activity::findOrFail($data['activityId']);
+                $weekActivity->activity_id = $newActivity->id;
 
-                    $planner = WeekPlanner::where('week_activity_id', $weekActivity->id)->first();
-                    if ($planner) {
-                        $planner->product_id = $newActivity->product_id;
-                        $planner->save();
-                    }
+                $planner = WeekPlanner::where('week_activity_id', $weekActivity->id)->first();
+                if ($planner) {
+                    $planner->product_id = $newActivity->product_id;
+                    $planner->save();
                 }
+                $hasChanges = true;
+            }
 
-                if (isset($data['materials'])) {
-                    $this->syncMaterials($weekActivity, $data['materials']);
-                }
-                if (isset($data['indicators'])) {
-                    $this->syncIndicators($weekActivity, $data['indicators']);
-                }
-                if (isset($data['logisticSupports'])) {
-                    $this->syncLogisticSupport($weekActivity, $data['logisticSupports']);
-                }
+            if (isset($data['materials'])) {
+                $this->syncMaterials($weekActivity, $data['materials']);
+                $hasChanges = true;
+            }
+            if (isset($data['indicators'])) {
+                $this->syncIndicators($weekActivity, $data['indicators']);
+                $hasChanges = true;
+            }
+            if (isset($data['logisticSupports'])) {
+                $this->syncLogisticSupport($weekActivity, $data['logisticSupports']);
+                $hasChanges = true;
+            }
+
+            if ($wasApproved && $hasChanges) {
+                $weekActivity->status = 'pending';
             }
 
             $weekActivity->save();
@@ -444,5 +462,24 @@ class WeekActivityService
         }
 
         return $ownActivities->merge($supportActivities);
+    }
+
+    public function deleteActivity(int $id, User $user): void
+    {
+        DB::transaction(function () use ($id, $user) {
+            $weekActivity = WeekActivity::where('user_id', $user->id)->findOrFail($id);
+
+            if (!in_array($weekActivity->status, ['pending', 'approved'])) {
+                throw new \Exception("Solo se pueden eliminar actividades en estado pendiente o aprobado.");
+            }
+
+            $weekActivity->materials()->detach();
+            $weekActivity->performanceIndicators()->detach();
+            $weekActivity->logisticSupportUsers()->detach();
+
+            WeekPlanner::where('week_activity_id', $weekActivity->id)->delete();
+
+            $weekActivity->delete();
+        });
     }
 }

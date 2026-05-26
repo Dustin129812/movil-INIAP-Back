@@ -2,10 +2,10 @@
 
 namespace Modules\TrlImporter\Http\Controllers;
 
-use Illuminate\Routing\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Routing\Controller;
+use Modules\TrlImporter\Database\ExcelImportService;
 use Modules\TrlImporter\Http\Requests\ImportExcelRequest;
-use Modules\TrlImporter\Services\ExcelImportService;
 
 class TrlImporterController extends Controller
 {
