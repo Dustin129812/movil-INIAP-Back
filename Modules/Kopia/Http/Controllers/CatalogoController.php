@@ -57,9 +57,7 @@ class CatalogoController extends Controller
     {
         $provincias = Province::select('id', 'name')->get();
         $cantones = Canton::select('id', 'provincia_id', 'name')->get();
-
         $estaciones = Location::select('id', 'province_id', 'canton_id', 'name')->get();
-
         $cultivos = Cultivo::select('id', 'nombre', 'nombre_cientifico')->get();
         $variedades = Variedad::select('id', 'cultivo_id', 'nombre', 'caracteristicas_base')->get();
 

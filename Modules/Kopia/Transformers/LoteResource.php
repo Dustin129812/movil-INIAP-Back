@@ -67,8 +67,34 @@ class LoteResource extends JsonResource
             'proyectos' => $this->whenLoaded('proyectos', function() {
                 return $this->proyectos->map(fn($p) => [
                     'id' => $p->id,
+                    'uuid_movil' => $p->uuid_movil, // <-- CLAVE: Faltaba esto
+                    'responsable_id' => $p->responsable_id,
                     'titulo' => $p->titulo,
+                    'descripcion' => $p->descripcion,
                     'cultivo' => $p->variedad?->cultivo?->nombre ?? 'Sin Cultivo Asignado',
+                    'variedades_ids' => $p->variedades ? $p->variedades->pluck('id')->toArray() : [],
+                    'ciclos' => $p->ciclos->map(fn($c) => [
+                        'id' => $c->id,
+                        'uuid_movil' => $c->uuid_movil, // <-- CLAVE: Faltaba esto
+                        'cultivo_variedad' => $c->cultivo_variedad,
+                        'distancia_siembra' => $c->distancia_siembra,
+                        'fecha_siembra' => $c->fecha_siembra,
+                        'metricas_siembra' => $c->metricas_siembra,
+                        'visitas' => $c->visitas->map(fn($v) => [
+                            'id' => $v->id,
+                            'uuid_movil' => $v->uuid_movil, // <-- CLAVE: Faltaba esto
+                            'fecha_visita' => $v->fecha_visita,
+                            'tecnico_nombre' => $v->tecnico_nombre,
+                            'observaciones' => $v->observaciones,
+                            'recomendaciones' => $v->recomendaciones,
+                            'hojas_datos' => $v->hojasDatos ? $v->hojasDatos->map(fn($h) => [
+                                'id' => $h->id,
+                                'uuid_movil' => $h->uuid_movil, // <-- CLAVE: Faltaba esto
+                                'nombre_plantilla' => $h->nombre_plantilla,
+                                'datos_variables' => $h->datos_variables
+                            ]) : []
+                        ])
+                    ])
                 ]);
             }),
 

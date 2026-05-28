@@ -1,48 +1,59 @@
 <?php
 
-
 namespace Modules\Administracion\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 use Modules\Administracion\Entities\Dispatch;
+use Modules\Administracion\Entities\Vehicle;
 use Modules\Investigacion\Entities\WeekActivity;
 
 class DispatchService
 {
-    /**
-     * Procesa la solicitud de movilización (Lógica 1 a 1).
-     */
     public function processDispatch(array $data, User $admin): Dispatch
     {
         return DB::transaction(function () use ($data, $admin) {
+            $weekActivity = WeekActivity::with('materials')->findOrFail($data['week_activity_id']);
 
-            $dispatch = Dispatch::firstOrNew([
-                'week_activity_id' => $data['week_activity_id']
-            ]);
+            $dispatch = Dispatch::firstOrNew(['week_activity_id' => $data['week_activity_id']]);
+
+            $previousVehicleId = $dispatch->vehicle_id;
 
             $dispatch->admin_id = $admin->id;
             $dispatch->status = $data['status'];
             $dispatch->admin_notes = $data['admin_notes'] ?? null;
+            $dispatch->vehicle_id = $data['vehicle_id'] ?? $dispatch->vehicle_id;
+            $dispatch->driver_id = $data['driver_id'] ?? $dispatch->driver_id;
+
+            if (!$dispatch->exists || empty($dispatch->requested_items)) {
+                $dispatch->requested_items = $this->buildRequestedItemsSnapshot($weekActivity);
+            }
+
+            if ($data['status'] === 'dispatched' && isset($data['dispatched_items'])) {
+                $dispatch->dispatched_items = $data['dispatched_items'];
+            }
 
             $dispatch->save();
+
+            if ($data['status'] === 'processing' && $dispatch->vehicle_id) {
+                Vehicle::where('id', $dispatch->vehicle_id)
+                    ->update(['is_available' => false]);
+            }
+
+            // Si el estado pasa a finalizado o rechazado, liberamos el vehículo
+            if (in_array($data['status'], ['dispatched', 'rejected']) && $dispatch->vehicle_id) {
+                Vehicle::where('id', $dispatch->vehicle_id)
+                    ->update(['is_available' => true]);
+            }
 
             return $dispatch;
         });
     }
 
-    /**
-     * Obtiene solicitudes logísticas filtradas por ID de ubicación.
-     */
     public function getStationRequests(?int $locationId = null): Collection
     {
-        return WeekActivity::query($locationId, function ($query, $locationId) {
-            return $query->whereHas('user', function ($q) use ($locationId) {
-                $q->where('location_id', $locationId);
-            });
-        })
-            // Filtro vital: Solo extraer actividades que solicitan vehículo
+        return WeekActivity::query()
             ->whereHas('materials', function ($query) {
                 $query->where('material_week_activity.request_type', 'logistics');
             })
@@ -58,7 +69,6 @@ class DispatchService
                 $dispatch = $weekActivity->dispatch;
                 $status = $dispatch ? $dispatch->status : 'pending';
 
-                // Búsqueda y decodificación del JSONB logístico
                 $logisticItem = $weekActivity->materials->firstWhere('pivot.request_type', 'logistics');
 
                 $mobilizationData = [];
@@ -83,16 +93,12 @@ class DispatchService
                     'activity_description' => $weekActivity->description,
                     'status' => $status,
                     'mobilization' => $mobilizationData,
+                    'requested_items' => $this->buildRequestedItemsSnapshot($weekActivity),
                     'admin_notes' => $dispatch ? $dispatch->admin_notes : null,
                 ];
             });
     }
 
-    /**
-     * Construye un array estructurado (snapshot) leyendo la tabla pivote de materiales.
-     * * @param WeekActivity $weekActivity
-     * @return array
-     */
     private function buildRequestedItemsSnapshot(WeekActivity $weekActivity): array
     {
         return $weekActivity->materials->map(function ($material) {

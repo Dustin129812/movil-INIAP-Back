@@ -17,13 +17,12 @@ class PlanningReviewService
 
     /**
      * Define centralizadamente quién pertenece al perímetro de visión del revisor.
-     * Retorna un arreglo de IDs válidos.
      */
-    private function getValidPerimeterIds(Collection $managedGroups, User $revisor, bool $isDirector): array
+    private function getValidPerimeterIds(Collection $managedGroups, User $revisor, bool $hasStationAccess): array
     {
         $memberIds = $managedGroups->flatMap->members->pluck('id')->unique();
 
-        if (!$isDirector && !$this->isAdmCentral($revisor)) {
+        if (!$hasStationAccess && !$this->isAdmCentral($revisor)) {
             $memberIds = $memberIds->reject(fn($id) => $id == $revisor->id);
         }
 
@@ -32,19 +31,21 @@ class PlanningReviewService
 
     public function getWeeklyPlanningData(User $revisor, string $period = '15days'): Collection
     {
-        $isDirector = $revisor->hasRole('station-director');
-        $managedGroups = $this->getManagedGroups($revisor);
+        // 1. Ampliamos el acceso total para Directores Y Administradores de Estación
+        $hasStationAccess = $revisor->hasRole('station-director') || $revisor->hasRole('station-admin'); // Ajusta el nombre del rol si es distinto
 
-        if (!$isDirector && $managedGroups->isEmpty()) {
+        $managedGroups = $this->getManagedGroups($revisor, $hasStationAccess);
+
+        if (!$hasStationAccess && $managedGroups->isEmpty()) {
             return collect();
         }
 
         $dateFilter = $this->getDateFilter($period);
         $statuses = ['pending', 'approved', 'rejected', 'reassigned', 'completed'];
 
-        $validMemberIds = $this->getValidPerimeterIds($managedGroups, $revisor, $isDirector);
+        $validMemberIds = $this->getValidPerimeterIds($managedGroups, $revisor, $hasStationAccess);
 
-        $ownActivities = $this->fetchOwnActivities($managedGroups, $statuses, $dateFilter, $revisor, $isDirector);
+        $ownActivities = $this->fetchOwnActivities($managedGroups, $statuses, $dateFilter, $revisor, $hasStationAccess);
 
         $ownActivities->each(function($act) use ($managedGroups) {
             $userName = $act->user ? $act->user->name : 'Usuario Desconocido';
@@ -52,10 +53,10 @@ class PlanningReviewService
             $this->injectMetadata($act, true, $act->user_id, $userName, $userName, $group);
         });
 
-        $supportActivities = $this->fetchSupportActivities($managedGroups, $statuses, $dateFilter, $revisor, $isDirector);
+        $supportActivities = $this->fetchSupportActivities($managedGroups, $statuses, $dateFilter, $revisor, $hasStationAccess);
         $decoratedSupport = collect();
 
-        $directResponsibles = $isDirector
+        $directResponsibles = $hasStationAccess
             ? $managedGroups->whereNull('parent_id')->pluck('responsible_id')->unique()->filter()->toArray()
             : [];
 
@@ -64,7 +65,7 @@ class PlanningReviewService
                 if (in_array($sUser->id, $validMemberIds)) {
                     $shouldInclude = false;
 
-                    if ($isDirector) {
+                    if ($hasStationAccess) {
                         $isHistorical = in_array($act->status, ['completed', 'approved']);
                         $isDirectResponsible = in_array($sUser->id, $directResponsibles);
 
@@ -90,11 +91,11 @@ class PlanningReviewService
         return $ownActivities->concat($decoratedSupport);
     }
 
-    private function getManagedGroups(User $revisor): Collection
+    private function getManagedGroups(User $revisor, bool $hasStationAccess = false): Collection
     {
         $query = Group::with('members');
 
-        if ($revisor->hasRole('station-director')) {
+        if ($hasStationAccess) {
             return $query->where('location_id', $revisor->location_id)->get();
         }
 
@@ -130,10 +131,10 @@ class PlanningReviewService
         return $user->location && strtoupper($user->location->name) === 'ADM. CENTRAL';
     }
 
-    private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $isDirector): Collection
+    private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $hasStationAccess): Collection
     {
-        return WeekActivity::where(function ($q) use ($managedGroups, $revisor, $isDirector, $statuses) {
-            if ($isDirector) {
+        return WeekActivity::where(function ($q) use ($managedGroups, $revisor, $hasStationAccess, $statuses) {
+            if ($hasStationAccess) {
                 $directResponsibles = $managedGroups->whereNull('parent_id')
                     ->pluck('responsible_id')
                     ->unique()
@@ -167,13 +168,13 @@ class PlanningReviewService
             ->get();
     }
 
-    private function fetchSupportActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $isDirector): Collection
+    private function fetchSupportActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $hasStationAccess): Collection
     {
         return WeekActivity::whereHas('logisticSupportUsers', function ($sq) {
             $sq->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
         })
-            ->where(function($q) use ($managedGroups, $revisor, $isDirector, $statuses) {
-                if ($isDirector) {
+            ->where(function($q) use ($managedGroups, $revisor, $hasStationAccess, $statuses) {
+                if ($hasStationAccess) {
                     $directResponsibles = $managedGroups->whereNull('parent_id')->pluck('responsible_id')->unique()->filter();
                     $allStationMembers = $managedGroups->flatMap->members->pluck('id')->unique();
 

@@ -14,14 +14,12 @@ return new class extends Migration
         Schema::create('administracion.dispatches', function (Blueprint $table) {
             $table->id();
 
-            // 1. Relación explícita con week_activities en el esquema public
             $table->unsignedBigInteger('week_activity_id');
             $table->foreign('week_activity_id')
                 ->references('id')
                 ->on('public.weekly_activities')
                 ->onDelete('cascade');
 
-            // 2. Relación explícita con users en el esquema public
             $table->unsignedBigInteger('admin_id')->nullable();
             $table->foreign('admin_id')
                 ->references('id')
@@ -33,6 +31,9 @@ return new class extends Migration
             $table->jsonb('dispatched_items')->nullable();
 
             $table->text('admin_notes')->nullable();
+
+            $table->foreignId('vehicle_id')->nullable()->constrained('administracion.vehicles')->nullOnDelete();
+            $table->foreignId('driver_id')->nullable()->constrained('users')->nullOnDelete();
 
             $table->timestamps();
         });

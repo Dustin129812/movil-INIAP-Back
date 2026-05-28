@@ -147,6 +147,7 @@ class SyncKopiaService
                         ]);
                 }
             ])
+            ->select('*', DB::raw('ST_AsGeoJSON(area) as geometria_geojson'))
             ->get();
 
         return [
