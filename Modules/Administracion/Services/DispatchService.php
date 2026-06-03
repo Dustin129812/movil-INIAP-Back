@@ -54,6 +54,11 @@ class DispatchService
     public function getStationRequests(?int $locationId = null): Collection
     {
         return WeekActivity::query()
+            ->when($locationId, function ($query, $locationId) {
+                $query->whereHas('user', function ($q) use ($locationId) {
+                    $q->where('location_id', $locationId);
+                });
+            })
             ->whereHas('materials', function ($query) {
                 $query->where('material_week_activity.request_type', 'logistics');
             })
