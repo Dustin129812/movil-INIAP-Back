@@ -16,6 +16,7 @@ class Acuerdo extends Model
 
     protected $fillable = [
         'organizacion_id',
+        'user_id',
         'fecha_firma',
         'anios_vigencia',
         'archivo_acuerdo_path',

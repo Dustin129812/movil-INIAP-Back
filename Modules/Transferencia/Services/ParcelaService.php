@@ -15,18 +15,22 @@ class ParcelaService
     {
         $query = Parcela::query()->with(['ensayo', 'organizacion', 'provincia', 'canton', 'parroquia']);
 
-        $query = $this->applyLocationScope($query);
-
         $canSeeAll = $filters['can_see_all'] ?? false;
 
-        if (!$canSeeAll && !empty($filters['user_id'])) {
-            $query->whereHas('ensayo.equipoTecnico', function ($teamQuery) use ($filters) {
-                $teamQuery->where('users.id', $filters['user_id']);
-            });
+        if (!$canSeeAll) {
+            $query = $this->applyLocationScope($query);
+        } elseif (!empty($filters['location_id'])) {
+            $query->where('location_id', $filters['location_id']);
         }
 
-        if ($canSeeAll && !empty($filters['location_id'])) {
-            $query->where('location_id', $filters['location_id']);
+        if (isset($filters['huerfanos_only']) && $filters['huerfanos_only'] === 'true') {
+            $query->whereNull('user_id');
+        } elseif (!$canSeeAll && !empty($filters['user_id'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->whereHas('ensayo.equipoTecnico', function ($teamQuery) use ($filters) {
+                    $teamQuery->where('users.id', $filters['user_id']);
+                })->orWhereNull('user_id');
+            });
         }
 
         if (!empty($filters['provincia_id'])) { $query->where('provincia_id', $filters['provincia_id']); }
@@ -66,6 +70,21 @@ class ParcelaService
     {
         return DB::transaction(function () use ($parcela) {
             return $parcela->delete();
+        });
+    }
+
+    public function claim(Parcela $parcela): Parcela
+    {
+        return DB::transaction(function () use ($parcela) {
+            if (!is_null($parcela->user_id)) {
+                abort(422, 'Esta parcela de campo ya cuenta con un técnico asignado.');
+            }
+
+            $parcela->update([
+                'user_id' => request()->user()->id
+            ]);
+
+            return $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton']);
         });
     }
 }

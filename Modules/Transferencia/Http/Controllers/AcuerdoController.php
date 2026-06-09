@@ -19,7 +19,12 @@ class AcuerdoController extends Controller
 
     public function index(AcuerdoRequest $request): AnonymousResourceCollection
     {
-        $acuerdos = $this->acuerdoService->paginate($request->validated());
+        $filters = $request->validated();
+
+        $filters['user_id'] = $request->user()->id;
+        $filters['can_see_all'] = $request->user()->hasPermissionTo('transferencia.seguimiento_general');
+
+        $acuerdos = $this->acuerdoService->paginate($filters);
 
         return AcuerdoResource::collection($acuerdos);
     }
@@ -57,5 +62,12 @@ class AcuerdoController extends Controller
     public function download(Acuerdo $acuerdo): StreamedResponse
     {
         return $this->acuerdoService->downloadFile($acuerdo);
+    }
+
+    public function claim(Acuerdo $acuerdo): AcuerdoResource
+    {
+        $acuerdoActualizado = $this->acuerdoService->claim($acuerdo);
+
+        return new AcuerdoResource($acuerdoActualizado);
     }
 }

@@ -20,7 +20,13 @@ class AcuerdoService
             ->with(['organizacion'])
             ->withCount('parcelas');
 
-        $query = $this->applyLocationScope($query);
+        $canSeeAll = $filters['can_see_all'] ?? false;
+
+        if (!$canSeeAll) {
+            $query = $this->applyLocationScope($query);
+        } elseif (!empty($filters['location_id'])) {
+            $query->where('location_id', $filters['location_id']);
+        }
 
         if (!empty($filters['search'])) {
             $query->whereHas('organizacion', function ($q) use ($filters) {
@@ -36,8 +42,13 @@ class AcuerdoService
             });
         }
 
-        if (!empty($filters['user_id'])) {
-            $query->where('user_id', $filters['user_id']);
+        if (isset($filters['huerfanos_only']) && $filters['huerfanos_only'] === 'true') {
+            $query->whereNull('user_id');
+        } elseif (!empty($filters['user_id'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->where('user_id', $filters['user_id'])
+                    ->orWhereNull('user_id');
+            });
         }
 
         $perPage = $filters['per_page'] ?? 100;
@@ -109,5 +120,20 @@ class AcuerdoService
                 'Content-Disposition' => 'inline; filename="' . $nombreDescarga . '"'
             ]
         );
+    }
+
+    public function claim(Acuerdo $acuerdo): Acuerdo
+    {
+        return DB::transaction(function () use ($acuerdo) {
+            if (!is_null($acuerdo->user_id)) {
+                abort(422, 'Este acuerdo institucional ya cuenta con un responsable asignado.');
+            }
+
+            $acuerdo->update([
+                'user_id' => request()->user()->id
+            ]);
+
+            return $acuerdo->load('organizacion');
+        });
     }
 }

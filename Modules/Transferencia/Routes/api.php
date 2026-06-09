@@ -10,6 +10,7 @@ use Modules\Transferencia\Http\Controllers\DpaController;
 use Modules\Transferencia\Http\Controllers\EnsayoController;
 use Modules\Transferencia\Http\Controllers\OrganizacionController;
 use Modules\Transferencia\Http\Controllers\ParcelaController;
+use Modules\Transferencia\Http\Controllers\ReporteController;
 use Modules\Transferencia\Http\Controllers\TransferenciaFiltroController;
 use Modules\Transferencia\Services\AcuerdoService;
 use Modules\Transferencia\Services\EnsayoService;
@@ -40,6 +41,14 @@ Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
 
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->name('api.transferencia.dashboard');
+    Route::get('dashboard/poa/{productoId}', [DashboardController::class, 'poaDetails']);
+    Route::get('dashboard/reporte-pdf', [ReporteController::class, 'descargarDashboardPdf']);
+
+    Route::patch('organizaciones/{organizacion}/claim', [OrganizacionController::class, 'claim'])->name('api.transferencia.organizaciones.claim');
+    Route::patch('acuerdos/{acuerdo}/claim', [AcuerdoController::class, 'claim'])->name('api.transferencia.acuerdos.claim');
+    Route::patch('ensayos/{ensayo}/claim', [EnsayoController::class, 'claim'])->name('api.transferencia.ensayos.claim');
+    Route::patch('parcelas/{parcela}/claim', [ParcelaController::class, 'claim'])->name('api.transferencia.parcelas.claim');
+    Route::get('filtros/estaciones', [TransferenciaFiltroController::class, 'estaciones']);
 
     /**
      * Rutas para Filtros Geográficos Optimizados (DPA Activos)

@@ -1,8 +1,7 @@
 <?php
 
-namespace Modules\Produccion\Services;
+namespace Modules\Produccion\Entities;
 
-use Modules\Produccion\Entities\LibroCampo;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 

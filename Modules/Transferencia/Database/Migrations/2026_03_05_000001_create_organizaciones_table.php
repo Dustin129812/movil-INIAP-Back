@@ -16,6 +16,7 @@ return new class extends Migration
             $table->integer('participantes_hombres')->default(0);
             $table->integer('participantes_mujeres')->default(0);
 
+            $table->foreignId('user_id')->nullable()->constrained('public.users')->nullOnDelete();
             $table->foreignId('provincia_id')->constrained('provinces');
             $table->foreignId('canton_id')->constrained('cantons');
             $table->foreignId('parroquia_id')->constrained('parroquias');

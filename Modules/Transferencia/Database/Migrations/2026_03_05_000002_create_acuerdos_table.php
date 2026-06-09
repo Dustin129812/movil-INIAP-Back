@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('location_id')->constrained('locations');
             $table->foreignId('organizacion_id')->constrained('transferencia.organizaciones')->cascadeOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained('public.users')->nullOnDelete();
 
             $table->date('fecha_firma');
             $table->integer('anios_vigencia');

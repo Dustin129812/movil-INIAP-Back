@@ -59,4 +59,11 @@ class EnsayoController extends Controller
     {
         return $this->ensayoService->downloadProtocolo($ensayo);
     }
+
+    public function claim(Ensayo $ensayo): EnsayoResource
+    {
+        $ensayoActualizado = $this->ensayoService->claim($ensayo);
+
+        return new EnsayoResource($ensayoActualizado);
+    }
 }

@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('location_id')->constrained('locations');
 
+            $table->foreignId('user_id')->nullable()->constrained('public.users')->nullOnDelete();
             $table->foreignId('ensayo_id')->constrained('transferencia.ensayos');
             $table->foreignId('organizacion_id')->constrained('transferencia.organizaciones');
             $table->foreignId('acuerdo_id')->nullable()->constrained('transferencia.acuerdos');

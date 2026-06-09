@@ -19,6 +19,10 @@ class OrganizacionController extends Controller
 
     public function index(OrganizacionRequest $request): AnonymousResourceCollection
     {
+        $filters = $request->validated();
+
+        $filters['user_id'] = $request->user()->id;
+        $filters['can_see_all'] = $request->user()->hasPermissionTo('transferencia.seguimiento_general');
         $organizaciones = $this->organizacionService->paginate($request->validated());
 
         return OrganizacionResource::collection($organizaciones);
@@ -50,5 +54,12 @@ class OrganizacionController extends Controller
         $this->organizacionService->delete($organizacion);
 
         return response()->json(['message' => 'Organización eliminada correctamente']);
+    }
+
+    public function claim(Organizacion $organizacion): OrganizacionResource
+    {
+        $organizacionActualizada = $this->organizacionService->claim($organizacion);
+
+        return new OrganizacionResource($organizacionActualizada);
     }
 }

@@ -30,6 +30,9 @@ class OrganizacionRequest extends FormRequest
             'search'   => ['nullable', 'string', 'max:100'],
             'tipo'     => ['nullable', 'string', 'in:Legalizada,Grupo de productores,Comuna o Recinto,Gad,Instituto de Educacion'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'location_id'    => ['nullable', 'integer'],
+            'huerfanos_only' => ['nullable', 'string'],
+            'filter_user_id' => ['nullable', 'string'],
         ];
     }
 
@@ -40,7 +43,6 @@ class OrganizacionRequest extends FormRequest
             'tipo_organizacion' => ['required', 'string', 'in:Legalizada,Grupo de productores,Comuna o Recinto,Gad,Instituto de Educacion'],
             'participantes_hombres' => ['required', 'integer', 'min:0'],
             'participantes_mujeres' => ['required', 'integer', 'min:0'],
-
             'provincia_id' => ['required', Rule::exists(Province::class, 'id')],
             'canton_id'    => ['required', Rule::exists(Canton::class, 'id')],
             'parroquia_id' => ['required', Rule::exists(Parroquia::class, 'id')],

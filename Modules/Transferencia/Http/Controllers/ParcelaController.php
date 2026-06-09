@@ -56,4 +56,11 @@ class ParcelaController extends Controller
 
         return response()->json(['message' => 'Parcela eliminada correctamente']);
     }
+
+    public function claim(Parcela $parcela): ParcelaResource
+    {
+        $parcelaActualizada = $this->parcelaService->claim($parcela);
+
+        return new ParcelaResource($parcelaActualizada);
+    }
 }

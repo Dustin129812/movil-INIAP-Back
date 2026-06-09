@@ -4,6 +4,7 @@ namespace Modules\Transferencia\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
+use Illuminate\Http\Request;
 use Modules\Transferencia\Services\TransferenciaFiltroService;
 
 class TransferenciaFiltroController extends Controller
@@ -15,9 +16,9 @@ class TransferenciaFiltroController extends Controller
     /**
      * Obtener provincias con actividad en transferencia.
      */
-    public function provincias(): JsonResponse
+    public function provincias(Request $request): JsonResponse
     {
-        $provincias = $this->filtroService->getProvinciasActivas();
+        $provincias = $this->filtroService->getProvinciasActivas($request->user()->location_id);
 
         return response()->json($provincias);
     }
@@ -25,9 +26,9 @@ class TransferenciaFiltroController extends Controller
     /**
      * Obtener cantones con actividad según la provincia.
      */
-    public function cantones(int $provinciaId): JsonResponse
+    public function cantones(Request $request, int $provinciaId): JsonResponse
     {
-        $cantones = $this->filtroService->getCantonesActivos($provinciaId);
+        $cantones = $this->filtroService->getCantonesActivos($provinciaId, $request->user()->location_id);
 
         return response()->json($cantones);
     }
@@ -35,10 +36,16 @@ class TransferenciaFiltroController extends Controller
     /**
      * Obtener parroquias con actividad según el cantón.
      */
-    public function parroquias(int $cantonId): JsonResponse
+    public function parroquias(Request $request, int $cantonId): JsonResponse
     {
-        $parroquias = $this->filtroService->getParroquiasActivas($cantonId);
+        $parroquias = $this->filtroService->getParroquiasActivas($cantonId, $request->user()->location_id);
 
         return response()->json($parroquias);
+    }
+
+    public function estaciones(): JsonResponse
+    {
+        $estaciones = $this->filtroService->getEstaciones();
+        return response()->json($estaciones);
     }
 }

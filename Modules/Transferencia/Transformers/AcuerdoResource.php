@@ -16,6 +16,7 @@ class AcuerdoResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'user_id' => $this->user_id,
             'fecha_firma' => $this->fecha_firma?->format('Y-m-d'),
             'anios_vigencia' => $this->anios_vigencia,
             'estado_vigencia' => [

@@ -35,6 +35,7 @@ class Parcela extends Model
         'fecha_implementacion',
         'fecha_finalizacion',
         'estado',
+        'user_id',
     ];
 
     protected $casts = [

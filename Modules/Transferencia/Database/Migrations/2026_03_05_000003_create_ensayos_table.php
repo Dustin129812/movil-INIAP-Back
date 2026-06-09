@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('archivo_protocolo_path')->nullable();
             $table->string('archivo_informe_path')->nullable();
 
+            $table->foreignId('user_id')->nullable()->constrained('public.users')->nullOnDelete();
             $table->foreignId('acuerdo_id')->nullable()->constrained('transferencia.acuerdos')->nullOnDelete();
             $table->foreignId('location_id')->constrained('locations');
             $table->foreignId('producto_id')->nullable()->constrained('products');

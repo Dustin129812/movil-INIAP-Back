@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Modules\Investigacion\Entities\Activity;
+use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Product;
 
 class Ensayo extends Model
@@ -30,6 +31,7 @@ class Ensayo extends Model
         'producto_id',
         'actividad_id',
         'location_id',
+        'user_id',
     ];
 
     protected $casts = [
@@ -75,5 +77,10 @@ class Ensayo extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function location()
+    {
+        return $this->belongsTo(Location::class, 'location_id');
     }
 }

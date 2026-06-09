@@ -36,6 +36,9 @@ class AcuerdoRequest extends FormRequest
         return [
             'organizacion_id' => ['nullable', Rule::exists(Organizacion::class, 'id')],
             'per_page'        => ['nullable', 'integer', 'min:1', 'max:100'],
+            'location_id'    => ['nullable', 'integer'],
+            'huerfanos_only' => ['nullable', 'string'],
+            'filter_user_id' => ['nullable', 'string'],
         ];
     }
 

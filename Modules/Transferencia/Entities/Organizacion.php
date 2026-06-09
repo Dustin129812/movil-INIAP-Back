@@ -26,6 +26,7 @@ class Organizacion extends Model
         'canton_id',
         'parroquia_id',
         'location_id',
+        'user_id',
     ];
 
     protected $casts = [

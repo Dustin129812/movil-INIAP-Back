@@ -18,18 +18,22 @@ class EnsayoService
     {
         $query = Ensayo::query()->with(['equipoTecnico', 'producto', 'actividad']);
 
-        $query = $this->applyLocationScope($query);
-
         $canSeeAll = $filters['can_see_all'] ?? false;
 
-        if (!$canSeeAll && !empty($filters['user_id'])) {
-            $query->whereHas('equipoTecnico', function ($teamQuery) use ($filters) {
-                $teamQuery->where('users.id', $filters['user_id']);
-            });
+        if (!$canSeeAll) {
+            $query = $this->applyLocationScope($query);
+        } elseif (!empty($filters['location_id'])) {
+            $query->where('location_id', $filters['location_id']);
         }
 
-        if ($canSeeAll && !empty($filters['location_id'])) {
-            $query->where('location_id', $filters['location_id']);
+        if (isset($filters['huerfanos_only']) && $filters['huerfanos_only'] === 'true') {
+            $query->whereNull('user_id');
+        } elseif (!$canSeeAll && !empty($filters['user_id'])) {
+            $query->where(function ($q) use ($filters) {
+                $q->whereHas('equipoTecnico', function ($teamQuery) use ($filters) {
+                    $teamQuery->where('users.id', $filters['user_id']);
+                })->orWhereNull('user_id');
+            });
         }
 
         if (!empty($filters['provincia_id']) || !empty($filters['canton_id']) || !empty($filters['parroquia_id'])) {
@@ -55,22 +59,31 @@ class EnsayoService
     public function create(array $data): Ensayo
     {
         return DB::transaction(function () use ($data) {
+            // 1. Manejo de Archivos
             if (isset($data['archivo_protocolo']) && $data['archivo_protocolo'] instanceof \Illuminate\Http\UploadedFile) {
                 $data['archivo_protocolo_path'] = $data['archivo_protocolo']->store('transferencia/protocolos', 'private');
                 unset($data['archivo_protocolo']);
             }
-
             if (isset($data['archivo_informe']) && $data['archivo_informe'] instanceof \Illuminate\Http\UploadedFile) {
                 $data['archivo_informe_path'] = $data['archivo_informe']->store('transferencia/informes', 'private');
                 unset($data['archivo_informe']);
             }
 
+            // 2. Creación Base
             $data['location_id'] = request()->user()->location_id;
-
             $ensayo = Ensayo::create($data);
 
-            if (!empty($data['equipo_tecnico_ids'])) {
-                $ensayo->equipoTecnico()->sync($data['equipo_tecnico_ids']);
+            // 3. TRADUCCIÓN LÓGICA: De Equipo a Usuarios
+            // No tocamos la BD en producción, usamos la relación que ya existe
+            if (!empty($data['equipo_id'])) {
+                // Suponiendo que tu modelo Equipo tiene una relación 'users' o 'miembros'
+                $userIds = Equipo::findOrFail($data['equipo_id'])
+                    ->users()
+                    ->pluck('users.id')
+                    ->toArray();
+
+                // 'equipoTecnico' en tu modelo Ensayo sigue siendo un belongsToMany a User
+                $ensayo->equipoTecnico()->sync($userIds);
             }
 
             return $ensayo->load(['equipoTecnico']);
@@ -140,5 +153,20 @@ class EnsayoService
                 'Content-Disposition' => 'inline; filename="' . $nombreDescarga . '"'
             ]
         );
+    }
+
+    public function claim(Ensayo $ensayo): Ensayo
+    {
+        return DB::transaction(function () use ($ensayo) {
+            if (!is_null($ensayo->user_id)) {
+                abort(422, 'Este ensayo científico ya cuenta con un investigador responsable.');
+            }
+
+            $ensayo->update([
+                'user_id' => request()->user()->id
+            ]);
+
+            return $ensayo->load(['equipoTecnico']);
+        });
     }
 }
