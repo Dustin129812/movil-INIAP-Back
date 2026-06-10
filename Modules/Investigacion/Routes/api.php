@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Modules\Investigacion\Http\Controllers\DashboardController;
 use Modules\Investigacion\Http\Controllers\IdiProtocolController;
 use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
@@ -53,6 +54,8 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
     Route::put('/week-activities/{id}', [WeekActivityController::class, 'updateActivity']);
     Route::delete('week-activities-delete/{id}', [WeekActivityController::class, 'destroy']);
 
+    Route::get('/dashboard/workforce-distribution', [DashboardController::class, 'getWorkforceDistribution'])
+        ->name('investigacion.dashboard.workforce-distribution');
 });
 
 Route::middleware(['auth:api'])->prefix('reports')->group(function () {

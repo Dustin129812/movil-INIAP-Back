@@ -4,15 +4,52 @@ namespace Modules\Investigacion\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Modules\Investigacion\Entities\Product;
 use Modules\Investigacion\Entities\WeekActivity;
 use Modules\Investigacion\Entities\WeeklyPulse;
+use Modules\Investigacion\Http\Requests\GetWorkforceReportRequest;
+use Modules\Investigacion\Services\WorkforceReportService;
+use Modules\Investigacion\Transformers\WorkforceHoardingResource;
 
 class DashboardController extends Controller
 {
+
+    protected WorkforceReportService $workforceService;
+
+    public function __construct(WorkforceReportService $workforceService)
+    {
+        $this->workforceService = $workforceService;
+    }
+
+    /**
+     * Obtiene el reporte de distribución y concentración de personal de apoyo en la estación.
+     */
+    public function getWorkforceDistribution(GetWorkforceReportRequest $request): JsonResponse
+    {
+        $user = Auth::user();
+        $validated = $request->validated();
+
+        // El servicio procesa la consulta pesada extrayendo el ranking por localidad
+        $rankingData = $this->workforceService->getHoardingRanking(
+            $validated['start_date'],
+            $validated['end_date'],
+            (int) $user->location_id
+        );
+
+        return response()->json([
+            'msg' => [
+                'summary' => 'Éxito',
+                'detail'  => 'Reporte de concentración de fuerza laboral generado.',
+                'code'    => 200
+            ],
+            'data' => WorkforceHoardingResource::collection($rankingData)
+        ]);
+    }
+
     /**
      * Obtiene los datos para el dashboard del rol 'researcher'.
      */
