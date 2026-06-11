@@ -53,6 +53,7 @@ class ParcelaService
     {
         return DB::transaction(function () use ($data) {
             $data['location_id'] = request()->user()->location_id;
+            $data['user_id'] = request()->user()->id;
             $parcela = Parcela::create($data);
             return $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton']);
         });

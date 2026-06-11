@@ -20,18 +20,15 @@ class OrganizacionResource extends JsonResource
             ],
             'ubicacion' => [
                 'provincia_id' => $this->provincia_id,
-                // CAMBIO AQUÍ: Usamos ->name en lugar de ->nombre
                 'provincia_nombre' => $this->whenLoaded('provincia', fn() => $this->provincia->name),
 
                 'canton_id' => $this->canton_id,
-                // CAMBIO AQUÍ: Usamos ->name en lugar de ->nombre
                 'canton_nombre' => $this->whenLoaded('canton', fn() => $this->canton->name),
 
-                // Agregamos el parroquia_id para que el formulario React lo reconozca al editar
                 'parroquia_id' => $this->parroquia_id,
-                // Este se queda como ->nombre porque así está en la migración de parroquias
                 'parroquia_nombre' => $this->whenLoaded('parroquia', fn() => $this->parroquia->nombre),
             ],
+            'user_id' => $this->user_id,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

@@ -2,6 +2,7 @@
 
 namespace Modules\Transferencia\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -59,30 +60,23 @@ class EnsayoService
     public function create(array $data): Ensayo
     {
         return DB::transaction(function () use ($data) {
-            // 1. Manejo de Archivos
-            if (isset($data['archivo_protocolo']) && $data['archivo_protocolo'] instanceof \Illuminate\Http\UploadedFile) {
-                $data['archivo_protocolo_path'] = $data['archivo_protocolo']->store('transferencia/protocolos', 'private');
-                unset($data['archivo_protocolo']);
-            }
-            if (isset($data['archivo_informe']) && $data['archivo_informe'] instanceof \Illuminate\Http\UploadedFile) {
-                $data['archivo_informe_path'] = $data['archivo_informe']->store('transferencia/informes', 'private');
-                unset($data['archivo_informe']);
-            }
+            $data['archivo_protocolo_path'] = $this->uploadFiles($data['archivos_protocolos'] ?? [], 'transferencia/protocolos');
+            $data['archivo_informe_path'] = $this->uploadFiles($data['archivos_informes'] ?? [], 'transferencia/informes');
+
+            unset($data['archivos_protocolos'], $data['archivos_informes']);
 
             // 2. Creación Base
             $data['location_id'] = request()->user()->location_id;
+            $data['user_id'] = request()->user()->id;
             $ensayo = Ensayo::create($data);
 
-            // 3. TRADUCCIÓN LÓGICA: De Equipo a Usuarios
-            // No tocamos la BD en producción, usamos la relación que ya existe
+
             if (!empty($data['equipo_id'])) {
-                // Suponiendo que tu modelo Equipo tiene una relación 'users' o 'miembros'
                 $userIds = Equipo::findOrFail($data['equipo_id'])
                     ->users()
                     ->pluck('users.id')
                     ->toArray();
 
-                // 'equipoTecnico' en tu modelo Ensayo sigue siendo un belongsToMany a User
                 $ensayo->equipoTecnico()->sync($userIds);
             }
 
@@ -93,27 +87,19 @@ class EnsayoService
     public function update(Ensayo $ensayo, array $data): Ensayo
     {
         return DB::transaction(function () use ($ensayo, $data) {
+            $retainedProtocolos = $data['retained_protocolos'] ?? [];
+            $this->cleanOrphanFiles($ensayo->archivo_protocolo_path ?? [], $retainedProtocolos);
 
-            if (isset($data['archivo_protocolo']) && $data['archivo_protocolo'] instanceof \Illuminate\Http\UploadedFile) {
-                if ($ensayo->archivo_protocolo_path && Storage::disk('private')->exists($ensayo->archivo_protocolo_path)) {
-                    Storage::disk('private')->delete($ensayo->archivo_protocolo_path);
-                }
-                $data['archivo_protocolo_path'] = $data['archivo_protocolo']->store('transferencia/protocolos', 'private');
-                unset($data['archivo_protocolo']);
-            } elseif (isset($data['tiene_protocolo']) && $data['tiene_protocolo'] === false) {
-                if ($ensayo->archivo_protocolo_path && Storage::disk('private')->exists($ensayo->archivo_protocolo_path)) {
-                    Storage::disk('private')->delete($ensayo->archivo_protocolo_path);
-                }
-                $data['archivo_protocolo_path'] = null;
-            }
+            $newProtocolosPaths = $this->uploadFiles($data['archivos_protocolos'] ?? [], 'transferencia/protocolos');
+            $data['archivo_protocolo_path'] = array_merge($retainedProtocolos, $newProtocolosPaths);
 
-            if (isset($data['archivo_informe']) && $data['archivo_informe'] instanceof \Illuminate\Http\UploadedFile) {
-                if ($ensayo->archivo_informe_path && Storage::disk('private')->exists($ensayo->archivo_informe_path)) {
-                    Storage::disk('private')->delete($ensayo->archivo_informe_path);
-                }
-                $data['archivo_informe_path'] = $data['archivo_informe']->store('transferencia/informes', 'private');
-                unset($data['archivo_informe']);
-            }
+            $retainedInformes = $data['retained_informes'] ?? [];
+            $this->cleanOrphanFiles($ensayo->archivo_informe_path ?? [], $retainedInformes);
+
+            $newInformesPaths = $this->uploadFiles($data['archivos_informes'] ?? [], 'transferencia/informes');
+            $data['archivo_informe_path'] = array_merge($retainedInformes, $newInformesPaths);
+
+            unset($data['archivos_protocolos'], $data['archivos_informes'], $data['retained_protocolos'], $data['retained_informes']);
 
             $ensayo->update($data);
 
@@ -135,24 +121,48 @@ class EnsayoService
     /**
      * Procesa la descarga física del protocolo desde el almacenamiento privado.
      */
-    public function downloadProtocolo(Ensayo $ensayo): StreamedResponse
+    public function downloadProtocolo(Ensayo $ensayo, int $index): StreamedResponse
     {
-        if (!$ensayo->archivo_protocolo_path || !Storage::disk('private')->exists($ensayo->archivo_protocolo_path)) {
+        $protocolos = $ensayo->archivo_protocolo_path ?? [];
+
+        if (!isset($protocolos[$index]) || !Storage::disk('private')->exists($protocolos[$index])) {
             abort(404, 'El documento solicitado no se encuentra disponible o fue removido.');
         }
 
-        $extension = pathinfo($ensayo->archivo_protocolo_path, PATHINFO_EXTENSION);
+        $path = $protocolos[$index];
+        $extension = pathinfo($path, PATHINFO_EXTENSION);
         $slugNombre = Str::slug($ensayo->nombre ?? 'ensayo');
-        $nombreDescarga = "Protocolo_{$slugNombre}_{$ensayo->id}.{$extension}";
+        $nombreDescarga = "Protocolo_{$slugNombre}_{$ensayo->id}_p{$index}.{$extension}";
 
         return Storage::disk('private')->response(
-            $ensayo->archivo_protocolo_path,
+            $path,
             $nombreDescarga,
             [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'inline; filename="' . $nombreDescarga . '"'
             ]
         );
+    }
+
+    private function uploadFiles(array $files, string $path): array
+    {
+        $paths = [];
+        foreach ($files as $file) {
+            if ($file instanceof \Illuminate\Http\UploadedFile) {
+                $paths[] = $file->store($path, 'private');
+            }
+        }
+        return $paths;
+    }
+
+    private function cleanOrphanFiles(array $existingPaths, array $retainedPaths): void
+    {
+        $toDelete = array_diff($existingPaths, $retainedPaths);
+        foreach ($toDelete as $path) {
+            if (Storage::disk('private')->exists($path)) {
+                Storage::disk('private')->delete($path);
+            }
+        }
     }
 
     public function claim(Ensayo $ensayo): Ensayo

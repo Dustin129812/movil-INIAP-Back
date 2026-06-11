@@ -65,8 +65,16 @@ class EnsayoRequest extends FormRequest
             'tiene_protocolo' => ['boolean'],
             'aprobado_por_comite' => ['boolean'],
             'fecha_aprobacion_protocolo' => ['nullable', 'required_if:tiene_protocolo,true', 'date'],
-            'archivo_protocolo' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
-            'archivo_informe' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+
+            'archivos_protocolos'   => ['nullable', 'array'],
+            'archivos_protocolos.*' => ['file', 'mimes:pdf', 'max:10240'],
+            'archivos_informes'     => ['nullable', 'array'],
+            'archivos_informes.*'   => ['file', 'mimes:pdf', 'max:10240'],
+
+            'retained_protocolos'   => ['nullable', 'array'],
+            'retained_protocolos.*' => ['string'],
+            'retained_informes'     => ['nullable', 'array'],
+            'retained_informes.*'   => ['string'],
 
             'producto_id'  => ['nullable', Rule::exists(Product::class, 'id')],
             'actividad_id' => ['nullable', Rule::exists(Activity::class, 'id')],

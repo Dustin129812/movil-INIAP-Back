@@ -5,10 +5,19 @@ namespace Modules\Transferencia\Transformers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\URL;
+
 class EnsayoResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $protocolosPaths = is_array($this->archivo_protocolo_path)
+            ? $this->archivo_protocolo_path
+            : json_decode($this->archivo_protocolo_path ?? '[]', true) ?? [];
+
+        $informesPaths = is_array($this->archivo_informe_path)
+            ? $this->archivo_informe_path
+            : json_decode($this->archivo_informe_path ?? '[]', true) ?? [];
+
         return [
             'id' => $this->id,
             'nombre' => $this->nombre,
@@ -20,20 +29,32 @@ class EnsayoResource extends JsonResource
                 'tipo' => $this->tipo_tecnologia,
             ],
             'archivos' => [
-                'tiene_protocolo' => $this->tiene_protocolo,
-                'aprobado_por_comite' => $this->aprobado_por_comite,
+                'tiene_protocolo' => (bool) $this->tiene_protocolo,
+                'aprobado_por_comite' => (bool) $this->aprobado_por_comite,
                 'fecha_aprobacion' => $this->fecha_aprobacion_protocolo?->format('Y-m-d'),
 
-                'protocolo_url' => $this->archivo_protocolo_path
-                    ? URL::temporarySignedRoute(
+                'protocolos_urls' => collect($protocolosPaths)->map(function ($path, $index) {
+                    return URL::temporarySignedRoute(
                         'api.transferencia.ensayos.download',
                         now()->addMinutes(30),
-                        ['ensayo' => $this->id]
-                    )
-                    : null,
-                'informe_url' => null, // Temporalmente null hasta que implementemos su endpoint
+                        ['ensayo' => $this->id, 'index' => $index]
+                    );
+                })->toArray(),
+
+                'informes_urls' => collect($informesPaths)->map(function ($path, $index) {
+                    return URL::temporarySignedRoute(
+                        'api.transferencia.ensayos.download',
+                        now()->addMinutes(30),
+                        ['ensayo' => $this->id, 'index' => $index]
+                    );
+                })->toArray(),
+
+                'protocolos_paths' => $protocolosPaths,
+                'informes_paths' => $informesPaths,
             ],
             'poa' => [
+                'producto_id' => $this->producto_id,
+                'actividad_id' => $this->actividad_id,
                 'producto' => $this->whenLoaded('producto', fn() => [
                     'id' => $this->producto->id,
                     'nombre' => $this->producto->name,
@@ -43,6 +64,7 @@ class EnsayoResource extends JsonResource
                     'descripcion' => $this->actividad->description,
                 ]),
             ],
+            'user_id' => $this->user_id,
             'creador' => $this->whenLoaded('user', function () {
                 return [
                     'id' => $this->user->id,

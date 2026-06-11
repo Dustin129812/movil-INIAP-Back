@@ -64,5 +64,5 @@ Route::middleware(['auth:api'])->prefix('transferencia')->group(function() {
 Route::get('/acuerdos/descargar/{acuerdo}', [AcuerdoController::class, 'download'])
     ->name('api.transferencia.acuerdos.download');
 
-Route::get('/ensayos/descargar/{ensayo}', [EnsayoController::class, 'download'])
+Route::get('/ensayos/descargar/{ensayo}/{index}', [EnsayoController::class, 'download'])
     ->name('api.transferencia.ensayos.download');

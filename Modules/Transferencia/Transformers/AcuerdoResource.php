@@ -31,7 +31,6 @@ class AcuerdoResource extends JsonResource
                 )
                 : null,
             'organizacion' => new OrganizacionResource($this->whenLoaded('organizacion')),
-
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

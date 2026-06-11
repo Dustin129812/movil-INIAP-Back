@@ -38,6 +38,8 @@ class Ensayo extends Model
         'tiene_protocolo' => 'boolean',
         'aprobado_por_comite' => 'boolean',
         'fecha_aprobacion_protocolo' => 'date',
+        'archivo_protocolo_path' => 'array',
+        'archivo_informe_path' => 'array',
     ];
 
     /**
@@ -62,7 +64,7 @@ class Ensayo extends Model
     public function equipoTecnico(): BelongsToMany
     {
         return $this->belongsToMany(
-            \App\Models\User::class,
+            User::class,
             'transferencia.ensayo_user',
             'ensayo_id',
             'user_id'

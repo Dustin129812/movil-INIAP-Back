@@ -59,6 +59,7 @@ class AcuerdoService
     {
         return DB::transaction(function () use ($data) {
             $data['location_id'] = request()->user()->location_id;
+            $data['user_id'] = request()->user()->id;
 
             if (isset($data['archivo_acuerdo']) && $data['archivo_acuerdo'] instanceof \Illuminate\Http\UploadedFile) {
                 $data['archivo_acuerdo_path'] = $data['archivo_acuerdo']->store('transferencia/acuerdos', 'private');

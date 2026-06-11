@@ -53,11 +53,11 @@ class EnsayoController extends Controller
     }
 
     /**
-     * Descarga el archivo de protocolo validando la firma temporal.
+     * Descarga un archivo de protocolo específico validando la firma temporal.
      */
-    public function download(Ensayo $ensayo): StreamedResponse
+    public function download(Ensayo $ensayo, int $index): StreamedResponse
     {
-        return $this->ensayoService->downloadProtocolo($ensayo);
+        return $this->ensayoService->downloadProtocolo($ensayo, $index);
     }
 
     public function claim(Ensayo $ensayo): EnsayoResource

@@ -48,12 +48,11 @@ class ParcelaResource extends JsonResource
                 ]
             ],
 
-            // Agrupamos el ciclo de vida
             'fechas' => [
                 'implementacion' => $this->fecha_implementacion?->format('Y-m-d'),
                 'finalizacion' => $this->fecha_finalizacion?->format('Y-m-d'),
             ],
-
+            'user_id' => $this->user_id,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
