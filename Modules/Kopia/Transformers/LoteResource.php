@@ -55,6 +55,7 @@ class LoteResource extends JsonResource
             'id' => $this->id,
             'uuid_movil' => $this->uuid_movil,
             'nombre_lote' => $this->nombre_lote,
+            'tipo_riego' => $this->tipo_riego ?? 'gravedad',
             'provincia' => $this->provincia?->name ?? 'Sin Provincia',
             'canton'    => $this->canton?->name ?? 'Sin Cantón',
             'parroquia' => $this->parroquia ?? 'Sector no definido',

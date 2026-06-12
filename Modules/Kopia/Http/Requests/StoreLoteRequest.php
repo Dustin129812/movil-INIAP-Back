@@ -23,8 +23,12 @@ class StoreLoteRequest extends FormRequest
             'nombre_lote' => ['required', 'string', 'max:255'],
             'coordenadas' => ['required', 'array', 'min:3'],
             'ubicacion_manual' => ['nullable', 'string', 'max:255'],
+            'tipo_riego' => [
+                'nullable',
+                'string',
+                Rule::in(['gravedad', 'goteo', 'aspersión', 'microaspersión'])
+            ],
 
-            // Validaciones estructurales
             'province_id' => ['required', Rule::exists(Province::class, 'id')],
             'canton_id' => ['required', Rule::exists(Canton::class, 'id')],
             'location_id' => ['nullable', Rule::exists(Location::class, 'id')],

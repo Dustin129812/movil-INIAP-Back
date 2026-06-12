@@ -76,7 +76,6 @@ class SyncKopiaService
         );
     }
 
-    // Actualizamos la firma de guardarVisita
     private function guardarVisita(CicloCultivo $ciclo, Proyecto $proyecto, array $data): Visita
     {
         return Visita::updateOrCreate(
@@ -104,6 +103,7 @@ class SyncKopiaService
             'altitud'          => $data['altitud'] ?? null,
             'otros_datos_geo'  => $data['otros_datos_geo'] ?? null,
             'condiciones_terreno' => $data['condiciones_terreno'] ?? null,
+            'tipo_riego'       => $data['tipo_riego'] ?? 'gravedad',
         ];
 
         if (!empty($data['coordenadas']) && is_array($data['coordenadas'])) {
@@ -169,6 +169,7 @@ class SyncKopiaService
                 'titulo' => $data['titulo'],
                 'descripcion' => $data['descripcion'] ?? null,
                 'tipo_ensayo' => $data['tipo_ensayo'] ?? null,
+                'tipo_acolchado' => $data['tipo_acolchado'] ?? 'sin_acolchado',
                 'financiamiento' => $data['financiamiento'] ?? null,
                 'colaborador_nombre' => $data['colaborador_nombre'] ?? null,
                 'colaborador_telefono' => $data['colaborador_telefono'] ?? null,

@@ -26,6 +26,7 @@ class Proyecto extends Model
         'colaborador_nombre',
         'colaborador_telefono',
         'colaborador_celular',
+        'tipo_acolchado',
     ];
 
     protected $casts = [

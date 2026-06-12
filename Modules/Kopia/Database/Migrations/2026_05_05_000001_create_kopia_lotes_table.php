@@ -13,8 +13,8 @@ return new class extends Migration {
             $table->geometry('area', 'polygon', 4326);
             $table->string('ubicacion_manual')->nullable();
             $table->jsonb('condiciones_terreno')->nullable();
+            $table->string('tipo_riego', 30)->default('gravedad')->comment('Admite: gravedad, goteo, aspersión, microaspersión');
 
-            // Relaciones geográficas y administrativas
             $table->unsignedBigInteger('province_id');
             $table->unsignedBigInteger('canton_id');
             $table->string('parroquia')->nullable();
@@ -23,7 +23,6 @@ return new class extends Migration {
             $table->unsignedBigInteger('location_id')->nullable();
             $table->timestamps();
 
-            // Llaves foráneas apuntando al esquema donde residen tus tablas core
             $table->foreign('province_id')->references('id')->on('public.provinces')->onDelete('restrict');
             $table->foreign('canton_id')->references('id')->on('public.cantons')->onDelete('restrict');
             $table->foreign('location_id')->references('id')->on('public.locations')->onDelete('restrict');

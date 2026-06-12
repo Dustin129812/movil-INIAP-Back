@@ -25,8 +25,12 @@ class SyncKopiaRequest extends FormRequest {
             'lotes.*.parroquia' => ['nullable', 'string', 'max:255'],
             'lotes.*.altitud' => ['nullable', 'numeric'],
             'lotes.*.condiciones_terreno' => ['nullable', 'array'],
+            'lotes.*.tipo_riego' => [
+                'nullable',
+                'string',
+                Rule::in(['gravedad', 'goteo', 'aspersión', 'microaspersión'])
+            ],
 
-            // 1. Proyectos anidados en Lotes
             'lotes.*.proyectos' => ['nullable', 'array'],
             'lotes.*.proyectos.*.uuid_movil' => ['required', 'uuid'],
             'lotes.*.proyectos.*.responsable_id' => ['required', Rule::exists(User::class, 'id')],
@@ -34,12 +38,17 @@ class SyncKopiaRequest extends FormRequest {
             'lotes.*.proyectos.*.variedades_ids.*' => ['required', Rule::exists(Variedad::class, 'id')],
             'lotes.*.proyectos.*.titulo' => ['required', 'string'],
             'lotes.*.proyectos.*.descripcion' => ['nullable', 'string'],
+            'lotes.*.proyectos.*.tipo_acolchado' => [
+                'nullable',
+                'string',
+                Rule::in(['con_acolchado', 'parcialmente_acolchado', 'sin_acolchado'])
+            ],
+
             'lotes.*.proyectos.*.tipo_ensayo' => ['nullable', 'string', Rule::in(['con_diseno', 'sin_diseno', 'multiplicacion'])],
             'lotes.*.proyectos.*.financiamiento' => ['nullable', 'string', 'max:255'],
             'lotes.*.proyectos.*.colaborador_nombre' => ['nullable', 'string', 'max:255'],
             'lotes.*.proyectos.*.colaborador_celular' => ['nullable', 'string', 'max:20'],
 
-            // 2. Ciclos anidados en Proyectos (CORRECCIÓN ESTRUCTURAL)
             'lotes.*.proyectos.*.ciclos' => ['nullable', 'array'],
             'lotes.*.proyectos.*.ciclos.*.uuid_movil' => ['required', 'uuid'],
             'lotes.*.proyectos.*.ciclos.*.cultivo_variedad' => ['required', 'string'],
@@ -47,7 +56,6 @@ class SyncKopiaRequest extends FormRequest {
             'lotes.*.proyectos.*.ciclos.*.fecha_siembra' => ['required', 'date'],
             'lotes.*.proyectos.*.ciclos.*.metricas_siembra' => ['nullable', 'array'],
 
-            // 3. Visitas anidadas en Ciclos
             'lotes.*.proyectos.*.ciclos.*.visitas' => ['nullable', 'array'],
             'lotes.*.proyectos.*.ciclos.*.visitas.*.uuid_movil' => ['required', 'uuid'],
             'lotes.*.proyectos.*.ciclos.*.visitas.*.tecnico_nombre' => ['required', 'string'],
@@ -55,7 +63,6 @@ class SyncKopiaRequest extends FormRequest {
             'lotes.*.proyectos.*.ciclos.*.visitas.*.observaciones' => ['nullable', 'string'],
             'lotes.*.proyectos.*.ciclos.*.visitas.*.recomendaciones' => ['nullable', 'string'],
 
-            // 4. Hojas de Datos anidadas en Visitas
             'lotes.*.proyectos.*.ciclos.*.visitas.*.hojas_datos' => ['nullable', 'array'],
             'lotes.*.proyectos.*.ciclos.*.visitas.*.hojas_datos.*.uuid_movil' => ['required', 'uuid'],
             'lotes.*.proyectos.*.ciclos.*.visitas.*.hojas_datos.*.nombre_plantilla' => ['required', 'string'],

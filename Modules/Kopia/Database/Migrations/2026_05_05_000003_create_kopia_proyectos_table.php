@@ -16,8 +16,11 @@ return new class extends Migration {
             $table->text('descripcion')->nullable();
             $table->jsonb('objetivos')->nullable();
             $table->jsonb('informacion_adicional')->nullable();
+            $table->string('tipo_acolchado', 30)->default('sin_acolchado')
+                ->comment('Admite: con_acolchado, parcialmente_acolchado, sin_acolchado');
 
-            $table->enum('tipo_ensayo', ['con_diseno', 'sin_diseno', 'multiplicacion'])->nullable();
+            $table->enum('tipo_ensayo', ['con_diseno', 'sin_diseno', 'multiplicacion'])
+                ->nullable();
             $table->string('financiamiento')->nullable();
             $table->string('colaborador_nombre')->nullable();
             $table->string('colaborador_telefono')->nullable();
@@ -25,8 +28,10 @@ return new class extends Migration {
 
             $table->timestamps();
 
-            $table->foreign('lote_id')->references('id')->on('kopia.lotes')->onDelete('restrict');
-            $table->foreign('responsable_id')->references('id')->on('users')->onDelete('restrict');
+            $table->foreign('lote_id')->references('id')->on('kopia.lotes')
+                ->onDelete('restrict');
+            $table->foreign('responsable_id')->references('id')->on('users')
+                ->onDelete('restrict');
         });
     }
 
