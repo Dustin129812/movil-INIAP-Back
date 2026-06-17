@@ -10,6 +10,7 @@ use Modules\Administracion\Http\Requests\GetStationRequestsRequest;
 use Modules\Administracion\Http\Requests\ProcessDispatchRequest;
 use Modules\Administracion\Services\DispatchService;
 use Modules\Administracion\Transformers\DispatchResource;
+use Modules\Administracion\Transformers\StationRequestResource;
 
 class DispatchController extends Controller
 {
@@ -24,7 +25,6 @@ class DispatchController extends Controller
     public function index(GetStationRequestsRequest $request): JsonResponse
     {
         $user = $request->user();
-
         $locationId = $request->validated('location_id') ?? $user->location_id;
 
         $requests = $this->dispatchService->getStationRequests($locationId);
@@ -35,7 +35,7 @@ class DispatchController extends Controller
                 'detail' => 'Cargando tablero para la ubicación seleccionada.',
                 'code' => 200,
             ],
-            'data' => $requests
+            'data' => StationRequestResource::collection($requests)
         ]);
     }
 

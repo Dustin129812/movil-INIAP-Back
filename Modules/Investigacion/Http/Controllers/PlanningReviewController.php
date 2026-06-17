@@ -20,9 +20,6 @@ class PlanningReviewController extends Controller
         $this->reviewService = $reviewService;
     }
 
-    /**
-     * Obtiene la data aplanada para el Dashboard de Revisión.
-     */
     public function index(Request $request)
     {
         try {
@@ -51,9 +48,6 @@ class PlanningReviewController extends Controller
         }
     }
 
-    /**
-     * Aprueba, rechaza o reasigna una actividad semanal.
-     */
     public function updateStatus(UpdateWeekActivityStatusRequest $request, $activityId)
     {
         try {
@@ -84,9 +78,6 @@ class PlanningReviewController extends Controller
         }
     }
 
-    /**
-     * Sirve el archivo físico usando URLs firmadas
-     */
     public function downloadEvidence(Request $request)
     {
         $path = $request->query('path');
@@ -99,9 +90,6 @@ class PlanningReviewController extends Controller
         return response()->file($disk->path($path));
     }
 
-    /**
-     * Genera el ZIP en almacenamiento externo y retorna una URL firmada
-     */
     public function prepareUserZip(Request $request, $userId)
     {
         try {
@@ -122,9 +110,43 @@ class PlanningReviewController extends Controller
         }
     }
 
-    /**
-     * Descarga física del ZIP desde el disco externo (Ruta firmada)
-     */
+    public function prepareAllUsersZip(Request $request)
+    {
+        try {
+            $period = $request->query('period', '15days');
+
+            $zipFileName = $this->reviewService->generateAllUsersEvidenceZip(
+                $request->user(),
+                $period
+            );
+
+            $url = URL::temporarySignedRoute(
+                'api.investigacion.evidence.zip.download',
+                now()->addMinutes(30),
+                ['filename' => $zipFileName]
+            );
+
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Archivo generado',
+                    'detail' => 'El compilado global está listo para descargar.',
+                    'code' => 200
+                ],
+                'url' => $url
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en PlanningReviewController@prepareAllUsersZip: ' . $e->getMessage());
+            return response()->json([
+                'msg' => [
+                    'summary' => 'Error de compilación',
+                    'detail' => $e->getMessage(),
+                    'code' => 500
+                ]
+            ], 500);
+        }
+    }
+
     public function downloadZip(Request $request)
     {
         $filename = $request->query('filename');

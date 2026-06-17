@@ -5,26 +5,95 @@ namespace Modules\Investigacion\Services\Reports;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Modules\Investigacion\Entities\WeekActivity;
+use ZipArchive;
 
 class WeeklyPlanReportService
 {
+    /**
+     * Genera la descarga individual de un Plan Semanal
+     */
     public function generateReport(array $data)
+    {
+        $reportData = $this->prepareReportData($data['user_id'], $data['start_date'], $data['end_date']);
+
+        $pdf = Pdf::loadView('reports.weekly_plan', $reportData)->setPaper('a4', 'landscape');
+
+        $fileName = 'Plan Semanal_' . str_replace(' ', '_', $reportData['technician']->name) . '_' . $reportData['start_date_obj']->format('Ymd') . '.pdf';
+
+        return $pdf->download($fileName);
+    }
+
+    /**
+     * Genera un ZIP con los Planes Semanales de todos los técnicos de la estación
+     */
+    public function generateMassivePlanZip(User $admin, array $data): string
+    {
+        $users = User::where('location_id', $admin->location_id)->get();
+        $hasData = false;
+
+        $zipFileName = 'planes_masivos_estacion_' . $admin->location_id . '_' . now()->format('Ymd_His') . '.zip';
+        $disk = Storage::disk('verificables_externos');
+
+        if (!$disk->exists('temp_zips')) {
+            $disk->makeDirectory('temp_zips');
+        }
+
+        $zipPath = $disk->path('temp_zips/' . $zipFileName);
+        $zip = new ZipArchive;
+
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
+            foreach ($users as $user) {
+                $reportData = $this->prepareReportData($user->id, $data['start_date'], $data['end_date']);
+
+                // Solución Puntos 1 y 2: Solo procesar si el usuario tiene actividades
+                if ($reportData['weekActivities']->isNotEmpty()) {
+                    $hasData = true;
+
+                    // Solución Punto 3: Generar en RAM e inyectar al ZIP
+                    $pdfContent = Pdf::loadView('reports.weekly_plan', $reportData)->setPaper('a4', 'landscape')->output();
+
+                    $safeUserName = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $user->name);
+                    $fileName = trim($safeUserName) . '/Plan_Semanal_' . $reportData['start_date_obj']->format('Ymd') . '.pdf';
+
+                    $zip->addFromString($fileName, $pdfContent);
+                }
+            }
+            $zip->close();
+        } else {
+            throw new \Exception("No se pudo inicializar el compilador ZIP masivo.");
+        }
+
+        // Limpiar el ZIP defectuoso si nadie tuvo planificaciones
+        if (!$hasData) {
+            if ($disk->exists('temp_zips/' . $zipFileName)) {
+                $disk->delete('temp_zips/' . $zipFileName);
+            }
+            throw new \Exception("Ningún usuario en la estación tiene planificaciones en el rango seleccionado.");
+        }
+
+        return $zipFileName;
+    }
+
+    /**
+     * Centraliza la recolección y formateo de datos para la vista Blade
+     */
+    private function prepareReportData(int $userId, string $startDate, string $endDate): array
     {
         Carbon::setLocale('es');
 
-        $userId    = $data['user_id'];
-        $startDate = Carbon::parse($data['start_date']);
-        $endDate   = Carbon::parse($data['end_date']);
+        $start = Carbon::parse($startDate);
+        $end   = Carbon::parse($endDate);
 
         $technician = User::with('location')->find($userId);
         if (!$technician) {
-            throw new \Exception('Técnico no encontrado.'); // El controlador manejará la excepción
+            throw new \Exception('Técnico no encontrado.');
         }
 
         $ratedStatuses = ['approved', 'completed', 'partial', 'not completed', 'rated'];
 
-        $weekActivities = WeekActivity::whereBetween('date', [$startDate, $endDate])
+        $weekActivities = WeekActivity::whereBetween('date', [$start, $end])
             ->whereIn('status', $ratedStatuses)
             ->where(function ($query) use ($userId) {
                 $query->where('user_id', $userId)
@@ -84,24 +153,20 @@ class WeeklyPlanReportService
 
         $groupedActivities = $weekActivities->groupBy(fn($item) => Carbon::parse($item->date)->format('Y-m-d'));
 
-        $reportData = [
+        return [
             'iniap_logo_path'     => public_path('storage/images/iniap_logo.png'),
             'ecuador_shield_path' => public_path('storage/images/ecuador_shield.jpg'),
             'technician'          => $technician,
             'technician_location' => $technician->location->name ?? 'Ubicación Desconocida',
             'program_rubro'       => $mainRubro,
             'presentation_date'   => Carbon::now()->translatedFormat('d \d\e F \d\e Y'),
-            'week_range'          => 'Del ' . $startDate->translatedFormat('d \d\e F \d\e Y') . ' al ' . $endDate->translatedFormat('d \d\e F \d\e Y'),
+            'week_range'          => 'Del ' . $start->translatedFormat('d \d\e F \d\e Y') . ' al ' . $end->translatedFormat('d \d\e F \d\e Y'),
             'weekActivities'      => $groupedActivities,
-            'start_date_obj'      => $startDate,
+            'start_date_obj'      => $start,
             'visibility'          => ['support' => $hasSupport, 'indicators' => $hasIndicators],
             'widths'              => $widths,
             'omittedColumnsText'  => $omittedColumnsText
         ];
-
-        $pdf = Pdf::loadView('reports.weekly_plan', $reportData)->setPaper('a4', 'landscape');
-
-        return $pdf->download('Plan Semanal_' . str_replace(' ', '_', $technician->name) . '_' . $startDate->format('Ymd') . '.pdf');
     }
 
     private function formatActivityDescription($item)

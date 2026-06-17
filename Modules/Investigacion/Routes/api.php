@@ -17,11 +17,6 @@ use Modules\Investigacion\Http\Controllers\WeekActivityController;
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| is assigned the "api" middleware group. Enjoy building your API!
-|
 */
 
 Route::middleware('auth:api')->prefix('investigacion')->group(function () {
@@ -45,6 +40,7 @@ Route::middleware('auth:api')->prefix('investigacion')->group(function () {
 
     Route::prefix('planning-reviews')->group(function () {
         Route::get('/', [PlanningReviewController::class, 'index']);
+        Route::get('/export-all', [PlanningReviewController::class, 'prepareAllUsersZip']); // <- RUTA AGREGADA
     });
 
     Route::put('activities/{activityId}/status', [PlanningReviewController::class, 'updateStatus']);
@@ -63,6 +59,7 @@ Route::middleware(['auth:api'])->prefix('reports')->group(function () {
     // Reportes de Operación Semanal
     Route::controller(WeeklyReportController::class)->group(function () {
         Route::get('/weekly-plan', 'generateWeeklyPlanReport');
+        Route::get('/weekly-plan/massive', 'generateMassiveWeeklyPlans'); // <- RUTA AGREGADA
         Route::get('/weekly-monitoring', 'generateWeeklyMonitoringReport');
         Route::get('/user-weekly-plans', 'getUserWeeklyPlans');
         Route::get('/location-weekly-plans', 'getUserWeeklyPlansbyLocation');

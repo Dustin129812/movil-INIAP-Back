@@ -7,15 +7,24 @@ use Modules\Administracion\Entities\Vehicle;
 
 class FleetAnalyticsService
 {
-    public function getAnalyticsData(): array
+    public function getAnalyticsData(?string $startDate = null, ?string $endDate = null): array
     {
         $vehicles = Vehicle::all();
 
-        $dispatches = Dispatch::whereNotNull('vehicle_id')->get();
+        $dispatchesQuery = Dispatch::with(['weekActivity.user', 'weekActivity.materials'])
+            ->whereNotNull('vehicle_id');
+
+        if ($startDate && $endDate) {
+            $dispatchesQuery->whereHas('weekActivity', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            })->with(['weekActivity' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            }]);
+        }
 
         return [
             'vehicles' => $vehicles,
-            'dispatches' => $dispatches,
+            'dispatches' => $dispatchesQuery->get(),
         ];
     }
 }

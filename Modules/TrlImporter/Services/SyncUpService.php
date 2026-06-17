@@ -20,6 +20,7 @@ class SyncUpService
                         'tecnologia_id' => $data['tecnologia_id'],
                         'fecha'         => $data['fecha'],
                         'tecnico'       => $data['tecnico'],
+                        'estado'        => $data['estado'],
                         'observaciones' => $data['observaciones'] ?? null,
                     ]
                 );

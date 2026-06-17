@@ -18,8 +18,6 @@ class DispatchService
 
             $dispatch = Dispatch::firstOrNew(['week_activity_id' => $data['week_activity_id']]);
 
-            $previousVehicleId = $dispatch->vehicle_id;
-
             $dispatch->admin_id = $admin->id;
             $dispatch->status = $data['status'];
             $dispatch->admin_notes = $data['admin_notes'] ?? null;
@@ -36,22 +34,28 @@ class DispatchService
 
             $dispatch->save();
 
-            if ($data['status'] === 'processing' && $dispatch->vehicle_id) {
-                Vehicle::where('id', $dispatch->vehicle_id)
-                    ->update(['is_available' => false]);
-            }
+            if ($dispatch->vehicle_id) {
+                if ($data['status'] === 'processing') {
+                    Vehicle::where('id', $dispatch->vehicle_id)
+                        ->update(['is_available' => false]);
+                } elseif (in_array($data['status'], ['dispatched', 'rejected'])) {
+                    $hasOtherActiveDispatches = Dispatch::where('vehicle_id', $dispatch->vehicle_id)
+                        ->where('status', 'processing')
+                        ->where('id', '!=', $dispatch->id)
+                        ->exists();
 
-            // Si el estado pasa a finalizado o rechazado, liberamos el vehículo
-            if (in_array($data['status'], ['dispatched', 'rejected']) && $dispatch->vehicle_id) {
-                Vehicle::where('id', $dispatch->vehicle_id)
-                    ->update(['is_available' => true]);
+                    if (!$hasOtherActiveDispatches) {
+                        Vehicle::where('id', $dispatch->vehicle_id)
+                            ->update(['is_available' => true]);
+                    }
+                }
             }
 
             return $dispatch;
         });
     }
 
-    public function getStationRequests(?int $locationId = null): Collection
+    public function getStationRequests(?int $locationId = null): \Illuminate\Database\Eloquent\Collection
     {
         return WeekActivity::query()
             ->when($locationId, function ($query, $locationId) {
@@ -69,39 +73,7 @@ class DispatchService
                 'dispatch'
             ])
             ->orderBy('date', 'asc')
-            ->get()
-            ->map(function ($weekActivity) {
-                $dispatch = $weekActivity->dispatch;
-                $status = $dispatch ? $dispatch->status : 'pending';
-
-                $logisticItem = $weekActivity->materials->firstWhere('pivot.request_type', 'logistics');
-
-                $mobilizationData = [];
-                if ($logisticItem) {
-                    $metadata = $logisticItem->pivot->metadata;
-                    $decodedMeta = is_string($metadata) ? json_decode($metadata, true) : ($metadata ?? []);
-
-                    $mobilizationData = [
-                        'type'           => $decodedMeta['tipo'] ?? 'interna',
-                        'destination'    => $decodedMeta['lugar'] ?? $weekActivity->work_location,
-                        'departure_time' => $decodedMeta['fecha_desde'] ?? 'Por definir',
-                        'return_time'    => $decodedMeta['fecha_hasta'] ?? 'Por definir',
-                        'justification'  => $logisticItem->pivot->description ?? $weekActivity->description,
-                        'passengers'     => $logisticItem->pivot->quantity ?? 1,
-                    ];
-                }
-
-                return (object) [
-                    'id' => $weekActivity->id,
-                    'date' => $weekActivity->date,
-                    'technician_name' => $weekActivity->user->name,
-                    'activity_description' => $weekActivity->description,
-                    'status' => $status,
-                    'mobilization' => $mobilizationData,
-                    'requested_items' => $this->buildRequestedItemsSnapshot($weekActivity),
-                    'admin_notes' => $dispatch ? $dispatch->admin_notes : null,
-                ];
-            });
+            ->get();
     }
 
     private function buildRequestedItemsSnapshot(WeekActivity $weekActivity): array

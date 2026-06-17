@@ -14,10 +14,6 @@ use ZipArchive;
 
 class PlanningReviewService
 {
-
-    /**
-     * Define centralizadamente quién pertenece al perímetro de visión del revisor.
-     */
     private function getValidPerimeterIds(Collection $managedGroups, User $revisor, bool $hasStationAccess): array
     {
         $memberIds = $managedGroups->flatMap->members->pluck('id')->unique();
@@ -31,8 +27,7 @@ class PlanningReviewService
 
     public function getWeeklyPlanningData(User $revisor, string $period = '15days'): Collection
     {
-        // 1. Ampliamos el acceso total para Directores Y Administradores de Estación
-        $hasStationAccess = $revisor->hasRole('station-director') || $revisor->hasRole('station-admin'); // Ajusta el nombre del rol si es distinto
+        $hasStationAccess = $revisor->hasRole('station-director') || $revisor->hasRole('station-admin');
 
         $managedGroups = $this->getManagedGroups($revisor, $hasStationAccess);
 
@@ -123,9 +118,6 @@ class PlanningReviewService
         return $allManagedGroups;
     }
 
-    /**
-     * Verifica si el usuario pertenece a la locación ADM. CENTRAL.
-     */
     private function isAdmCentral(User $user): bool
     {
         return $user->location && strtoupper($user->location->name) === 'ADM. CENTRAL';
@@ -282,12 +274,56 @@ class PlanningReviewService
 
                 foreach ($paths as $path) {
                     $fullPath = $disk->path($path);
-                    if (file_exists($fullPath)) {
+                    if (is_file($fullPath)) {
                         $zip->addFile($fullPath, $act->date . '/' . basename($path));
                     }
                 }
             }
             $zip->close();
+        }
+
+        return $zipFileName;
+    }
+
+    public function generateAllUsersEvidenceZip(User $revisor, string $period = '15days'): string
+    {
+        $activities = $this->getWeeklyPlanningData($revisor, $period);
+
+        $activitiesWithEvidence = $activities->filter(function ($act) {
+            return !empty($act->evidence_path);
+        });
+
+        if ($activitiesWithEvidence->isEmpty()) {
+            throw new \Exception("No hay archivos verificables en este periodo para ninguno de los técnicos administrados.");
+        }
+
+        $zipFileName = 'evidencias_globales_' . $revisor->id . '_' . now()->format('Ymd_His') . '.zip';
+        $disk = Storage::disk('verificables_externos');
+
+        if (!$disk->exists('temp_zips')) {
+            $disk->makeDirectory('temp_zips');
+        }
+
+        $zipPath = $disk->path('temp_zips/' . $zipFileName);
+        $zip = new ZipArchive;
+
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
+            foreach ($activitiesWithEvidence as $act) {
+                $paths = is_array($act->evidence_path) ? $act->evidence_path : [$act->evidence_path];
+
+                $userName = $act->display_user_name ?? ($act->user ? $act->user->name : 'Desconocido');
+                $safeUserName = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $userName);
+
+                foreach ($paths as $path) {
+                    $fullPath = $disk->path($path);
+                    if (is_file($fullPath)) {
+                        $zip->addFile($fullPath, trim($safeUserName) . '/' . $act->date . '/' . basename($path));
+                    }
+                }
+            }
+            $zip->close();
+        } else {
+            throw new \Exception("No se pudo generar el archivo ZIP masivo.");
         }
 
         return $zipFileName;

@@ -17,7 +17,9 @@ class Dispatch extends Model
         'status',
         'requested_items',
         'dispatched_items',
-        'admin_notes'
+        'admin_notes',
+        'vehicle_id',
+        'driver_id'
     ];
 
     protected $casts = [
