@@ -27,20 +27,38 @@ class PlanningReviewService
 
     public function getWeeklyPlanningData(User $revisor, string $period = '15days'): Collection
     {
-        $hasStationAccess = $revisor->hasRole('station-director') || $revisor->hasRole('station-admin');
+        $startDate = $this->getDateFilter($period);
+        return $this->buildPlanningData($revisor, $startDate, null);
+    }
 
+    public function getWeeklyPlanningDataByRange(User $revisor, string $startDate, string $endDate): Collection
+    {
+        return $this->buildPlanningData($revisor, Carbon::parse($startDate), Carbon::parse($endDate));
+    }
+
+    private function getDateFilter(string $period): ?Carbon
+    {
+        return match($period) {
+            '7days' => Carbon::now()->subDays(7),
+            '15days' => Carbon::now()->subDays(15),
+            'all' => null,
+            default => null
+        };
+    }
+
+    private function buildPlanningData(User $revisor, ?Carbon $startDate, ?Carbon $endDate): Collection
+    {
+        $hasStationAccess = $revisor->hasRole('station-director') || $revisor->hasRole('station-admin');
         $managedGroups = $this->getManagedGroups($revisor, $hasStationAccess);
 
         if (!$hasStationAccess && $managedGroups->isEmpty()) {
             return collect();
         }
 
-        $dateFilter = $this->getDateFilter($period);
         $statuses = ['pending', 'approved', 'rejected', 'reassigned', 'completed'];
-
         $validMemberIds = $this->getValidPerimeterIds($managedGroups, $revisor, $hasStationAccess);
 
-        $ownActivities = $this->fetchOwnActivities($managedGroups, $statuses, $dateFilter, $revisor, $hasStationAccess);
+        $ownActivities = $this->fetchOwnActivities($managedGroups, $statuses, $startDate, $endDate, $revisor, $hasStationAccess);
 
         $ownActivities->each(function($act) use ($managedGroups) {
             $userName = $act->user ? $act->user->name : 'Usuario Desconocido';
@@ -48,7 +66,7 @@ class PlanningReviewService
             $this->injectMetadata($act, true, $act->user_id, $userName, $userName, $group);
         });
 
-        $supportActivities = $this->fetchSupportActivities($managedGroups, $statuses, $dateFilter, $revisor, $hasStationAccess);
+        $supportActivities = $this->fetchSupportActivities($managedGroups, $statuses, $startDate, $endDate, $revisor, $hasStationAccess);
         $decoratedSupport = collect();
 
         $directResponsibles = $hasStationAccess
@@ -123,10 +141,8 @@ class PlanningReviewService
         return $user->location && strtoupper($user->location->name) === 'ADM. CENTRAL';
     }
 
-    private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $hasStationAccess): Collection
-    {
-        return WeekActivity::where(function ($q) use ($managedGroups, $revisor, $hasStationAccess, $statuses) {
-            if ($hasStationAccess) {
+    private function fetchOwnActivities(Collection $managedGroups, array $statuses, ?Carbon $startDate, ?Carbon $endDate, User $revisor, bool $hasStationAccess): Collection    {
+        return WeekActivity::where(function ($q) use ($managedGroups, $revisor, $hasStationAccess, $statuses) {            if ($hasStationAccess) {
                 $directResponsibles = $managedGroups->whereNull('parent_id')
                     ->pluck('responsible_id')
                     ->unique()
@@ -153,14 +169,17 @@ class PlanningReviewService
             }
         })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators'])
-            ->when($date, function($q) use ($date) {
-                $q->where('date', '>=', $date);
+            ->when($startDate && !$endDate, function($q) use ($startDate) {
+                $q->where('date', '>=', $startDate);
+            })
+            ->when($startDate && $endDate, function($q) use ($startDate, $endDate) {
+                $q->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
             })
             ->orderBy('date', 'desc')
             ->get();
     }
 
-    private function fetchSupportActivities(Collection $managedGroups, array $statuses, ?Carbon $date, User $revisor, bool $hasStationAccess): Collection
+    private function fetchSupportActivities(Collection $managedGroups, array $statuses, ?Carbon $startDate, ?Carbon $endDate, User $revisor, bool $hasStationAccess): Collection
     {
         return WeekActivity::whereHas('logisticSupportUsers', function ($sq) {
             $sq->whereIn('week_activity_logistic_support_user.status', ['accepted', 'pending']);
@@ -184,9 +203,15 @@ class PlanningReviewService
                 }
             })
             ->with(['activity.product.rubro', 'activity.product.location', 'user', 'materials', 'activity.indicators', 'logisticSupportUsers'])
-            ->when($date, function($q) use ($date) {
-                $q->where(function($query) use ($date) {
-                    $query->where('date', '>=', $date)
+            ->when($startDate && !$endDate, function($q) use ($startDate) {
+                $q->where(function($query) use ($startDate) {
+                    $query->where('date', '>=', $startDate)
+                        ->orWhereIn('status', ['pending', 'reassigned']);
+                });
+            })
+            ->when($startDate && $endDate, function($q) use ($startDate, $endDate) {
+                $q->where(function($query) use ($startDate, $endDate) {
+                    $query->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                         ->orWhereIn('status', ['pending', 'reassigned']);
                 });
             })
@@ -231,16 +256,6 @@ class PlanningReviewService
         $act->setAttribute('display_user_name', $displayName);
         $act->setAttribute('ownerName', $ownerName);
         $act->setAttribute('assigned_group', $group);
-    }
-
-    private function getDateFilter(string $period): ?Carbon
-    {
-        return match($period) {
-            '7days' => Carbon::now()->subDays(7),
-            '15days' => Carbon::now()->subDays(15),
-            'all' => null,
-            default => null
-        };
     }
 
     public function generateUserEvidenceZip(int $userId, string $period = '15days'): string
@@ -288,7 +303,17 @@ class PlanningReviewService
     public function generateAllUsersEvidenceZip(User $revisor, string $period = '15days'): string
     {
         $activities = $this->getWeeklyPlanningData($revisor, $period);
+        return $this->buildGlobalZip($activities, $revisor);
+    }
 
+    public function generateAllUsersEvidenceZipByRange(User $revisor, string $startDate, string $endDate): string
+    {
+        $activities = $this->getWeeklyPlanningDataByRange($revisor, $startDate, $endDate);
+        return $this->buildGlobalZip($activities, $revisor);
+    }
+
+    private function buildGlobalZip(Collection $activities, User $revisor): string
+    {
         $activitiesWithEvidence = $activities->filter(function ($act) {
             return !empty($act->evidence_path);
         });
@@ -328,4 +353,5 @@ class PlanningReviewService
 
         return $zipFileName;
     }
+
 }

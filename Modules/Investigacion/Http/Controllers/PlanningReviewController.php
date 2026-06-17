@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Storage;
+use Modules\Investigacion\Http\Requests\WeekPlanner\GetPlanningReviewsRequest;
 use Modules\Investigacion\Http\Requests\WeekPlanner\UpdateWeekActivityStatusRequest;
 use Modules\Investigacion\Services\PlanningReviewService;
 use Modules\Investigacion\Transformers\PlanningReviewResource;
@@ -20,31 +21,28 @@ class PlanningReviewController extends Controller
         $this->reviewService = $reviewService;
     }
 
-    public function index(Request $request)
+    public function index(GetPlanningReviewsRequest $request)
     {
         try {
-            $period = $request->query('period', '15days');
-
-            $activities = $this->reviewService->getWeeklyPlanningData($request->user(), $period);
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $activities = $this->reviewService->getWeeklyPlanningDataByRange(
+                    $request->user(),
+                    $request->validated('start_date'),
+                    $request->validated('end_date')
+                );
+            } else {
+                $period = $request->validated('period') ?? '15days';
+                $activities = $this->reviewService->getWeeklyPlanningData($request->user(), $period);
+            }
 
             return response()->json([
-                'msg' => [
-                    'summary' => 'Éxito',
-                    'detail' => 'Planificaciones cargadas correctamente.',
-                    'code' => 200
-                ],
+                'msg' => ['summary' => 'Éxito', 'detail' => 'Planificaciones cargadas correctamente.', 'code' => 200],
                 'data' => PlanningReviewResource::collection($activities)
             ]);
 
         } catch (\Exception $e) {
             Log::error('Error en PlanningReviewController@index: ' . $e->getMessage());
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error',
-                    'detail' => 'No se pudieron cargar las planificaciones.',
-                    'code' => 500
-                ]
-            ], 500);
+            return response()->json(['msg' => ['summary' => 'Error', 'detail' => 'No se pudieron cargar las planificaciones.', 'code' => 500]], 500);
         }
     }
 
@@ -90,60 +88,52 @@ class PlanningReviewController extends Controller
         return response()->file($disk->path($path));
     }
 
-    public function prepareUserZip(Request $request, $userId)
+    public function prepareUserZip(GetPlanningReviewsRequest $request, $userId)
     {
         try {
-            $period = $request->query('period', '15days');
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $zipFileName = $this->reviewService->generateUserEvidenceZipByRange(
+                    $userId,
+                    $request->validated('start_date'),
+                    $request->validated('end_date')
+                );
+            } else {
+                $period = $request->validated('period') ?? '15days';
+                $zipFileName = $this->reviewService->generateUserEvidenceZip($userId, $period);
+            }
 
-            $zipFileName = $this->reviewService->generateUserEvidenceZip($userId, $period);
-
-            $url = URL::temporarySignedRoute(
-                'api.investigacion.evidence.zip.download',
-                now()->addMinutes(15),
-                ['filename' => $zipFileName]
-            );
-
+            $url = URL::temporarySignedRoute('api.investigacion.evidence.zip.download', now()->addMinutes(15), ['filename' => $zipFileName]);
             return response()->json(['url' => $url]);
         } catch (\Exception $e) {
-            Log::error('Error en PlanningReviewController@prepareUserZip: ' . $e->getMessage());
+            Log::error('Error en prepareUserZip: ' . $e->getMessage());
             return response()->json(['msg' => ['detail' => $e->getMessage()]], 500);
         }
     }
 
-    public function prepareAllUsersZip(Request $request)
+    public function prepareAllUsersZip(GetPlanningReviewsRequest $request)
     {
         try {
-            $period = $request->query('period', '15days');
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $zipFileName = $this->reviewService->generateAllUsersEvidenceZipByRange(
+                    $request->user(),
+                    $request->validated('start_date'),
+                    $request->validated('end_date')
+                );
+            } else {
+                $period = $request->validated('period') ?? '15days';
+                $zipFileName = $this->reviewService->generateAllUsersEvidenceZip($request->user(), $period);
+            }
 
-            $zipFileName = $this->reviewService->generateAllUsersEvidenceZip(
-                $request->user(),
-                $period
-            );
-
-            $url = URL::temporarySignedRoute(
-                'api.investigacion.evidence.zip.download',
-                now()->addMinutes(30),
-                ['filename' => $zipFileName]
-            );
+            $url = URL::temporarySignedRoute('api.investigacion.evidence.zip.download', now()->addMinutes(30), ['filename' => $zipFileName]);
 
             return response()->json([
-                'msg' => [
-                    'summary' => 'Archivo generado',
-                    'detail' => 'El compilado global está listo para descargar.',
-                    'code' => 200
-                ],
+                'msg' => ['summary' => 'Archivo generado', 'detail' => 'El compilado global está listo para descargar.', 'code' => 200],
                 'url' => $url
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Error en PlanningReviewController@prepareAllUsersZip: ' . $e->getMessage());
-            return response()->json([
-                'msg' => [
-                    'summary' => 'Error de compilación',
-                    'detail' => $e->getMessage(),
-                    'code' => 500
-                ]
-            ], 500);
+            Log::error('Error en prepareAllUsersZip: ' . $e->getMessage());
+            return response()->json(['msg' => ['summary' => 'Error', 'detail' => $e->getMessage(), 'code' => 500]], 500);
         }
     }
 
