@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Administracion\Http\Controllers\AdministracionController;
 use Modules\Administracion\Http\Controllers\DispatchController;
 use Modules\Administracion\Http\Controllers\FleetPerformanceController;
 use Modules\Administracion\Http\Controllers\LogisticsCatalogController;
@@ -13,6 +14,8 @@ use Modules\Administracion\Http\Controllers\VehicleManagementController;
 |--------------------------------------------------------------------------
 |*/
 Route::prefix('administracion')->middleware(['auth:api'])->group(function () {
+
+    Route::get('/dashboard/metrics', [AdministracionController::class, 'metrics']);
 
     // Rutas de Catálogos
     Route::get('/logistics-catalogs', [LogisticsCatalogController::class, 'index']);
