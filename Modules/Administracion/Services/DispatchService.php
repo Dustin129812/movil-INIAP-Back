@@ -55,13 +55,20 @@ class DispatchService
         });
     }
 
-    public function getStationRequests(?int $locationId = null): \Illuminate\Database\Eloquent\Collection
+    /**
+     * Obtiene las solicitudes de la estación con filtro opcional de fechas.
+     */
+    public function getStationRequests(?int $locationId = null, ?string $startDate = null, ?string $endDate = null): \Illuminate\Database\Eloquent\Collection
     {
         return WeekActivity::query()
             ->when($locationId, function ($query, $locationId) {
                 $query->whereHas('user', function ($q) use ($locationId) {
                     $q->where('location_id', $locationId);
                 });
+            })
+            // Añadido: Filtro de ventana operativa
+            ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
             })
             ->whereHas('materials', function ($query) {
                 $query->where('material_week_activity.request_type', 'logistics');

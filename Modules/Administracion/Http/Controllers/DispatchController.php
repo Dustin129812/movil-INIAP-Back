@@ -25,9 +25,13 @@ class DispatchController extends Controller
     public function index(GetStationRequestsRequest $request): JsonResponse
     {
         $user = $request->user();
-        $locationId = $request->validated('location_id') ?? $user->location_id;
 
-        $requests = $this->dispatchService->getStationRequests($locationId);
+        $validated = $request->validated();
+        $locationId = $validated['location_id'] ?? $user->location_id;
+        $startDate = $validated['start_date'] ?? null;
+        $endDate = $validated['end_date'] ?? null;
+
+        $requests = $this->dispatchService->getStationRequests($locationId, $startDate, $endDate);
 
         return response()->json([
             'msg' => [
