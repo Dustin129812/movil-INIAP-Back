@@ -15,6 +15,10 @@ class ProyectoResource extends JsonResource
             'titulo' => $this->titulo,
             'descripcion' => $this->descripcion,
             'tipo_ensayo' => $this->tipo_ensayo,
+            'variedad' => $this->variedad,
+            'fecha_siembra' => $this->fecha_siembra ? $this->fecha_siembra->format('Y-m-d') : null,
+            'tipo_acolchado' => $this->tipo_acolchado,
+
             'financiamiento' => $this->financiamiento,
             'colaborador_nombre' => $this->colaborador_nombre,
             'colaborador_telefono' => $this->colaborador_telefono,
@@ -23,13 +27,6 @@ class ProyectoResource extends JsonResource
 
         if ($this->relationLoaded('responsable')) {
             $data['responsable'] = $this->responsable->name ?? 'Sin asignar';
-        }
-
-        if ($this->relationLoaded('variedades')) {
-            $data['variedades_ids'] = $this->variedades->pluck('id')->toArray();
-            $data['variedades'] = $this->variedades->map(function ($v) {
-                return ($v->cultivo->nombre ?? '') . ' - ' . $v->nombre;
-            })->filter()->values();
         }
 
         if ($this->relationLoaded('lote')) {

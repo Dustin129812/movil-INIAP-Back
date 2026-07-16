@@ -16,11 +16,23 @@ return new class extends Migration {
             $table->text('descripcion')->nullable();
             $table->jsonb('objetivos')->nullable();
             $table->jsonb('informacion_adicional')->nullable();
-            $table->string('tipo_acolchado', 30)->default('sin_acolchado')
+
+            $table->string('variedad')->comment('Campo de digitación abierta');
+            $table->date('fecha_siembra')->nullable();
+
+            $table->string('tipo_acolchado', 30)->nullable()
                 ->comment('Admite: con_acolchado, parcialmente_acolchado, sin_acolchado');
 
-            $table->enum('tipo_ensayo', ['con_diseno', 'sin_diseno', 'multiplicacion'])
-                ->nullable();
+            $table->enum('diseno_experimental', ['con_diseno', 'sin_diseno', 'multiplicacion'])->nullable();
+
+            $table->enum('tipo_ensayo', [
+                'investigacion',
+                'validacion',
+                'produccion_semillas',
+                'multiplicacion_semillas',
+                'refrescamiento'
+            ])->nullable();
+
             $table->string('financiamiento')->nullable();
             $table->string('colaborador_nombre')->nullable();
             $table->string('colaborador_telefono')->nullable();

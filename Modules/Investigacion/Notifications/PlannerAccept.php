@@ -57,7 +57,7 @@ class PlannerAccept extends Notification
             'approved_name' => $this->approver->name,
             'status' => $this->status,
             'created_at' => now()->toDateTimeString(),
-            'action_url' => '/dashboard/week-activities/' . $this->weekActivity->id,
+            'action_url' => '/notifications',
         ];
     }
 }

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Modules\Investigacion\Entities\Group;
 use Modules\Investigacion\Entities\WeekActivity;
+use Modules\Investigacion\Notifications\BulkPlannerAccept;
 use Modules\Investigacion\Notifications\PlannerAccept;
 use ZipArchive;
 
@@ -352,6 +353,37 @@ class PlanningReviewService
         }
 
         return $zipFileName;
+    }
+
+    /**
+     * Actualiza múltiples actividades y emite UNA SOLA notificación por usuario.
+     */
+    public function bulkUpdateActivityStatus(array $activityIds, string $status, User $approver): array
+    {
+        return DB::transaction(function () use ($activityIds, $status, $approver) {
+
+            WeekActivity::whereIn('id', $activityIds)->update(['status' => $status]);
+
+            $activities = WeekActivity::with('user')
+                ->whereIn('id', $activityIds)
+                ->get();
+
+            $activitiesByUser = $activities->groupBy('user_id');
+
+            foreach ($activitiesByUser as $userId => $userActivities) {
+                $creator = $userActivities->first()->user;
+
+                if ($creator && $creator->id !== $approver->id) {
+
+                    $creator->notify(new BulkPlannerAccept($userActivities, $approver, $status));
+                }
+            }
+
+            return [
+                'updated_count' => count($activityIds),
+                'status' => $status,
+            ];
+        });
     }
 
 }

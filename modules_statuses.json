@@ -7,5 +7,6 @@
     "Transferencia": true,
     "Auth": true,
     "TrlImporter": true,
-    "Kopia": true
+    "Kopia": true,
+    "Notificaciones": true
 }

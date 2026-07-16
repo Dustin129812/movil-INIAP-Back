@@ -1,0 +1,11 @@
+{
+    "name": "Notificaciones",
+    "alias": "notificaciones",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Notificaciones\\Providers\\NotificacionesServiceProvider"
+    ],
+    "files": []
+}

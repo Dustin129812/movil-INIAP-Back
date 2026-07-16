@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Investigacion\Http\Controllers\GeneralController;
 use Modules\Kopia\Http\Controllers\AuthKopiaController;
 use Modules\Kopia\Http\Controllers\CatalogoController;
 use Modules\Kopia\Http\Controllers\LoteController;
@@ -46,5 +47,6 @@ Route::prefix('kopia')->group(function () {
         Route::put('/lotes/{id}', [LoteController::class, 'update']);
         Route::delete('/lotes/{id}', [LoteController::class, 'destroy']);
 
+        Route::get('getLocations', [GeneralController::class, 'getLocations']);
     });
 });

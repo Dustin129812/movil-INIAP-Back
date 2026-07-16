@@ -7,7 +7,6 @@ use Illuminate\Validation\Rule;
 use Modules\Investigacion\Entities\Canton;
 use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\Province;
-use Modules\Kopia\Entities\Variedad;
 use App\Models\User;
 
 class SyncKopiaRequest extends FormRequest {
@@ -18,7 +17,6 @@ class SyncKopiaRequest extends FormRequest {
             'lotes.*.nombre_lote' => ['required', 'string'],
             'lotes.*.coordenadas' => ['nullable', 'array', 'min:3'],
             'lotes.*.ubicacion_manual' => ['nullable', 'string'],
-
             'lotes.*.province_id' => ['required', Rule::exists(Province::class, 'id')],
             'lotes.*.canton_id' => ['required', Rule::exists(Canton::class, 'id')],
             'lotes.*.location_id' => ['nullable', Rule::exists(Location::class, 'id')],
@@ -34,17 +32,29 @@ class SyncKopiaRequest extends FormRequest {
             'lotes.*.proyectos' => ['nullable', 'array'],
             'lotes.*.proyectos.*.uuid_movil' => ['required', 'uuid'],
             'lotes.*.proyectos.*.responsable_id' => ['required', Rule::exists(User::class, 'id')],
-            'lotes.*.proyectos.*.variedades_ids' => ['required', 'array', 'min:1'],
-            'lotes.*.proyectos.*.variedades_ids.*' => ['required', Rule::exists(Variedad::class, 'id')],
+
             'lotes.*.proyectos.*.titulo' => ['required', 'string'],
             'lotes.*.proyectos.*.descripcion' => ['nullable', 'string'],
+
+            'lotes.*.proyectos.*.variedad' => ['required', 'string', 'max:255'],
+            'lotes.*.proyectos.*.fecha_siembra' => ['nullable', 'date'],
             'lotes.*.proyectos.*.tipo_acolchado' => [
                 'nullable',
                 'string',
                 Rule::in(['con_acolchado', 'parcialmente_acolchado', 'sin_acolchado'])
             ],
 
-            'lotes.*.proyectos.*.tipo_ensayo' => ['nullable', 'string', Rule::in(['con_diseno', 'sin_diseno', 'multiplicacion'])],
+            'lotes.*.proyectos.*.diseno_experimental' => [
+                'nullable',
+                'string',
+                Rule::in(['con_diseno', 'sin_diseno', 'multiplicacion'])
+            ],
+            'lotes.*.proyectos.*.tipo_ensayo' => [
+                'nullable',
+                'string',
+                Rule::in(['investigacion', 'validacion', 'produccion_semillas', 'multiplicacion_semillas', 'refrescamiento'])
+            ],
+
             'lotes.*.proyectos.*.financiamiento' => ['nullable', 'string', 'max:255'],
             'lotes.*.proyectos.*.colaborador_nombre' => ['nullable', 'string', 'max:255'],
             'lotes.*.proyectos.*.colaborador_celular' => ['nullable', 'string', 'max:20'],

@@ -16,11 +16,12 @@ class Proyecto extends Model
         'uuid_movil',
         'lote_id',
         'responsable_id',
-        'variedad_id',
         'titulo',
         'descripcion',
         'objetivos',
         'informacion_adicional',
+        'variedad',
+        'fecha_siembra',
         'tipo_ensayo',
         'financiamiento',
         'colaborador_nombre',
@@ -32,7 +33,6 @@ class Proyecto extends Model
     protected $casts = [
         'objetivos' => 'array',
         'informacion_adicional' => 'array',
-        'variedades_ids' => 'array',
     ];
 
     public function lote(): BelongsTo
@@ -45,11 +45,6 @@ class Proyecto extends Model
         return $this->belongsTo(User::class, 'responsable_id');
     }
 
-    public function variedad(): BelongsTo
-    {
-        return $this->belongsTo(Variedad::class, 'variedad_id');
-    }
-
     public function colaboradores(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'kopia.proyecto_colaborador', 'proyecto_id', 'user_id')
@@ -59,11 +54,5 @@ class Proyecto extends Model
     public function ciclos(): HasMany
     {
         return $this->hasMany(CicloCultivo::class, 'proyecto_id');
-    }
-
-    public function variedades()
-    {
-        // Declaración estricta: esquema.tabla
-        return $this->belongsToMany(Variedad::class, 'kopia.proyecto_variedad');
     }
 }

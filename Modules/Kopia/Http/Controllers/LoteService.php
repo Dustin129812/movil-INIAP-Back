@@ -1,11 +1,11 @@
 <?php
 
-namespace Modules\Kopia\Services;
+namespace Modules\Kopia\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Kopia\Entities\Lote;
-use Illuminate\Database\Eloquent\Collection;
-use Psy\Util\Str;
+use Modules\Kopia\Entities\Proyecto;
 
 class LoteService
 {
@@ -15,7 +15,6 @@ class LoteService
     public function obtenerDetalleLote(int $id): \Illuminate\Database\Eloquent\Builder|array|Collection|\Illuminate\Database\Eloquent\Model
     {
         return Lote::with([
-            'proyectos.variedad.cultivo',
             'proyectos.responsable',
             'proyectos.ciclos'
         ])->findOrFail($id);
@@ -71,7 +70,6 @@ class LoteService
     public function crearLoteIntegrado(array $datos, int $responsableId): Lote
     {
         return DB::transaction(function () use ($datos, $responsableId) {
-            // 1. Preparar e insertar Lote
             $loteAttributes = [
                 'uuid_movil'       => $datos['uuid_movil'],
                 'nombre_lote'      => $datos['nombre_lote'],
@@ -88,7 +86,6 @@ class LoteService
 
             $lote = Lote::create($loteAttributes);
 
-            // 2. Iterar e insertar Proyectos del lote
             foreach ($datos['proyectos'] as $proyectoData) {
                 $proyecto = Proyecto::create([
                     'uuid_movil'     => $proyectoData['uuid_movil'],
@@ -97,12 +94,11 @@ class LoteService
                     'titulo'         => $proyectoData['titulo'],
                     'descripcion'    => $proyectoData['descripcion'] ?? null,
                     'tipo_ensayo'    => $proyectoData['tipo_ensayo'] ?? null,
+                    'variedad'       => $proyectoData['variedad'],
+                    'fecha_siembra'  => $proyectoData['fecha_siembra'] ?? null,
+                    'tipo_acolchado' => $proyectoData['tipo_acolchado'] ?? null,
                 ]);
 
-                // Sincronizar relaciones
-                if (!empty($proyectoData['variedades_ids'])) {
-                    $proyecto->variedades()->sync($proyectoData['variedades_ids']);
-                }
 
                 if (!empty($proyectoData['colaboradores'])) {
                     $proyecto->colaboradores()->sync($proyectoData['colaboradores']);

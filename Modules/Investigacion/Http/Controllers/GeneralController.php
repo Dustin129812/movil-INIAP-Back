@@ -9,21 +9,32 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\Investigacion\Entities\Activity;
 use Modules\Investigacion\Entities\Ethnic_Group;
-use Modules\Investigacion\Entities\Location;
 use Modules\Investigacion\Entities\LogisticSupport;
 use Modules\Investigacion\Entities\Nationality;
 use Modules\Investigacion\Entities\Position;
 use Modules\Investigacion\Entities\Product;
+use Modules\Kopia\Services\LocationService;
+use Modules\Kopia\Transformers\LocationResource;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GeneralController extends Controller
 {
+
+    public function __construct(
+        private readonly LocationService $locationService
+    ) {}
+
+    /**
+     * Retorna la lista de ubicaciones formateadas.
+     */
     public function getLocations()
     {
-        $locations = Location::get();
-        return $locations;
-    }
+        $locations = $this->locationService->obtenerTodasLasUbicaciones();
 
+        return response()->json([
+            'data' => LocationResource::collection($locations)
+        ], 200, [], JSON_UNESCAPED_UNICODE);
+    }
     public function getNationality()
     {
         $nationality = Nationality::get();

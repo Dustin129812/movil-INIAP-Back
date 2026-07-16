@@ -7,7 +7,6 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\Kopia\Entities\Lote;
 use Modules\Kopia\Http\Requests\StoreLoteProyectoRequest;
-use Modules\Kopia\Services\LoteService;
 use Modules\Kopia\Transformers\LoteResource;
 
 class LoteController extends Controller
@@ -40,7 +39,7 @@ class LoteController extends Controller
                 auth('api')->id()
             );
 
-            $loteRefrescado = Lote::with(['proyectos.variedad.cultivo', 'proyectos.colaboradores'])
+            $loteRefrescado = Lote::with(['proyectos.colaboradores'])
                 ->select('*', DB::raw('ST_AsGeoJSON(area) as geometria_geojson'))
                 ->find($lote->id);
 

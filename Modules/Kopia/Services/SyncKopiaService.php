@@ -138,7 +138,7 @@ class SyncKopiaService
                             $q->where('user_id', $userId);
                         })
                         ->with([
-                            'variedad.cultivo',
+                            // ¡ELIMINAR 'variedad.cultivo' DE AQUÍ!
                             'responsable',
                             'colaboradores',
                             'ciclos' => function ($q) {
@@ -161,6 +161,7 @@ class SyncKopiaService
         if (str_starts_with($uuid, '00000000')) {
             throw new \Exception("UUID inválido recibido desde el dispositivo móvil.");
         }
+
         $proyecto = Proyecto::updateOrCreate(
             ['uuid_movil' => $uuid],
             [
@@ -168,18 +169,18 @@ class SyncKopiaService
                 'responsable_id' => $data['responsable_id'] ?? auth('api')->id(),
                 'titulo' => $data['titulo'],
                 'descripcion' => $data['descripcion'] ?? null,
+
+                'variedad' => $data['variedad'],
+                'fecha_siembra' => $data['fecha_siembra'] ?? null,
+                'tipo_acolchado' => $data['tipo_acolchado'] ?? null,
+
                 'tipo_ensayo' => $data['tipo_ensayo'] ?? null,
-                'tipo_acolchado' => $data['tipo_acolchado'] ?? 'sin_acolchado',
                 'financiamiento' => $data['financiamiento'] ?? null,
                 'colaborador_nombre' => $data['colaborador_nombre'] ?? null,
                 'colaborador_telefono' => $data['colaborador_telefono'] ?? null,
                 'colaborador_celular' => $data['colaborador_celular'] ?? null,
             ]
         );
-
-        if (!empty($data['variedades_ids'])) {
-            $proyecto->variedades()->sync($data['variedades_ids']);
-        }
 
         return $proyecto;
     }
