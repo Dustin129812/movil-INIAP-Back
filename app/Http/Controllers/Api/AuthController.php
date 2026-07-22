@@ -15,36 +15,30 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        // Validar datos recibidos desde la app móvil
+        // Validar datos recibidos
         $request->validate([
             'email' => 'required|email',
-            'password' => 'required',
-            'uuid' => 'required',
+            'password' => 'required|string',
+            'uuid' => 'required|string',
             'modelo' => 'nullable|string',
             'sistema_operativo' => 'nullable|string'
         ]);
 
-
-        // Datos para autenticar usuario
+        // Credenciales
         $credentials = $request->only('email', 'password');
 
-
-        // Intentar iniciar sesión con JWT
+        // Intentar iniciar sesión
         if (!$token = Auth::guard('api')->attempt($credentials)) {
-
             return response()->json([
                 'success' => false,
                 'message' => 'Credenciales incorrectas'
             ], 401);
-
         }
 
-
-        // Obtener usuario autenticado
+        // Usuario autenticado
         $user = Auth::guard('api')->user();
 
-
-        // Registrar o actualizar dispositivo móvil
+        // Registrar o actualizar dispositivo
         Dispositivo::updateOrCreate(
             [
                 'uuid' => $request->uuid
@@ -57,8 +51,7 @@ class AuthController extends Controller
             ]
         );
 
-
-        // Respuesta al móvil
+        // Respuesta
         return response()->json([
             'success' => true,
             'message' => 'Login exitoso',
@@ -68,19 +61,16 @@ class AuthController extends Controller
         ]);
     }
 
-
-
     /**
      * Usuario autenticado
      */
     public function me()
     {
-        return response()->json(
-            Auth::guard('api')->user()
-        );
+        return response()->json([
+            'success' => true,
+            'user' => Auth::guard('api')->user()
+        ]);
     }
-
-
 
     /**
      * Cerrar sesión
@@ -95,14 +85,14 @@ class AuthController extends Controller
         ]);
     }
 
-
-
     /**
      * Refrescar token
      */
     public function refresh()
     {
         return response()->json([
+            'success' => true,
+            'message' => 'Token actualizado correctamente',
             'access_token' => Auth::guard('api')->refresh(),
             'token_type' => 'Bearer'
         ]);

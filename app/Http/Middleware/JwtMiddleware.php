@@ -5,17 +5,17 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
-use PHPOpenSourceSaver\JWTAuth\Exceptions\TokenExpiredException;
-use PHPOpenSourceSaver\JWTAuth\Exceptions\TokenInvalidException;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 
 class JwtMiddleware
 {
+
     public function handle(Request $request, Closure $next)
     {
         try {
 
-            // Verifica que exista un token válido
             $user = Auth::guard('api')->user();
 
             if (!$user) {
@@ -29,26 +29,30 @@ class JwtMiddleware
 
             return response()->json([
                 'success' => false,
-                'message' => 'Token expirado'
+                'message' => 'El token ha expirado'
             ], 401);
-
 
         } catch (TokenInvalidException $e) {
 
             return response()->json([
                 'success' => false,
-                'message' => 'Token inválido'
+                'message' => 'El token es inválido'
             ], 401);
-
 
         } catch (JWTException $e) {
 
             return response()->json([
                 'success' => false,
-                'message' => 'Token no encontrado'
+                'message' => 'No se encontró un token de autenticación'
             ], 401);
-        }
 
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de autenticación'
+            ], 500);
+        }
 
         return $next($request);
     }
