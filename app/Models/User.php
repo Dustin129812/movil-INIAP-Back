@@ -36,4 +36,9 @@ class User extends Authenticatable implements JWTSubject
     {
         return [];
     }
+
+    public function dispositivos()
+   {
+        return $this->hasMany(Dispositivo::class);
+   }
 }

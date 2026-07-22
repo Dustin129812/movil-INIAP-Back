@@ -1,9 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Dispositivo;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
@@ -12,30 +15,72 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
+        // Validar datos recibidos desde la app móvil
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+            'uuid' => 'required',
+            'modelo' => 'nullable|string',
+            'sistema_operativo' => 'nullable|string'
+        ]);
+
+
+        // Datos para autenticar usuario
         $credentials = $request->only('email', 'password');
 
+
+        // Intentar iniciar sesión con JWT
         if (!$token = Auth::guard('api')->attempt($credentials)) {
+
             return response()->json([
                 'success' => false,
                 'message' => 'Credenciales incorrectas'
             ], 401);
+
         }
 
+
+        // Obtener usuario autenticado
+        $user = Auth::guard('api')->user();
+
+
+        // Registrar o actualizar dispositivo móvil
+        Dispositivo::updateOrCreate(
+            [
+                'uuid' => $request->uuid
+            ],
+            [
+                'user_id' => $user->id,
+                'modelo' => $request->modelo,
+                'sistema_operativo' => $request->sistema_operativo,
+                'ultimo_login' => Carbon::now()
+            ]
+        );
+
+
+        // Respuesta al móvil
         return response()->json([
             'success' => true,
+            'message' => 'Login exitoso',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => Auth::guard('api')->user()
+            'user' => $user
         ]);
     }
+
+
 
     /**
      * Usuario autenticado
      */
     public function me()
     {
-        return response()->json(Auth::guard('api')->user());
+        return response()->json(
+            Auth::guard('api')->user()
+        );
     }
+
+
 
     /**
      * Cerrar sesión
@@ -49,6 +94,8 @@ class AuthController extends Controller
             'message' => 'Sesión cerrada correctamente'
         ]);
     }
+
+
 
     /**
      * Refrescar token
