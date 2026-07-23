@@ -19,13 +19,13 @@ class ProyectoService
                 $proyecto->colaboradores()->sync($data['colaboradores']);
             }
 
-            return $proyecto->load(['lote', 'variedad.cultivo', 'colaboradores']);
+            return $proyecto->load(['lote', 'colaboradores']);
         });
     }
 
     public function listarParaUsuario(int $userId)
     {
-        return Proyecto::with(['lote', 'variedad.cultivo', 'responsable', 'colaboradores'])
+        return Proyecto::with(['lote', 'responsable', 'colaboradores'])
             ->where('responsable_id', $userId)
             ->orWhereHas('colaboradores', fn($q) => $q->where('user_id', $userId))
             ->orderBy('created_at', 'desc')
@@ -40,7 +40,6 @@ class ProyectoService
         return Proyecto::with([
             'lote.provincia',
             'responsable',
-            'variedades.cultivo',
             'ciclos.visitas.hojasDatos'
         ])->findOrFail($id);
     }

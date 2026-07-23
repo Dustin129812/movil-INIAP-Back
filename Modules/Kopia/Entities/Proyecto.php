@@ -23,6 +23,7 @@ class Proyecto extends Model
         'variedad',
         'fecha_siembra',
         'tipo_ensayo',
+        'tipo_tratamiento',
         'financiamiento',
         'colaborador_nombre',
         'colaborador_telefono',
@@ -31,6 +32,7 @@ class Proyecto extends Model
     ];
 
     protected $casts = [
+        'fecha_siembra' => 'date',
         'objetivos' => 'array',
         'informacion_adicional' => 'array',
     ];

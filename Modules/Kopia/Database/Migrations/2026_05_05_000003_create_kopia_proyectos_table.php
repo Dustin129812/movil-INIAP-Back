@@ -20,6 +20,8 @@ return new class extends Migration {
             $table->string('variedad')->comment('Campo de digitación abierta');
             $table->date('fecha_siembra')->nullable();
 
+            $table->string('tipo_tratamiento')->nullable();
+
             $table->string('tipo_acolchado', 30)->nullable()
                 ->comment('Admite: con_acolchado, parcialmente_acolchado, sin_acolchado');
 

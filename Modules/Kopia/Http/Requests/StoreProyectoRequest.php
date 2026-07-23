@@ -26,6 +26,7 @@ class StoreProyectoRequest extends FormRequest
 
             'variedad' => ['required', 'string', 'max:255'],
             'fecha_siembra' => ['nullable', 'date'],
+            'tipo_tratamiento' => ['nullable', 'string', 'max:255'],
             'tipo_acolchado' => [
                 'nullable',
                 'string',

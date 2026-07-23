@@ -15,6 +15,7 @@ class ProyectoResource extends JsonResource
             'titulo' => $this->titulo,
             'descripcion' => $this->descripcion,
             'tipo_ensayo' => $this->tipo_ensayo,
+            'tipo_tratamiento' => $this->tipo_tratamiento,
             'variedad' => $this->variedad,
             'fecha_siembra' => $this->fecha_siembra ? $this->fecha_siembra->format('Y-m-d') : null,
             'tipo_acolchado' => $this->tipo_acolchado,
