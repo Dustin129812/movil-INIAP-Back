@@ -5,44 +5,34 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Dispositivo;
 use Carbon\Carbon;
 
 class AuthController extends Controller
 {
     /**
-     * Login
+     * Registro de usuario
      */
-    public function login(Request $request)
+    public function register(Request $request)
     {
-        // Validar datos recibidos
         $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:6',
             'uuid' => 'required|string',
             'modelo' => 'nullable|string',
             'sistema_operativo' => 'nullable|string'
         ]);
 
-        // Credenciales
-        $credentials = $request->only('email', 'password');
+        $user = \App\Models\User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
 
-        // Intentar iniciar sesión
-        if (!$token = Auth::guard('api')->attempt($credentials)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Credenciales incorrectas'
-            ], 401);
-        }
-
-        // Usuario autenticado
-        $user = Auth::guard('api')->user();
-
-        // Registrar o actualizar dispositivo
         Dispositivo::updateOrCreate(
-            [
-                'uuid' => $request->uuid
-            ],
+            ['uuid' => $request->uuid],
             [
                 'user_id' => $user->id,
                 'modelo' => $request->modelo,
@@ -51,13 +41,59 @@ class AuthController extends Controller
             ]
         );
 
-        // Respuesta
+        $token = Auth::guard('api')->login($user);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Registro exitoso',
+            'ID' => $user->id,
+            'NOMBRE' => $user->name,
+            'CORREO' => $user->email,
+            'TOKEN' => $token
+        ], 201);
+    }
+
+    /**
+     * Login
+     */
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
+            'uuid' => 'required|string',
+            'modelo' => 'nullable|string',
+            'sistema_operativo' => 'nullable|string'
+        ]);
+
+        $credentials = $request->only('email', 'password');
+
+        if (!$token = Auth::guard('api')->attempt($credentials)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Credenciales incorrectas'
+            ], 401);
+        }
+
+        $user = Auth::guard('api')->user();
+
+        Dispositivo::updateOrCreate(
+            ['uuid' => $request->uuid],
+            [
+                'user_id' => $user->id,
+                'modelo' => $request->modelo,
+                'sistema_operativo' => $request->sistema_operativo,
+                'ultimo_login' => Carbon::now()
+            ]
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Login exitoso',
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user
+            'ID' => $user->id,
+            'NOMBRE' => $user->name,
+            'CORREO' => $user->email,
+            'TOKEN' => $token
         ]);
     }
 
@@ -66,9 +102,12 @@ class AuthController extends Controller
      */
     public function me()
     {
+        $user = Auth::guard('api')->user();
         return response()->json([
             'success' => true,
-            'user' => Auth::guard('api')->user()
+            'ID' => $user->id,
+            'NOMBRE' => $user->name,
+            'CORREO' => $user->email
         ]);
     }
 
@@ -88,13 +127,21 @@ class AuthController extends Controller
     /**
      * Refrescar token
      */
-    public function refresh()
-    {
-        return response()->json([
-            'success' => true,
-            'message' => 'Token actualizado correctamente',
-            'access_token' => Auth::guard('api')->refresh(),
-            'token_type' => 'Bearer'
-        ]);
-    }
+    public function refresh(Request $request)
+{
+    $user = $request->user();
+    
+    // 1. Eliminar el token actual que se está usando
+    $user->currentAccessToken()->delete();
+    
+    // 2. Crear un nuevo token
+    $newToken = $user->createToken('auth_token')->plainTextToken;
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Token actualizado correctamente',
+        'access_token' => $newToken,
+        'token_type' => 'Bearer'
+    ]);
+}
 }

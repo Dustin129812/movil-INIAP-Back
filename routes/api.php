@@ -16,6 +16,7 @@ Route::get('/prueba', function () {
 |--------------------------------------------------------------------------
 */
 
+Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 /*
@@ -26,20 +27,12 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('jwt')->group(function () {
 
+    // Auth
     Route::get('/me', [AuthController::class, 'me']);
-
     Route::post('/logout', [AuthController::class, 'logout']);
-
     Route::post('/refresh', [AuthController::class, 'refresh']);
 
-});
-
-Route::middleware('jwt')->group(function () {
-
-    Route::get('/me', [AuthController::class, 'me']);
-
+    // User
     Route::get('/profile', [UserController::class, 'profile']);
-
-    Route::post('/logout', [AuthController::class, 'logout']);
 
 });
