@@ -14,22 +14,28 @@ class SyncKopiaService
 {
     public function procesarSincronizacion(array $lotesData): array
     {
+        $payloadToken = auth('api')->payload();
+        $isGuest = $payloadToken->get('role') === 'guest';
+        $guestUuid = $isGuest ? $payloadToken->get('device_uuid') : null;
+        $userId = $isGuest ? null : auth('api')->id();
+
         $resultados = [
             'lotes_procesados' => 0,
             'proyectos_procesados' => 0,
             'ciclos_procesados' => 0,
             'visitas_procesadas' => 0,
             'hojas_procesadas' => 0,
+            'modo_operacion' => $isGuest ? 'invitado' : 'tecnico_iniap'
         ];
 
-        DB::transaction(function () use ($lotesData, &$resultados) {
+        DB::transaction(function () use ($lotesData, &$resultados, $isGuest, $guestUuid, $userId) {
             foreach ($lotesData as $loteData) {
-                $lote = $this->guardarLote($loteData);
+                $lote = $this->guardarLote($loteData, $isGuest, $guestUuid);
                 $resultados['lotes_procesados']++;
 
                 if (!empty($loteData['proyectos'])) {
                     foreach ($loteData['proyectos'] as $proyectoData) {
-                        $proyecto = $this->guardarProyecto($lote, $proyectoData);
+                        $proyecto = $this->guardarProyecto($lote, $proyectoData, $userId, $guestUuid);
                         $resultados['proyectos_procesados']++;
 
                         if (!empty($proyectoData['ciclos'])) {
@@ -60,50 +66,21 @@ class SyncKopiaService
         return $resultados;
     }
 
-    private function guardarCiclo(Lote $lote, array $data, int $proyectoId): CicloCultivo
-    {
-        return CicloCultivo::updateOrCreate(
-            ['uuid_movil' => $data['uuid_movil']],
-            [
-                'lote_id' => $lote->id,
-                'proyecto_id' => $proyectoId,
-                'cultivo_variedad' => $data['cultivo_variedad'],
-                'distancia_siembra' => $data['distancia_siembra'],
-                'fecha_siembra' => $data['fecha_siembra'],
-                'metricas_siembra'  => $data['metricas_siembra'] ?? null,
-                'es_actual' => true,
-            ]
-        );
-    }
-
-    private function guardarVisita(CicloCultivo $ciclo, Proyecto $proyecto, array $data): Visita
-    {
-        return Visita::updateOrCreate(
-            ['uuid_movil' => $data['uuid_movil']],
-            [
-                'ciclo_cultivo_id' => $ciclo->id,
-                'proyecto_id' => $proyecto->id,
-                'tecnico_nombre' => $data['tecnico_nombre'],
-                'fecha_visita' => $data['fecha_visita'],
-                'observaciones' => $data['observaciones'] ?? null,
-                'recomendaciones' => $data['recomendaciones'] ?? null,
-            ]
-        );
-    }
-
-    private function guardarLote(array $data): Lote
+    private function guardarLote(array $data, bool $isGuest, ?string $guestUuid): Lote
     {
         $attributes = [
-            'nombre_lote'      => $data['nombre_lote'],
-            'ubicacion_manual' => $data['ubicacion_manual'] ?? null,
-            'province_id'      => $data['province_id'],
-            'canton_id'        => $data['canton_id'],
-            'location_id'      => $data['location_id'] ?? null,
-            'parroquia'        => $data['parroquia'] ?? null,
-            'altitud'          => $data['altitud'] ?? null,
-            'otros_datos_geo'  => $data['otros_datos_geo'] ?? null,
+            'nombre_lote'         => $data['nombre_lote'],
+            'ubicacion_manual'    => $data['ubicacion_manual'] ?? null,
+            'province_id'         => $data['province_id'],
+            'canton_id'           => $data['canton_id'],
+            'location_id'         => $data['location_id'] ?? null,
+            'parroquia'           => $data['parroquia'] ?? null,
+            'altitud'             => $data['altitud'] ?? null,
+            'otros_datos_geo'     => $data['otros_datos_geo'] ?? null,
             'condiciones_terreno' => $data['condiciones_terreno'] ?? null,
-            'tipo_riego'       => $data['tipo_riego'] ?? 'gravedad',
+            'tipo_riego'          => $data['tipo_riego'] ?? 'gravedad',
+            'dispositivo_invitado_id' => $guestUuid,
+            'estado_verificacion' => $isGuest ? 'pendiente' : 'aprobado',
         ];
 
         if (!empty($data['coordenadas']) && is_array($data['coordenadas'])) {
@@ -116,10 +93,77 @@ class SyncKopiaService
         );
     }
 
-    /**
-     * Obtiene el payload de lotes y proyectos filtrado estrictamente
-     * para el usuario autenticado (responsable o colaborador).
-     */
+    private function guardarProyecto(Lote $lote, array $data, ?int $userId, ?string $guestUuid): Proyecto
+    {
+        $uuid = $data['uuid_movil'];
+        if (str_starts_with($uuid, '00000000')) {
+            throw new \Exception("UUID inválido recibido desde el dispositivo móvil.");
+        }
+
+        return Proyecto::updateOrCreate(
+            ['uuid_movil' => $uuid],
+            [
+                'lote_id'              => $lote->id,
+                'responsable_id'       => $userId,
+                'dispositivo_invitado_id' => $guestUuid,
+                'titulo'               => $data['titulo'],
+                'descripcion'          => $data['descripcion'] ?? null,
+                'variedad'             => $data['variedad'],
+                'fecha_siembra'        => $data['fecha_siembra'] ?? null,
+                'tipo_acolchado'       => $data['tipo_acolchado'] ?? null,
+                'tipo_ensayo'          => $data['tipo_ensayo'] ?? null,
+                'financiamiento'       => $data['financiamiento'] ?? null,
+                'colaborador_nombre'   => $data['colaborador_nombre'] ?? null,
+                'colaborador_telefono' => $data['colaborador_telefono'] ?? null,
+                'colaborador_celular'  => $data['colaborador_celular'] ?? null,
+                'estado_verificacion'  => is_null($userId) ? 'pendiente' : 'aprobado',
+            ]
+        );
+    }
+
+    private function guardarCiclo(Lote $lote, array $data, int $proyectoId): CicloCultivo
+    {
+        return CicloCultivo::updateOrCreate(
+            ['uuid_movil' => $data['uuid_movil']],
+            [
+                'lote_id'           => $lote->id,
+                'proyecto_id'       => $proyectoId,
+                'cultivo_variedad'  => $data['cultivo_variedad'],
+                'distancia_siembra' => $data['distancia_siembra'],
+                'fecha_siembra'     => $data['fecha_siembra'],
+                'metricas_siembra'  => $data['metricas_siembra'] ?? null,
+                'es_actual'         => true,
+            ]
+        );
+    }
+
+    private function guardarVisita(CicloCultivo $ciclo, Proyecto $proyecto, array $data): Visita
+    {
+        return Visita::updateOrCreate(
+            ['uuid_movil' => $data['uuid_movil']],
+            [
+                'ciclo_cultivo_id' => $ciclo->id,
+                'proyecto_id'      => $proyecto->id,
+                'tecnico_nombre'   => $data['tecnico_nombre'],
+                'fecha_visita'     => $data['fecha_visita'],
+                'observaciones'    => $data['observaciones'] ?? null,
+                'recomendaciones'  => $data['recomendaciones'] ?? null,
+            ]
+        );
+    }
+
+    private function guardarHojaDato(Visita $visita, array $data): HojaDato
+    {
+        return HojaDato::updateOrCreate(
+            ['uuid_movil' => $data['uuid_movil']],
+            [
+                'visita_id'        => $visita->id,
+                'nombre_plantilla' => $data['nombre_plantilla'],
+                'datos_variables'  => $data['datos_variables'],
+            ]
+        );
+    }
+
     public function obtenerDatosSincronizacion(int $userId): array
     {
         $lotes = Lote::whereHas('proyectos', function ($query) use ($userId) {
@@ -138,7 +182,6 @@ class SyncKopiaService
                             $q->where('user_id', $userId);
                         })
                         ->with([
-                            // ¡ELIMINAR 'variedad.cultivo' DE AQUÍ!
                             'responsable',
                             'colaboradores',
                             'ciclos' => function ($q) {
@@ -153,48 +196,6 @@ class SyncKopiaService
         return [
             'lotes' => LoteResource::collection($lotes)->resolve(),
         ];
-    }
-
-    private function guardarProyecto(Lote $lote, array $data): Proyecto
-    {
-        $uuid = $data['uuid_movil'];
-        if (str_starts_with($uuid, '00000000')) {
-            throw new \Exception("UUID inválido recibido desde el dispositivo móvil.");
-        }
-
-        $proyecto = Proyecto::updateOrCreate(
-            ['uuid_movil' => $uuid],
-            [
-                'lote_id' => $lote->id,
-                'responsable_id' => $data['responsable_id'] ?? auth('api')->id(),
-                'titulo' => $data['titulo'],
-                'descripcion' => $data['descripcion'] ?? null,
-
-                'variedad' => $data['variedad'],
-                'fecha_siembra' => $data['fecha_siembra'] ?? null,
-                'tipo_acolchado' => $data['tipo_acolchado'] ?? null,
-
-                'tipo_ensayo' => $data['tipo_ensayo'] ?? null,
-                'financiamiento' => $data['financiamiento'] ?? null,
-                'colaborador_nombre' => $data['colaborador_nombre'] ?? null,
-                'colaborador_telefono' => $data['colaborador_telefono'] ?? null,
-                'colaborador_celular' => $data['colaborador_celular'] ?? null,
-            ]
-        );
-
-        return $proyecto;
-    }
-
-    private function guardarHojaDato(Visita $visita, array $data): HojaDato
-    {
-        return HojaDato::updateOrCreate(
-            ['uuid_movil' => $data['uuid_movil']],
-            [
-                'visita_id' => $visita->id,
-                'nombre_plantilla' => $data['nombre_plantilla'],
-                'datos_variables' => $data['datos_variables'],
-            ]
-        );
     }
 
     private function convertirCoordenadasAPoligono(array $coordenadas): string

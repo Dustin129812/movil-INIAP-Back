@@ -4,6 +4,8 @@ namespace Modules\Kopia\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Factory;
+use Illuminate\Routing\Router;
+use Modules\Kopia\Http\Middleware\CheckGuestOrUser;
 
 class KopiaServiceProvider extends ServiceProvider
 {
@@ -28,6 +30,10 @@ class KopiaServiceProvider extends ServiceProvider
         $this->registerConfig();
         $this->registerViews();
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
+
+        /** @var Router $router */
+        $router = $this->app->make(Router::class);
+        $router->aliasMiddleware('kopia.auth.mixed', CheckGuestOrUser::class);
     }
 
     /**

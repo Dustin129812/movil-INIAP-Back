@@ -10,7 +10,10 @@ return new class extends Migration {
             $table->id();
             $table->uuid('uuid_movil')->unique();
             $table->unsignedBigInteger('lote_id');
-            $table->unsignedBigInteger('responsable_id');
+            $table->unsignedBigInteger('responsable_id')->nullable();
+
+            $table->uuid('dispositivo_invitado_id')->nullable();
+            $table->string('estado_verificacion')->default('pendiente');
 
             $table->string('titulo');
             $table->text('descripcion')->nullable();
@@ -46,6 +49,10 @@ return new class extends Migration {
                 ->onDelete('restrict');
             $table->foreign('responsable_id')->references('id')->on('users')
                 ->onDelete('restrict');
+            $table->foreign('dispositivo_invitado_id')
+                ->references('id')
+                ->on('kopia.dispositivos_invitados')
+                ->onDelete('set null');
         });
     }
 

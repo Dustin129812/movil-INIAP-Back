@@ -9,6 +9,8 @@ return new class extends Migration {
         Schema::create('kopia.lotes', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid_movil')->unique();
+            $table->uuid('dispositivo_invitado_id')->nullable();
+            $table->string('estado_verificacion')->default('pendiente');
             $table->string('nombre_lote');
             $table->geometry('area', 'polygon', 4326);
             $table->string('ubicacion_manual')->nullable();
@@ -23,9 +25,25 @@ return new class extends Migration {
             $table->unsignedBigInteger('location_id')->nullable();
             $table->timestamps();
 
-            $table->foreign('province_id')->references('id')->on('public.provinces')->onDelete('restrict');
-            $table->foreign('canton_id')->references('id')->on('public.cantons')->onDelete('restrict');
-            $table->foreign('location_id')->references('id')->on('public.locations')->onDelete('restrict');
+            $table->foreign('province_id')
+                ->references('id')->
+                on('public.provinces')->
+                onDelete('restrict');
+
+            $table->foreign('canton_id')
+                ->references('id')
+                ->on('public.cantons')
+                ->onDelete('restrict');
+
+            $table->foreign('location_id')
+                ->references('id')
+                ->on('public.locations')
+                ->onDelete('restrict');
+
+            $table->foreign('dispositivo_invitado_id')
+                ->references('id')
+                ->on('kopia.dispositivos_invitados')
+                ->onDelete('set null');
         });
     }
 

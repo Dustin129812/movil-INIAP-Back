@@ -23,7 +23,9 @@ class Lote extends Model {
         'location_id',
         'otros_datos_geo',
         'altitud',
-        'parroquia'
+        'parroquia',
+        'dispositivo_invitado_id',
+        'estado_verificacion',
     ];
 
     protected $casts = [

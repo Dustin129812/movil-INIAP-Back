@@ -31,8 +31,10 @@ class SyncKopiaRequest extends FormRequest {
 
             'lotes.*.proyectos' => ['nullable', 'array'],
             'lotes.*.proyectos.*.uuid_movil' => ['required', 'uuid'],
-            'lotes.*.proyectos.*.responsable_id' => ['required', Rule::exists(User::class, 'id')],
-
+            'lotes.*.proyectos.*.responsable_id' => [
+                'nullable',
+                Rule::exists(User::class, 'id')
+            ],
             'lotes.*.proyectos.*.titulo' => ['required', 'string'],
             'lotes.*.proyectos.*.descripcion' => ['nullable', 'string'],
 

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Investigacion\Http\Controllers\GeneralController;
 use Modules\Kopia\Http\Controllers\AuthKopiaController;
 use Modules\Kopia\Http\Controllers\CatalogoController;
+use Modules\Kopia\Http\Controllers\GuestAuthController;
 use Modules\Kopia\Http\Controllers\LoteController;
 use Modules\Kopia\Http\Controllers\ProyectoController;
 use Modules\Kopia\Http\Controllers\SyncKopiaController;
@@ -21,9 +22,10 @@ Route::prefix('kopia')->group(function () {
 
     // Rutas Públicas
     Route::post('/login', [AuthKopiaController::class, 'login']);
+    Route::post('/guest/login', [GuestAuthController::class, 'login']);
 
     // Rutas Protegidas (Requieren Token JWT)
-    Route::middleware('auth:api')->group(function () {
+    Route::middleware('kopia.auth.mixed')->group(function () {
 
         // Sincronización General (Offline-first)
         Route::get('/sync/download', [SyncKopiaController::class, 'download']);

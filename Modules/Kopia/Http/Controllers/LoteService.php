@@ -29,9 +29,6 @@ class LoteService
                 $lote->nombre_lote = $datos['nombre_lote'];
             }
 
-            // Nota: Por regla de negocio (como indicaste en el modal),
-            // no permitimos editar la geometría desde la web si ya viene del móvil.
-
             $lote->save();
             return $lote;
         });
@@ -41,7 +38,6 @@ class LoteService
     {
         $lote = Lote::findOrFail($id);
 
-        // Protección de Integridad Referencial adaptada a Kopia
         if ($lote->proyectos()->count() > 0) {
             throw new \Exception("Integridad Referencial: No puedes eliminar un Lote que contiene Proyectos/Ensayos activos.");
         }

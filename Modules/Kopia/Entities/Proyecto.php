@@ -29,6 +29,8 @@ class Proyecto extends Model
         'colaborador_telefono',
         'colaborador_celular',
         'tipo_acolchado',
+        'dispositivo_invitado_id',
+        'estado_verificacion',
     ];
 
     protected $casts = [
