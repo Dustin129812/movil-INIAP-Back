@@ -39,7 +39,6 @@ use Modules\Investigacion\Http\Controllers\PatchNoteController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
 use Modules\Investigacion\Http\Controllers\ProductiveRubroController;
 use Modules\Investigacion\Http\Controllers\PulseController;
-use Modules\Investigacion\Http\Controllers\ReportController;
 use Modules\Investigacion\Http\Controllers\ResponseController;
 use Modules\Investigacion\Http\Controllers\ReusableActivityController;
 use Modules\Investigacion\Http\Controllers\RubroController;
@@ -249,6 +248,7 @@ Route::post('/webhook/messenger', [MessengerController::class, 'handleMessage'])
 Route::post('/import-users', [ImportController::class, 'importUserFile']);
 
 require base_path('Modules/TalentoHumano/Routes/api.php');
+require_once base_path('Modules/DireccionInvestigaciones/Routes/api.php');
 require_once base_path('Modules/Investigacion/Routes/api.php');
 require_once base_path('Modules/Produccion/Routes/api.php');
 require_once base_path('Modules/PlanificacionEstrategica/Routes/api.php');

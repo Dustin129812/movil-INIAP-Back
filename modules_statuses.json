@@ -8,5 +8,7 @@
     "Auth": true,
     "TrlImporter": true,
     "Kopia": true,
-    "Notificaciones": true
+    "Notificaciones": true,
+    "Direcci\u00f3nInvestigaciones": true,
+    "DireccionInvestigaciones": true
 }

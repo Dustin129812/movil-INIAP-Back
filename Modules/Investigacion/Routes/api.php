@@ -1,8 +1,7 @@
 <?php
 
-use Illuminate\Http\Request;
+use Modules\DireccionInvestigaciones\Http\Controllers\Protocolos\IdiProtocolController;
 use Modules\Investigacion\Http\Controllers\DashboardController;
-use Modules\Investigacion\Http\Controllers\IdiProtocolController;
 use Modules\Investigacion\Http\Controllers\MonthlyProgressController;
 use Modules\Investigacion\Http\Controllers\PlannerController;
 use Modules\Investigacion\Http\Controllers\PlanningReviewController;
@@ -20,11 +19,6 @@ use Modules\Investigacion\Http\Controllers\WeekActivityController;
 */
 
 Route::middleware('auth:api')->prefix('investigacion')->group(function () {
-
-    Route::resource('protocols', IdiProtocolController::class);
-    Route::get('catalogs/all', [IdiProtocolController::class, 'catalogs']);
-    Route::get('/protocols/download/{annexId}', [IdiProtocolController::class, 'downloadAnnex']);
-    Route::apiResource('protocols', IdiProtocolController::class);
 
     Route::get('monthly-progress/pending', [MonthlyProgressController::class, 'index']);
     Route::post('monthly-progress/store', [MonthlyProgressController::class, 'store']);
