@@ -1,8 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\UserController;
 
 Route::get('/prueba', function () {
     return response()->json([
@@ -10,29 +8,6 @@ Route::get('/prueba', function () {
     ]);
 });
 
-/*
-|--------------------------------------------------------------------------
-| Rutas públicas
-|--------------------------------------------------------------------------
-*/
-
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
-
-/*
-|--------------------------------------------------------------------------
-| Rutas protegidas con JWT
-|--------------------------------------------------------------------------
-*/
-
-Route::middleware('jwt')->group(function () {
-
-    // Auth
-    Route::get('/me', [AuthController::class, 'me']);
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::post('/refresh', [AuthController::class, 'refresh']);
-
-    // User
-    Route::get('/profile', [UserController::class, 'profile']);
-
-});
+require __DIR__ . '/modules/auth.php';
+require __DIR__ . '/modules/user.php';
+require __DIR__ . '/modules/dispositivo.php';

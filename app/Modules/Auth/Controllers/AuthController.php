@@ -1,30 +1,20 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Modules\Auth\Controllers;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Modules\Auth\Requests\LoginRequest;
+use App\Modules\Auth\Requests\RegisterRequest;
+use App\Models\Dispositivo;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use App\Models\Dispositivo;
 use Carbon\Carbon;
 
 class AuthController extends Controller
 {
-    /**
-     * Registro de usuario
-     */
-    public function register(Request $request)
+    public function register(RegisterRequest $request): JsonResponse
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6',
-            'uuid' => 'required|string',
-            'modelo' => 'nullable|string',
-            'sistema_operativo' => 'nullable|string'
-        ]);
-
         $user = \App\Models\User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -37,7 +27,7 @@ class AuthController extends Controller
                 'user_id' => $user->id,
                 'modelo' => $request->modelo,
                 'sistema_operativo' => $request->sistema_operativo,
-                'ultimo_login' => Carbon::now()
+                'ultimo_login' => Carbon::now(),
             ]
         );
 
@@ -49,29 +39,18 @@ class AuthController extends Controller
             'ID' => $user->id,
             'NOMBRE' => $user->name,
             'CORREO' => $user->email,
-            'TOKEN' => $token
+            'TOKEN' => $token,
         ], 201);
     }
 
-    /**
-     * Login
-     */
-    public function login(Request $request)
+    public function login(LoginRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
-            'uuid' => 'required|string',
-            'modelo' => 'nullable|string',
-            'sistema_operativo' => 'nullable|string'
-        ]);
-
         $credentials = $request->only('email', 'password');
 
         if (!$token = Auth::guard('api')->attempt($credentials)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Credenciales incorrectas'
+                'message' => 'Credenciales incorrectas',
             ], 401);
         }
 
@@ -83,7 +62,7 @@ class AuthController extends Controller
                 'user_id' => $user->id,
                 'modelo' => $request->modelo,
                 'sistema_operativo' => $request->sistema_operativo,
-                'ultimo_login' => Carbon::now()
+                'ultimo_login' => Carbon::now(),
             ]
         );
 
@@ -93,55 +72,41 @@ class AuthController extends Controller
             'ID' => $user->id,
             'NOMBRE' => $user->name,
             'CORREO' => $user->email,
-            'TOKEN' => $token
+            'TOKEN' => $token,
         ]);
     }
 
-    /**
-     * Usuario autenticado
-     */
-    public function me()
+    public function me(): JsonResponse
     {
         $user = Auth::guard('api')->user();
         return response()->json([
             'success' => true,
             'ID' => $user->id,
             'NOMBRE' => $user->name,
-            'CORREO' => $user->email
+            'CORREO' => $user->email,
         ]);
     }
 
-    /**
-     * Cerrar sesión
-     */
-    public function logout()
+    public function logout(): JsonResponse
     {
         Auth::guard('api')->logout();
+        return response()->json([
+            'success' => true,
+            'message' => 'Sesión cerrada correctamente',
+        ]);
+    }
+
+    public function refresh(): JsonResponse
+    {
+        $user = Auth::guard('api')->user();
+        $user->currentAccessToken()->delete();
+        $newToken = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'success' => true,
-            'message' => 'Sesión cerrada correctamente'
+            'message' => 'Token actualizado correctamente',
+            'access_token' => $newToken,
+            'token_type' => 'Bearer',
         ]);
     }
-
-    /**
-     * Refrescar token
-     */
-    public function refresh(Request $request)
-{
-    $user = $request->user();
-    
-    // 1. Eliminar el token actual que se está usando
-    $user->currentAccessToken()->delete();
-    
-    // 2. Crear un nuevo token
-    $newToken = $user->createToken('auth_token')->plainTextToken;
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Token actualizado correctamente',
-        'access_token' => $newToken,
-        'token_type' => 'Bearer'
-    ]);
-}
 }
