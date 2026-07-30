@@ -1,0 +1,11 @@
+{
+    "name": "AgroDecide",
+    "alias": "agrodecide",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\AgroDecide\\Providers\\AgroDecideServiceProvider"
+    ],
+    "files": []
+}
