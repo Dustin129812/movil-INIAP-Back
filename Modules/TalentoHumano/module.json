@@ -1,0 +1,11 @@
+{
+    "name": "TalentoHumano",
+    "alias": "talentohumano",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\TalentoHumano\\Providers\\TalentoHumanoServiceProvider"
+    ],
+    "files": []
+}

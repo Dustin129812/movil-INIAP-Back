@@ -1,0 +1,11 @@
+{
+    "name": "DireccionInvestigaciones",
+    "alias": "direccioninvestigaciones",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\DireccionInvestigaciones\\Providers\\DireccionInvestigacionesServiceProvider"
+    ],
+    "files": []
+}

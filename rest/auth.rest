@@ -1,0 +1,110 @@
+### ============================================
+### AGRODECIDE - Pruebas de Autenticación
+### ============================================
+### Antes de probar, reinicia Laravel:
+### cd /Users/david/simpagi-backend && php artisan serve --host=0.0.0.0 --port=8000
+###
+### Luego usa la IP de tu red, ej: http://192.168.100.210:8000
+### ============================================
+
+### ============================================
+### 1. LOGIN DE USUARIO REGULAR (Administrador/Técnico)
+### ============================================
+### Request: POST /api/agrodecide/login
+### Body: email, password
+### Respuesta exitosa: { success: true, data: { token, tecnico: {...} } }
+POST http://localhost:8000/api/agrodecide/login
+Content-Type: application/json
+
+{
+  "email": "admin@iniap.gob.ec",
+  "password": "password"
+}
+
+### ============================================
+### 2. LOGIN DE INVITADO (Dispositivo nuevo)
+### ============================================
+### Request: POST /api/agrodecide/guest/login
+### Body: device_uuid (uuid), modelo, sistema_operativo, hardware
+### Respuesta exitosa: { access_token, token_type, expires_in, role: "guest" }
+POST http://localhost:8000/api/agrodecide/guest/login
+Content-Type: application/json
+
+{
+  "device_uuid": "550e8400-e29b-41d4-a716-446655440001",
+  "modelo": "iPhone 15 Pro",
+  "sistema_operativo": "iOS 17.5",
+  "hardware": "Apple A17 Pro"
+}
+
+### ============================================
+### 3. LOGIN DE INVITADO (Dispositivo ya registrado)
+### Usa el mismo device_uuid para mantener el token anterior
+### ============================================
+POST http://localhost:8000/api/agrodecide/guest/login
+Content-Type: application/json
+
+{
+  "device_uuid": "550e8400-e29b-41d4-a716-446655440001",
+  "modelo": "iPhone 15 Pro",
+  "sistema_operativo": "iOS 17.5",
+  "hardware": "Apple A17 Pro"
+}
+
+### ============================================
+### 4. CREAR USUARIO (Solo Administrador)
+### ============================================
+### Request: POST /api/agrodecide/usuarios
+### Headers: Authorization: Bearer {token}
+### Body: name, email, password
+### Respuesta exitosa: { success: true, data: { id, name, email } }
+POST http://localhost:8000/api/agrodecide/usuarios
+Content-Type: application/json
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwMDAvYXBpL2Fncm9kZWNpZGUvbG9naW4iLCJpYXQiOjE3ODU3NzgwMzIsImV4cCI6MTc4NTg2NDQzMiwibmJmIjoxNzg1Nzc4MDMyLCJqdGkiOiJadnZNcFA0RWRIMlVaRDViIiwic3ViIjoiNCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjcifQ.Ko7i16OmHnw69iDFPBkRaII4LenWpKGCH6Yui6lVhs8
+
+{
+  "name": "Manuel suares",
+  "email": "Manuel@iniap.gob.ec",
+  "password": "password124",
+  "dni": "00000012",
+  "phone": "0989898234"
+}
+
+### ============================================
+### 5. LISTAR USUARIOS (Solo Administrador)
+### ============================================
+### Request: GET /api/agrodecide/usuarios
+### Headers: Authorization: Bearer {token}
+GET http://localhost:8000/api/agrodecide/usuarios
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### ============================================
+### 6. VER UN USUARIO (Solo Administrador)
+### ============================================
+### Request: GET /api/agrodecide/usuarios/{id}
+GET http://localhost:8000/api/agrodecide/usuarios/1
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### ============================================
+### 7. ACTUALIZAR USUARIO (Solo Administrador)
+### ============================================
+PUT http://localhost:8000/api/agrodecide/usuarios/1
+Content-Type: application/json
+Authorization: Bearer YOUR_TOKEN_HERE
+
+{
+  "name": "Juan Pérez Actualizado",
+  "email": "juan.perez.nuevo@iniap.gob.ec"
+}
+
+### ============================================
+### 8. ELIMINAR USUARIO (Solo Administrador)
+### ============================================
+DELETE http://localhost:8000/api/agrodecide/usuarios/5
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwMDAvYXBpL2Fncm9kZWNpZGUvbG9naW4iLCJpYXQiOjE3ODU3MDk3NzksImV4cCI6MTc4NTc5NjE3OSwibmJmIjoxNzg1NzA5Nzc5LCJqdGkiOiJJUm5JYXZkbVJKV1dueVIwIiwic3ViIjoiNCIsInBydiI6IjIzYmQ1Yzg5NDlmNjAwYWRiMzllNzAxYzQwMDg3MmRiN2E1OTc2ZjcifQ.5-kyBYAC5-TQ0fpi5myEnI37KCB8LW2sir7QbHfYmkg
+
+### ============================================
+### 9. VER DISPOSITIVOS INVITADOS (Solo Administrador)
+### ============================================
+### Esta ruta aún no existe - para implementarla
+### GET http://localhost:8000/api/agrodecide/dispositivos
