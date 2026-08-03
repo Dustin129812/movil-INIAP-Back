@@ -12,7 +12,7 @@ return new class extends Migration {
             $table->timestamps();
 
             $table->primary(['proyecto_id', 'user_id']);
-            $table->foreign('proyecto_id')->references('id')->on('Decide.proyectos')->onDelete('cascade');
+            $table->foreign('proyecto_id')->references('id')->on('AgroDecide.proyectos')->onDelete('cascade');
 
             $table->foreign('user_id')->references('id')->on('public.users')->onDelete('cascade');
         });
