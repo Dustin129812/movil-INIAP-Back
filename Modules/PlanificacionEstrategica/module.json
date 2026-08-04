@@ -1,0 +1,11 @@
+{
+    "name": "PlanificacionEstrategica",
+    "alias": "planificacionestrategica",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\PlanificacionEstrategica\\Providers\\PlanificacionEstrategicaServiceProvider"
+    ],
+    "files": []
+}

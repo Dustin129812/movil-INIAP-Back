@@ -1,0 +1,66 @@
+<?php
+
+namespace Modules\Transferencia\Http\Controllers;
+
+use Illuminate\Routing\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Modules\Transferencia\Entities\Parcela;
+use Modules\Transferencia\Http\Requests\ParcelaRequest;
+use Modules\Transferencia\Services\ParcelaService;
+use Modules\Transferencia\Transformers\ParcelaResource;
+
+class ParcelaController extends Controller
+{
+    public function __construct(
+        private readonly ParcelaService $parcelaService
+    ) {}
+
+    public function index(ParcelaRequest $request): AnonymousResourceCollection
+    {
+        $filters = $request->validated();
+
+        // Inyectamos el control de seguridad por roles y usuario
+        $filters['user_id'] = $request->user()->id;
+        $filters['can_see_all'] = $request->user()->hasPermissionTo('transferencia.seguimiento_general');
+
+        $parcelas = $this->parcelaService->paginate($filters);
+
+        return ParcelaResource::collection($parcelas);
+    }
+
+    public function store(ParcelaRequest $request): ParcelaResource
+    {
+        $parcela = $this->parcelaService->create($request->validated());
+
+        return new ParcelaResource($parcela);
+    }
+
+    public function show(ParcelaRequest $request, Parcela $parcela): ParcelaResource
+    {
+        $parcela->load(['ensayo', 'organizacion', 'provincia', 'canton', 'acuerdo']);
+
+        return new ParcelaResource($parcela);
+    }
+
+    public function update(ParcelaRequest $request, Parcela $parcela): ParcelaResource
+    {
+        $parcela = $this->parcelaService->update($parcela, $request->validated());
+
+        return new ParcelaResource($parcela);
+    }
+
+    public function destroy(ParcelaRequest $request, Parcela $parcela): JsonResponse
+    {
+        $this->parcelaService->delete($parcela);
+
+        return response()->json(['message' => 'Parcela eliminada correctamente']);
+    }
+
+    public function claim(Parcela $parcela): ParcelaResource
+    {
+        $parcelaActualizada = $this->parcelaService->claim($parcela);
+
+        return new ParcelaResource($parcelaActualizada);
+    }
+}
