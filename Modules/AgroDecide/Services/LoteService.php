@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\AgroDecide\Http\Controllers;
+namespace Modules\AgroDecide\Services;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
