@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Modules\AgroDecide\Http\Requests\StoreProyectoRequest;
 use Modules\AgroDecide\Services\ProyectoService;
 use Modules\AgroDecide\Transformers\ProyectoResource;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ProyectoController extends Controller
 {
@@ -16,7 +17,9 @@ class ProyectoController extends Controller
 
     public function index(): JsonResponse
     {
-        $proyectos = $this->proyectoService->listarParaUsuario(auth('api')->id());
+        $payload = JWTAuth::parseToken()->getPayload();
+        $userId = $payload->get('sub');
+        $proyectos = $this->proyectoService->listarParaUsuario($userId);
 
         return response()->json([
             'success' => true,
@@ -26,9 +29,11 @@ class ProyectoController extends Controller
 
     public function store(StoreProyectoRequest $request): JsonResponse
     {
+        $payload = JWTAuth::parseToken()->getPayload();
+        $userId = $payload->get('sub');
         $proyecto = $this->proyectoService->crearProyecto(
             $request->validated(),
-            auth('api')->id()
+            $userId
         );
 
         return response()->json([

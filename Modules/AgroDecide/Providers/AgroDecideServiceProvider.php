@@ -5,7 +5,7 @@ namespace Modules\AgroDecide\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Factory;
 use Illuminate\Routing\Router;
-use Modules\AgroDecide\Http\Middleware\CheckGuestOrUser;
+use Modules\AgroDecide\Http\Middleware\ValidateAgroDecideToken;
 use Illuminate\Support\Facades\Config;
 
 class AgroDecideServiceProvider extends ServiceProvider
@@ -34,7 +34,7 @@ class AgroDecideServiceProvider extends ServiceProvider
 
         /** @var Router $router */
         $router = $this->app->make(Router::class);
-        $router->aliasMiddleware('AgroDecide.auth.mixed', CheckGuestOrUser::class);
+        $router->aliasMiddleware('AgroDecide.auth.mixed', ValidateAgroDecideToken::class);
     }
 
     /**

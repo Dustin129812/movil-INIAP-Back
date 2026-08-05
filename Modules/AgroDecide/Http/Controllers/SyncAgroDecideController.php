@@ -6,6 +6,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Http\JsonResponse;
 use Modules\AgroDecide\Http\Requests\SyncAgroDecideRequest;
 use Modules\AgroDecide\Services\SyncAgroDecideService;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class SyncAgroDecideController extends Controller
 {
@@ -28,7 +29,9 @@ class SyncAgroDecideController extends Controller
 
     public function download(): JsonResponse
     {
-        $payload = $this->syncService->obtenerDatosSincronizacion(auth('api')->id());
+        $payloadToken = JWTAuth::parseToken()->getPayload();
+        $userId = $payloadToken->get('sub');
+        $payload = $this->syncService->obtenerDatosSincronizacion($userId);
 
         return response()->json([
             'status' => 'success',

@@ -8,12 +8,14 @@ use Modules\AgroDecide\Http\Controllers\GuestAuthController;
 use Modules\AgroDecide\Http\Controllers\LoteController;
 use Modules\AgroDecide\Http\Controllers\ProyectoController;
 use Modules\AgroDecide\Http\Controllers\SyncAgroDecideController;
+use Modules\AgroDecide\Http\Controllers\UserAgroDecideController;
 
 Route::prefix('agrodecide')->group(function () {
 
     // Rutas Públicas
     Route::post('/login', [AuthAgroDecideController::class, 'login']);
     Route::post('/guest/login', [GuestAuthController::class, 'login']);
+    Route::post('/user/login', [UserAgroDecideController::class, 'login']);
 
     // Rutas Protegidas (Requieren Token JWT)
     Route::middleware('AgroDecide.auth.mixed')->group(function () {

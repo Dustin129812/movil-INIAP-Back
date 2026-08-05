@@ -14,6 +14,8 @@ class DispositivoInvitado extends Model
     protected $fillable = [
         'id',
         'modelo_dispositivo',
+        'sistema_operativo',
+        'hardware',
         'estado',
     ];
 }

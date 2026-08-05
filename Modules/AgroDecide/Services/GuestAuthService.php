@@ -18,6 +18,8 @@ class GuestAuthService
 
             if (!$dispositivo->exists) {
                 $dispositivo->modelo_dispositivo = $data['modelo'] ?? 'Desconocido';
+                $dispositivo->sistema_operativo = $data['sistema_operativo'] ?? null;
+                $dispositivo->hardware = $data['hardware'] ?? null;
                 $dispositivo->estado = 'activo';
                 $dispositivo->save();
             }
@@ -30,8 +32,11 @@ class GuestAuthService
                 'sub'         => $dispositivo->id,
                 'role'        => 'guest',
                 'device_uuid' => $dispositivo->id,
+                'modelo'      => $dispositivo->modelo_dispositivo,
+                'sistema_operativo' => $dispositivo->sistema_operativo,
+                'hardware'    => $dispositivo->hardware,
                 'iat'         => time(),
-                'exp'         => time() + (43200 * 60) // 30 días o el tiempo que prefieras
+                'exp'         => time() + (43200 * 60) // 30 días
             ];
 
             $token = JWTAuth::getJWTProvider()->encode($payload);

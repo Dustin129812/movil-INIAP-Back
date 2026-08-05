@@ -22,6 +22,8 @@ class GuestLoginRequest extends FormRequest
         return [
             'device_uuid' => ['required', 'string', 'uuid'],
             'modelo'      => ['nullable', 'string', 'max:255'],
+            'sistema_operativo' => ['nullable', 'string', 'max:255'],
+            'hardware'    => ['nullable', 'string', 'max:255'],
         ];
     }
 }

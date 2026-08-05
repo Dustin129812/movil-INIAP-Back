@@ -9,18 +9,17 @@ use Modules\AgroDecide\Entities\CicloCultivo;
 use Modules\AgroDecide\Entities\Visita;
 use Modules\AgroDecide\Entities\HojaDato;
 use Modules\AgroDecide\Transformers\LoteResource;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class SyncAgroDecideService
 {
     public function procesarSincronizacion(array $lotesData): array
     {
+        $payloadToken = JWTAuth::parseToken()->getPayload();
 
-        $guard = auth('api');
-        $payloadToken = method_exists($guard, 'payload') ? $guard->payload() : null;
-
-        $isGuest = $payloadToken ? ($payloadToken->get('role') === 'guest') : false;
+        $isGuest = $payloadToken->get('role') === 'guest';
         $guestUuid = $isGuest ? $payloadToken->get('device_uuid') : null;
-        $userId = $isGuest ? null : $guard->id();
+        $userId = $isGuest ? null : $payloadToken->get('sub');
 
         $resultados = [
             'lotes_procesados' => 0,

@@ -1,0 +1,23 @@
+### LOGIN INVITADO
+POST http://localhost:8000/api/agrodecide/guest/login
+Content-Type: application/json
+
+{
+    "device_uuid": "550e8400-e29b-41d4-a716-446655440001",
+    "modelo": "iPhone 15 Pro",
+    "sistema_operativo": "iOS 17.5",
+    "hardware": "Apple A17 Pro"
+}
+
+
+
+### LOGIN USUARIO
+POST http://localhost:8000/api/agrodecide/user/login
+Content-Type: application/json
+
+{
+    "correo_institucional": "tecnico@iniap.gob.ec",
+    "password": "password123"
+}
+
+
