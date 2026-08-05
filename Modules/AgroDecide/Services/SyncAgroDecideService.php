@@ -32,7 +32,7 @@ class SyncAgroDecideService
 
         DB::transaction(function () use ($lotesData, &$resultados, $isGuest, $guestUuid, $userId) {
             foreach ($lotesData as $loteData) {
-                $lote = $this->guardarLote($loteData, $isGuest, $guestUuid);
+                $lote = $this->guardarLote($loteData, $isGuest, $guestUuid, $userId);
                 $resultados['lotes_procesados']++;
 
                 if (!empty($loteData['proyectos'])) {
@@ -68,7 +68,7 @@ class SyncAgroDecideService
         return $resultados;
     }
 
-    private function guardarLote(array $data, bool $isGuest, ?string $guestUuid): Lote
+    private function guardarLote(array $data, bool $isGuest, ?string $guestUuid, ?int $userId): Lote
     {
         $attributes = [
             'nombre_lote'         => $data['nombre_lote'],
@@ -81,7 +81,8 @@ class SyncAgroDecideService
             'otros_datos_geo'     => $data['otros_datos_geo'] ?? null,
             'condiciones_terreno' => $data['condiciones_terreno'] ?? null,
             'tipo_riego'          => $data['tipo_riego'] ?? 'gravedad',
-            'dispositivo_invitado_id' => $guestUuid,
+            'dispositivo_invitado_id' => $isGuest ? $guestUuid : null,
+            'user_agrodecide_id'  => !$isGuest ? $userId : null,
             'estado_verificacion' => $isGuest ? 'pendiente' : 'aprobado',
         ];
 

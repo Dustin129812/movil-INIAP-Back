@@ -25,6 +25,7 @@ class Lote extends Model {
         'altitud',
         'parroquia',
         'dispositivo_invitado_id',
+        'user_agrodecide_id',
         'estado_verificacion',
     ];
 
@@ -52,5 +53,10 @@ class Lote extends Model {
     public function proyectos()
     {
         return $this->hasMany(Proyecto::class, 'lote_id');
+    }
+
+    public function usuario(): BelongsTo
+    {
+        return $this->belongsTo(UserAgroDecide::class, 'user_agrodecide_id');
     }
 }

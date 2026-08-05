@@ -2,14 +2,15 @@
 
 namespace Modules\AgroDecide\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Modules\AgroDecide\Entities\Lote;
 use Modules\AgroDecide\Http\Requests\StoreLoteProyectoRequest;
+use Modules\AgroDecide\Services\LoteService;
 use Modules\AgroDecide\Transformers\LoteResource;
 use Tymon\JWTAuth\Facades\JWTAuth;
-// use Modules\AgroDecide\Services\LoteService; <-- ¡Recuerda importar la clase si está en otra carpeta!
 
 class LoteController extends Controller
 {
@@ -26,53 +27,59 @@ class LoteController extends Controller
         return LoteResource::collection($lotes);
     }
 
-    public function show($id)
+    public function show($id): JsonResponse
     {
-        $lote = $this->loteService->obtenerDetalleLote($id);
-
-        return new LoteResource($lote);
+        try {
+            $lote = $this->loteService->obtenerDetalleLote($id);
+            return response()->json([
+                'success' => true,
+                'data' => new LoteResource($lote),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lote no encontrado.',
+            ], 404);
+        }
     }
 
-    public function store(StoreLoteProyectoRequest $request)
+    public function store(StoreLoteProyectoRequest $request): JsonResponse
     {
         try {
             $payload = JWTAuth::parseToken()->getPayload();
             $role = $payload->get('role');
             $sub = $payload->get('sub');
 
-            // 1. Cláusula de guarda (Guard clause): Detiene todo si no es un usuario válido
-            // Puedes agregar otros roles en el array si los administradores también pueden crear lotes
-            if (!in_array($role, ['user']) || empty($sub)) {
+            // Verificar que esté autenticado (user o guest) y tenga identificador
+            if (empty($sub) || !in_array($role, ['user', 'guest'])) {
                 return response()->json([
-                    'message' => 'Acceso denegado: Se requiere un usuario válido para registrar un lote.'
+                    'success' => false,
+                    'message' => 'Acceso denegado: Usuario no válido.',
                 ], 403);
             }
 
-            $responsableId = (int) $sub;
-
-            // 2. Llamada segura al servicio
-            $lote = $this->loteService->crearLoteIntegrado(
-                $request->validated(),
-                $responsableId
-            );
-
-            // 3. Consulta limpia usando Eloquent
-            $loteRefrescado = Lote::with(['proyectos.colaboradores'])
-                ->select('*', DB::raw('ST_AsGeoJSON(area) as geometria_geojson'))
-                ->findOrFail($lote->id); // Usar findOrFail es más seguro
+            $lote = $this->loteService->crearLoteIntegrado($request->validated(), $sub, $role);
 
             return response()->json([
-                'data'    => new LoteResource($loteRefrescado),
-                'message' => 'Lote experimental y proyectos creados de forma integrada con éxito.'
+                'success' => true,
+                'data' => new LoteResource($this->getLoteConGeometria($lote->id, ['proyectos.colaboradores'])),
+                'message' => 'Lote experimental y proyectos creados con éxito.',
             ], 201);
 
         } catch (\Exception $e) {
-            // Un error 500 es más semántico para excepciones del servidor que un 422
-            return response()->json(['message' => 'Error al crear el lote: ' . $e->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Token inválido o no proporcionado.',
+            ], 401);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear el lote: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, $id): JsonResponse
     {
         $validated = $request->validate([
             'nombre_lote' => 'required|string|max:150',
@@ -81,25 +88,39 @@ class LoteController extends Controller
         try {
             $lote = $this->loteService->actualizarLote($id, $validated);
 
-            $loteRefrescado = Lote::select('*', DB::raw('ST_AsGeoJSON(area) as geometria_geojson'))
-                ->findOrFail($lote->id);
-
             return response()->json([
-                'data' => new LoteResource($loteRefrescado),
-                'message' => 'Lote actualizado correctamente.'
+                'success' => true,
+                'data' => new LoteResource($this->getLoteConGeometria($lote->id)),
+                'message' => 'Lote actualizado correctamente.',
             ]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al actualizar: ' . $e->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
-    public function destroy($id)
+    public function destroy($id): JsonResponse
     {
         try {
             $this->loteService->eliminarLote($id);
-            return response()->json(['message' => 'Lote eliminado exitosamente.']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Lote eliminado exitosamente.',
+            ]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al eliminar: ' . $e->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar: ' . $e->getMessage(),
+            ], 500);
         }
+    }
+
+    private function getLoteConGeometria(int $id, array $relations = []): Lote
+    {
+        return Lote::with($relations)
+            ->select('*', DB::raw('ST_AsGeoJSON(area) as geometria_geojson'))
+            ->findOrFail($id);
     }
 }

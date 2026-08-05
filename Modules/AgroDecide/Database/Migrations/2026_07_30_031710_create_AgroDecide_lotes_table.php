@@ -23,6 +23,7 @@ return new class extends Migration {
             $table->decimal('altitud', 8, 2)->nullable();
             $table->string('otros_datos_geo')->nullable();
             $table->unsignedBigInteger('location_id')->nullable();
+            $table->unsignedBigInteger('user_agrodecide_id')->nullable();
             $table->timestamps();
 
             $table->foreign('province_id')
@@ -39,6 +40,11 @@ return new class extends Migration {
                 ->references('id')
                 ->on('public.locations')
                 ->onDelete('restrict');
+
+            $table->foreign('user_agrodecide_id')
+                ->references('id')
+                ->on('AgroDecide.users')
+                ->onDelete('set null');
 
             $table->foreign('dispositivo_invitado_id')
                 ->references('id')

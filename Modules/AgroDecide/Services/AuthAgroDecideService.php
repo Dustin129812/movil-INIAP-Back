@@ -3,8 +3,9 @@
 namespace Modules\AgroDecide\Services;
 
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Modules\AgroDecide\Transformers\UserAgroDecideResource;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthAgroDecideService
 {
@@ -20,19 +21,14 @@ class AuthAgroDecideService
 
         $user = auth('api')->user();
 
-        $offlineHash = Hash::make($credentials['password']);
-
         return [
             'token' => $token,
-            'offline_access' => [
-                'user_id' => $user->id,
-                'secret' => $offlineHash,
-            ],
-            'tecnico' => [
-                'id' => $user->id,
-                'nombre' => $user->name,
-                'email' => $user->email,
-            ]
+            'tecnico' => new UserAgroDecideResource($user),
         ];
+    }
+
+    public function getTokenForCookie(): string
+    {
+        return JWTAuth::parseToken()->fromUser(JWTAuth::user());
     }
 }

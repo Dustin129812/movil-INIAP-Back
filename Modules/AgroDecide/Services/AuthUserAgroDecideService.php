@@ -35,8 +35,8 @@ class AuthUserAgroDecideService
         $payload = [
             'sub' => $user->id,
             'role' => 'user',
-            'correo' => $user->correo_institucional,
-            'nombre' => $user->nombre,
+            //'correo' => $user->correo_institucional,
+            //'nombre' => $user->nombre,
             'iat' => time(),
             'exp' => time() + (43200 * 60), // 30 días
         ];

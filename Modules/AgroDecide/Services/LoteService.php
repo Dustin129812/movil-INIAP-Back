@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\AgroDecide\Http\Controllers;
+namespace Modules\AgroDecide\Services;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -63,9 +63,9 @@ class LoteService
     /**
      * Crea un Lote y sus Proyectos asociados en una sola transacción (Offline-First approach)
      */
-    public function crearLoteIntegrado(array $datos, int $responsableId): Lote
+    public function crearLoteIntegrado(array $datos, int|string $responsableId, string $role): Lote
     {
-        return DB::transaction(function () use ($datos, $responsableId) {
+        return DB::transaction(function () use ($datos, $responsableId, $role) {
             $loteAttributes = [
                 'uuid_movil'       => $datos['uuid_movil'],
                 'nombre_lote'      => $datos['nombre_lote'],
@@ -76,6 +76,13 @@ class LoteService
                 'altitud'          => $datos['altitud'] ?? null,
             ];
 
+            // Asignar según el rol (user o guest)
+            if ($role === 'user') {
+                $loteAttributes['user_agrodecide_id'] = (int) $responsableId;
+            } else {
+                $loteAttributes['dispositivo_invitado_id'] = $responsableId;
+            }
+
             if (!empty($datos['coordenadas']) && is_array($datos['coordenadas'])) {
                 $loteAttributes['area'] = DB::raw($this->convertirCoordenadasAPoligono($datos['coordenadas']));
             }
@@ -83,21 +90,30 @@ class LoteService
             $lote = Lote::create($loteAttributes);
 
             foreach ($datos['proyectos'] as $proyectoData) {
-                $proyecto = Proyecto::create([
+                $colaboradores = $proyectoData['colaboradores'] ?? null;
+
+                $proyectoAttrs = [
                     'uuid_movil'     => $proyectoData['uuid_movil'],
                     'lote_id'        => $lote->id,
-                    'responsable_id' => $responsableId,
                     'titulo'         => $proyectoData['titulo'],
                     'descripcion'    => $proyectoData['descripcion'] ?? null,
                     'tipo_ensayo'    => $proyectoData['tipo_ensayo'] ?? null,
                     'variedad'       => $proyectoData['variedad'],
                     'fecha_siembra'  => $proyectoData['fecha_siembra'] ?? null,
                     'tipo_acolchado' => $proyectoData['tipo_acolchado'] ?? null,
-                ]);
+                ];
 
+                // Asignar según el rol
+                if ($role === 'user') {
+                    $proyectoAttrs['responsable_id'] = (int) $responsableId;
+                } else {
+                    $proyectoAttrs['dispositivo_invitado_id'] = $responsableId;
+                }
 
-                if (!empty($proyectoData['colaboradores'])) {
-                    $proyecto->colaboradores()->sync($proyectoData['colaboradores']);
+                $proyecto = Proyecto::create($proyectoAttrs);
+
+                if (!empty($colaboradores)) {
+                    $proyecto->colaboradores()->sync($colaboradores);
                 }
             }
 

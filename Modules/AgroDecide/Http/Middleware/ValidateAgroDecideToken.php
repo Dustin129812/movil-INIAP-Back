@@ -29,7 +29,7 @@ class ValidateAgroDecideToken
             }
 
             if ($role === 'user') {
-                // Token de usuario válido, solo verificar que existe el claim sub
+                
                 $userId = $payload->get('sub');
                 if (!$userId) {
                     return response()->json(['error' => 'Token inválido.'], 401);

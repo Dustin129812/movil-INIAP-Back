@@ -15,7 +15,7 @@ class AuthenticateJWT
                 auth()->setUser($user);
             }
         } catch (\Exception $e) {
-            // Si no hay token válido, tratar como invitado
+            
             session(['guest_id' => session('guest_id', \Illuminate\Support\Str::uuid()->toString())]);
         }
 

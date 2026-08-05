@@ -9,6 +9,7 @@ use Modules\AgroDecide\Http\Controllers\LoteController;
 use Modules\AgroDecide\Http\Controllers\ProyectoController;
 use Modules\AgroDecide\Http\Controllers\SyncAgroDecideController;
 use Modules\AgroDecide\Http\Controllers\UserAgroDecideController;
+use Modules\Investigacion\Http\Controllers\GeneralController;
 
 Route::prefix('agrodecide')->group(function () {
 
